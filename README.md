@@ -1,1 +1,1 @@
-# fast-gql-cache-rs - An rust-wasm based InMemoryCache implementation for apollo-client
+# fast-gql-cache-rs - A rust-wasm based InMemoryCache implementation for apollo-client

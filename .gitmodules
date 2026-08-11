@@ -1,0 +1,3 @@
+[submodule "apollo-client-sm"]
+	path = apollo-client-sm
+	url = git@github.com:apollographql/apollo-client.git
