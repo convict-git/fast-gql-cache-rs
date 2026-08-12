@@ -1,0 +1,46 @@
+diff --git a/node_modules/@apollo/client/cache/index.d.ts b/node_modules/@apollo/client/cache/index.d.ts
+index 380584f..ab54ac1 100644
+--- a/node_modules/@apollo/client/cache/index.d.ts
++++ b/node_modules/@apollo/client/cache/index.d.ts
+@@ -6,14 +6,16 @@ export type { IgnoreModifier, MissingTree, Modifier, ModifierDetails, Modifiers,
+ export { MissingFieldError } from "./core/types/common.js";
+ export type { Reference } from "@apollo/client/utilities";
+ export { canonicalStringify, isReference } from "@apollo/client/utilities";
+-export { EntityStore } from "./inmemory/entityStore.js";
+-export { defaultDataIdFromObject, fieldNameFromStoreName, } from "./inmemory/helpers.js";
++export { EntityStore, supportsResultCaching, maybeDependOnExistenceOfEntity } from "./inmemory/entityStore.js";
++export { defaultDataIdFromObject, fieldNameFromStoreName, hasOwn, normalizeConfig, } from "./inmemory/helpers.js";
+ export { InMemoryCache } from "./inmemory/inMemoryCache.js";
+ export type { ReactiveVar } from "./inmemory/reactiveVars.js";
+-export { cacheSlot, makeVar } from "./inmemory/reactiveVars.js";
++export { cacheSlot, forgetCache, makeVar, recallCache } from "./inmemory/reactiveVars.js";
+ export type { FieldFunctionOptions, FieldMergeFunction, FieldMergeFunctionOptions, FieldPolicy, FieldReadFunction, FieldReadFunctionOptions, KeyArgsFunction, PossibleTypesMap, TypePolicies, TypePolicy, } from "./inmemory/policies.js";
+ export { Policies } from "./inmemory/policies.js";
+ export type { FragmentRegistryAPI } from "./inmemory/fragmentRegistry.js";
+ export { createFragmentRegistry } from "./inmemory/fragmentRegistry.js";
++export { StoreReader } from "./inmemory/readFromStore.js";
++export { StoreWriter } from "./inmemory/writeToStore.js";
+ export type { ApolloReducerConfig, DiffQueryAgainstStoreOptions, IdGetter, IdGetterObj, InMemoryCacheConfig, MergeInfo, MergeTree, NormalizedCache, NormalizedCacheObject, OptimisticStoreItem, ReadMergeModifyContext, ReadQueryOptions, StoreObject, StoreValue, } from "./inmemory/types.js";
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/node_modules/@apollo/client/cache/index.js b/node_modules/@apollo/client/cache/index.js
+index 122e3dc..7050bdd 100644
+--- a/node_modules/@apollo/client/cache/index.js
++++ b/node_modules/@apollo/client/cache/index.js
+@@ -1,10 +1,12 @@
+ export { ApolloCache } from "./core/cache.js";
+ export { MissingFieldError } from "./core/types/common.js";
+ export { canonicalStringify, isReference } from "@apollo/client/utilities";
+-export { EntityStore } from "./inmemory/entityStore.js";
+-export { defaultDataIdFromObject, fieldNameFromStoreName, } from "./inmemory/helpers.js";
++export { EntityStore, supportsResultCaching, maybeDependOnExistenceOfEntity } from "./inmemory/entityStore.js";
++export { defaultDataIdFromObject, fieldNameFromStoreName, hasOwn, normalizeConfig } from "./inmemory/helpers.js";
+ export { InMemoryCache } from "./inmemory/inMemoryCache.js";
+-export { cacheSlot, makeVar } from "./inmemory/reactiveVars.js";
++export { cacheSlot, forgetCache, makeVar, recallCache } from "./inmemory/reactiveVars.js";
+ export { Policies } from "./inmemory/policies.js";
+ export { createFragmentRegistry } from "./inmemory/fragmentRegistry.js";
++export { StoreReader } from "./inmemory/readFromStore.js";
++export { StoreWriter } from "./inmemory/writeToStore.js";
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+pkg/
+coverage/
+*.log
+.DS_Store
+patches/.patch-package-timestamp
+node_modules

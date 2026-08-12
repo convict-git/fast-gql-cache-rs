@@ -1,0 +1,125 @@
+---
+description: fast-gql-cache-rs project conventions — Rust-WASM InMemoryCache for Apollo Client
+alwaysApply: true
+---
+
+# fast-gql-cache-rs
+
+Rust-WASM-based `InMemoryCache` implementation for [Apollo Client](https://github.com/apollographql/apollo-client). Ships as npm package `fast-gql-cache-rs` with a plug-and-play `InMemoryCacheRs` class (analogous to Apollo's `InMemoryCache`).
+
+Cache configuration follows [Apollo cache configuration docs](https://www.apollographql.com/docs/react/caching/cache-configuration).
+
+## Development vs production code
+
+This package has two distinct categories of code. Submodule rules depend on which category you are touching.
+
+| Category | What it includes | `apollo-client-sm` usage |
+|----------|------------------|--------------------------|
+| **Production (shipped)** | `src/` (excluding `__tests__`), `wasm/`, published `dist/` and `pkg/` | **Never import** from the submodule. Use `node_modules/@apollo/client`, `patch-package`, or `src/internal/` copies per the import rules below. |
+| **Development** | Tests, Jest/ESLint/TS/Prettier config, build scripts, parity harness | **May import or extend** submodule code and config — e.g. `extends apollo-client-sm/tsconfig.json`, Jest `moduleNameMapper` to `@apollo/client/testing/internal` via the submodule path. |
+
+The submodule is **not** universally read-only. Apply this split:
+
+- **Production imports** — nothing shipped to consumers may depend on `apollo-client-sm/`.
+- **Dev tooling** — reuse submodule config, tests, and reference implementation instead of duplicating what it already provides.
+
+When deciding whether to change something in `apollo-client-sm/`, ask: *is this production code that ships, or dev tooling that supports build, lint, and test?* Only the latter may lean on the submodule directly.
+
+## Submodule references
+
+| Submodule | Path | Purpose |
+|-----------|------|---------|
+| Apollo Client source | `apollo-client-sm/` | **Behavior reference** for production work; **direct reuse** for dev tooling (see table above). Understand behavior, edge cases, and implementation flow. Never import from here in **production** code. |
+| Rust skills | `.cursor/skills/rust-skills/` | Rust idioms and review rules for WASM work. Load relevant rules before planning or reviewing Rust changes. |
+
+**Never answer questions about Apollo Client behavior without confirming against `apollo-client-sm/`.**
+
+## Package boundaries
+
+- **npm name**: `fast-gql-cache-rs`
+- **Public export**: `InMemoryCacheRs` and `InMemoryCacheRsConfig` from the package entry (`src/index.ts`). No other classes or WASM bindings are public API.
+- **Apollo Client version**: `@apollo/client@4.2.11` — use as dependency and **peer dependency** in `package.json`.
+- **Config type**: `InMemoryCacheRsConfig` is our own standalone configuration interface (not an extension of Apollo's `InMemoryCacheConfig`). It mirrors Apollo cache option shapes today for plug-and-play migration; it is the constructor/config type for `InMemoryCacheRs` and will grow with Rust-WASM-specific options as Apollo collaborators are replaced. This is an intentional exception to mirroring Apollo types only.
+
+## Import rules (resolution order)
+
+When you need a symbol from Apollo Client, follow this order **in strict sequence**:
+
+1. **Public `node_modules` API** — import from `@apollo/client`, `@apollo/client/cache`, `@apollo/client/utilities`, etc. Verify with runtime resolution (`node -e "import('@apollo/client/cache').then(...)"`) and the package `exports` map in `node_modules/@apollo/client/package.json`. Deep paths that resolve to `legacyEntryPoints` are **not** importable.
+
+2. **`patch-package` (preferred over local copies)** — when a module exists in the published package but is **not** exported via `exports`, and we are **highly confident** we will keep delegating to Apollo's implementation (not replace with Rust-WASM soon), use `patch-package` to re-export it from `@apollo/client/cache` (or the appropriate entry) instead of maintaining a fork in `src/`. Document the patch in the commit/PR. Patches live under `patches/` and apply on `postinstall`.
+
+3. **Local copy in `src/internal/` (last resort)** — only after steps 1 and 2 are ruled out concretely:
+   - Record what was tried (which import paths, `exports` map, patch feasibility).
+   - Copy from `apollo-client-sm` (reference), adapt imports to `node_modules` where possible.
+   - Add a file header: why it was copied, what Apollo path it mirrors, and that it is slated for Rust-WASM replacement.
+   - Prefer small extractions (e.g. helper functions) over copying entire modules when a patch would be too heavy.
+
+| Context | Rule |
+|---------|------|
+| Production TypeScript (`src/`) | Prefer `node_modules` + `patch-package`; `src/internal/` only per step 3 above. Never import from `apollo-client-sm/`. |
+| Dev tooling (Jest, ESLint, TS, Prettier, scripts) | May import or `extends` from `apollo-client-sm/` to avoid config drift. |
+| Understanding behavior | Read `apollo-client-sm/src/...` — do not import from the submodule in production code. |
+| Tests | May duplicate **only** InMemoryCache test files (adapted for `InMemoryCacheRs`). Tests import `InMemoryCacheRs` from this package; Apollo utilities from `node_modules` or the submodule where dev tooling already does (e.g. testing internals). |
+
+**No redundant copies** of Apollo implementation classes. Allowed exceptions:
+
+1. `InMemoryCacheRs.ts` — our implementation (initially mirroring `inMemoryCache.ts`)
+2. `InMemoryCacheRsConfig.ts` — our config type
+3. `src/internal/*` — only per import resolution order above
+4. Test files that explicitly test `InMemoryCache` behavior (adapted for `InMemoryCacheRs`)
+
+Do **not** copy `ApolloCache` or `EntityStore` — import those from `@apollo/client/cache`.
+
+## Dev tooling (avoid config drift)
+
+Align with `apollo-client-sm` instead of duplicating config:
+
+| Tool | Approach |
+|------|----------|
+| **TypeScript** | `extends` `apollo-client-sm/tsconfig.json` (and `tsconfig.tests.json` / `tsconfig.build.json` as needed) with project-specific `rootDir`, `outDir`, `include`. |
+| **Prettier** | Run with `--config apollo-client-sm/.prettierrc` (includes Apollo's custom plugins). |
+| **Jest** | Extend Apollo's setup: `FixJSDOMEnvironment`, `src/config/jest/setup.ts`, `resolver.ts`, matchers. **Project-specific overrides only**: `testMatch` (our tests), `moduleNameMapper` (WASM `pkg/`, `@apollo/client/testing/internal` → submodule path). WASM interop does not require a separate Jest project—only extra `moduleNameMapper` entries for generated `pkg/*.js`. |
+| **ESLint** | Project-local `eslint.config.mjs` is acceptable; keep rules aligned with Apollo where practical. |
+
+## Implementation strategy
+
+### Phase 1 (current): TypeScript shell + WASM interop
+
+1. Implement `InMemoryCacheRs` by strictly following `ApolloCache` abstract API (`apollo-client-sm/src/cache/core/cache.ts`).
+2. Implement all **required** abstract methods with correct signatures first.
+3. Add **optional** overrides only when needed to match `InMemoryCache` behavior.
+4. Delegate to Apollo's `EntityStore`, `Policies`, etc. from `@apollo/client/cache`; use `patch-package` or `src/internal/` for non-exported collaborators (`StoreReader`, `StoreWriter`, helpers) per import rules above.
+5. `InMemoryCacheRs` is the sole TypeScript ↔ Rust-WASM interop surface (initially).
+
+### Phase 2 (future): Rust-WASM core
+
+Replace `StoreReader`, `StoreWriter`, and other `src/internal/` modules with Rust-WASM implementations. Remove Apollo patches when the patched symbols are no longer imported.
+
+## Skills and review
+
+Before planning, implementing, or reviewing:
+
+1. Read relevant Apollo submodule code and skills in `apollo-client-sm/.claude/skills/`.
+2. For Rust/WASM work, load rules from `.cursor/skills/rust-skills/SKILL.md` (progressive disclosure — open only relevant rule files).
+3. Follow TypeScript/Prettier/ESLint conventions aligned with `apollo-client-sm`.
+
+## Breaking these rules
+
+Agents must **not** break any rule without:
+
+1. Explicit user approval
+2. Solid reasoning documented in the PR/commit message
+3. A clear chain of thought explaining why the exception is necessary
+
+Default: adhere strictly.
+
+## Build and test
+
+- `npm run wasm:dev` / `npm run wasm:build` — Rust WASM (wasm-pack)
+- `npm run build` — full package build (WASM + TypeScript)
+- `npm test` — Jest (InMemoryCache parity tests; must pass before advancing phases)
+
+## Cursor + Rust
+
+Follow efficient Rust development in Cursor (wasm-bindgen, `rust-analyzer`, incremental WASM builds). See `package.json` scripts and `wasm/` crate layout.

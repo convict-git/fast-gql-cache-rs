@@ -1,0 +1,74 @@
+{
+  "name": "fast-gql-cache-rs",
+  "version": "0.1.0",
+  "description": "Rust-WASM InMemoryCache implementation for Apollo Client",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "pkg"
+  ],
+  "scripts": {
+    "clean": "rimraf dist coverage",
+    "wasm:dev": "bash scripts/wasm-pack.sh --dev",
+    "wasm:build": "bash scripts/wasm-pack.sh --release",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build": "npm run wasm:build && npm run build:ts",
+    "dev": "npm run wasm:dev && npm run build:ts -- --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json",
+    "lint": "eslint --max-warnings 0 .",
+    "format": "prettier --config apollo-client-sm/.prettierrc --write \"src/**/*.ts\" \"config/**/*.ts\" \"*.json\" \"wasm/**/*.rs\"",
+    "check:format": "prettier --config apollo-client-sm/.prettierrc --check \"src/**/*.ts\" \"config/**/*.ts\" \"*.json\"",
+    "postinstall": "patch-package",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs",
+    "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs --watch",
+    "test:ci": "npm run wasm:build && node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs --ci"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/convict-git/fast-gql-cache-rs.git"
+  },
+  "keywords": [
+    "apollo",
+    "graphql",
+    "cache",
+    "wasm",
+    "rust"
+  ],
+  "peerDependencies": {
+    "@apollo/client": "4.2.11",
+    "graphql": "^16.0.0 || ^17.0.0"
+  },
+  "devDependencies": {
+    "@apollo/client": "4.2.11",
+    "@eslint/js": "^9.21.0",
+    "@jest/expect-utils": "^29.7.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.7",
+    "eslint": "^9.21.0",
+    "expect-type": "^1.4.0",
+    "graphql-tag": "^2.12.7",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-util": "^29.7.0",
+    "patch-package": "^8.0.1",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.2.6",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.21.0",
+    "wasm-pack": "^0.13.1"
+  }
+}

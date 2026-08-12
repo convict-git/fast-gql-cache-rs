@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "isolatedModules": true,
+    "types": ["jest", "node"]
+    ,
+    "paths": {
+      "@apollo/client/testing/internal": [
+        "./apollo-client-sm/src/testing/internal/index.ts"
+      ]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

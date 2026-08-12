@@ -1,0 +1,12 @@
+{
+  "extends": "./apollo-client-sm/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "noEmit": true,
+    "types": ["jest", "node"],
+    "paths": {}
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "pkg", "apollo-client-sm", "src/**/__tests__/**"]
+}
