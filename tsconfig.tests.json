@@ -4,6 +4,9 @@
     "rootDir": ".",
     "noEmit": true,
     "isolatedModules": true,
+    // Downlevel `using` (explicit resource management) so ts-jest emits helper
+    // calls; the base config targets ESNext, which Node's runtime parser rejects.
+    "target": "es2022",
     "types": ["jest", "node"]
     ,
     "paths": {
