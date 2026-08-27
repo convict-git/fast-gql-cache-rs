@@ -6,3 +6,6 @@ coverage/
 .DS_Store
 patches/.patch-package-timestamp
 node_modules
+
+# Rust/WASM build output
+wasm/target/
