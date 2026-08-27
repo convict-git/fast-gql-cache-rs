@@ -1,5 +1,5 @@
 # fast-gql-cache-rs - A rust-wasm based InMemoryCache implementation for apollo-client
-Currently in the proof-of-concept phase, a drop-in replacement for [apollo-client’s `InMemoryCache`](https://www.apollographql.com/docs/react/v3/api/cache/InMemoryCache), intended to improve client-side GraphQL caching performance by moving performance-critical hot paths like read, write, and normalization to Rust-WebAssembly while minimizing JavaScript single-thread overhead, expecting smoother frame rates and near-zero loss of interactivity for applications with large normalized stores and write-heavy workloads.
+Currently in the proof-of-concept phase, a drop-in replacement for [apollo-client’s `InMemoryCache`](https://www.apollographql.com/docs/react/v3/api/cache/InMemoryCache), intended to **improve client-side GraphQL caching performance** by moving performance-critical hot paths like read, write, and normalization to **Rust-WebAssembly** while minimizing JavaScript single-thread overhead, expecting smoother frame rates and near-zero loss of interactivity for applications with l**arge normalized stores and write-heavy workloads**.
 
 ## Setup dev environment
 
