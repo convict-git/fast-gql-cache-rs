@@ -7,5 +7,13 @@ Currently in the proof-of-concept phase, a drop-in replacement for [apollo-clien
 git config submodule.apollo-client-sm.url https://github.com/apollographql/apollo-client.git
 git submodule update --init --recursive --depth 1
 npm install
-rustup toolchain install nightly --profile minimal --target wasm32-unknown-unknown
+
+# Skip the toolchain update if the nightly wasm32 target is already installed.
+# On overlayfs-backed containers (common in cloud CI/agents), rustup's default
+# atomic rename can fail with EXDEV during an update; RUSTUP_PERMIT_COPY_RENAME
+# tells it to use a copy fallback instead.
+if ! rustup target list --toolchain nightly --installed 2>/dev/null | grep -q '^wasm32-unknown-unknown'; then
+  export RUSTUP_PERMIT_COPY_RENAME=true
+  rustup toolchain install nightly --profile minimal --target wasm32-unknown-unknown
+fi
 ```

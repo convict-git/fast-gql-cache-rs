@@ -1,0 +1,4 @@
+{
+  "name": "fast-gql-cache-rs",
+  "install": "set -euo pipefail\ngit config submodule.apollo-client-sm.url https://github.com/apollographql/apollo-client.git\ngit submodule update --init --recursive --depth 1\nnpm install\nif ! rustup target list --toolchain nightly --installed 2>/dev/null | grep -q '^wasm32-unknown-unknown'; then\n  export RUSTUP_PERMIT_COPY_RENAME=true\n  rustup toolchain install nightly --profile minimal --target wasm32-unknown-unknown\nfi"
+}
