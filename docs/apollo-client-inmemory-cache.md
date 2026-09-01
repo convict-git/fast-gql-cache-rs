@@ -1,4 +1,4 @@
-# Apollo Client `InMemoryCache` — Maintainer's Deep Dive
+# Apollo Client `InMemoryCache` — Deep Dive
 
 > **Source of truth.** Everything below is derived from the `apollo-client-sm` submodule,
 > pinned at `ba511be` (`@apollo/client@4.2.11`). Paths are relative to
