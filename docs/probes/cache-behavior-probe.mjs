@@ -1156,6 +1156,79 @@ section("evict(): whole entity, single field, and field-with-args");
   });
 }
 
+{
+  // Dangling references inside a list field are filtered out by
+  // StoreReader.execSubSelectedArrayImpl via store.canRead, so evicting a list
+  // member shrinks the array instead of making the query incomplete.
+  const LIST = gql`
+    query {
+      todos {
+        id
+        text
+      }
+    }
+  `;
+  const cache = new InMemoryCache();
+  cache.writeQuery({
+    query: LIST,
+    data: {
+      todos: [
+        { __typename: "Todo", id: 1, text: "one" },
+        { __typename: "Todo", id: 2, text: "two" },
+        { __typename: "Todo", id: 3, text: "three" },
+      ],
+    },
+  });
+
+  cache.evict({ id: "Todo:2" });
+
+  const afterEvict = cache.diff({ query: LIST, optimistic: false, returnPartialData: true });
+  show("list field after evicting a member", {
+    rootQueryStillHoldsThreeRefs: cache.extract().ROOT_QUERY.todos.length,
+    readBack: afterEvict.result,
+    complete: afterEvict.complete,
+  });
+  check("dangling references are filtered out of list results", () => {
+    assert.deepEqual(
+      afterEvict.result.todos.map((t) => t.id),
+      [1, 3]
+    );
+  });
+  check("a filtered-out dangling reference does not make the query incomplete", () => {
+    assert.equal(afterEvict.complete, true);
+    assert.equal(afterEvict.missing, undefined);
+  });
+  check("the stale Reference is still present in the raw store until gc", () => {
+    assert.equal(cache.extract().ROOT_QUERY.todos.length, 3);
+  });
+
+  // A dangling reference in a *singular* field is a different story: there is
+  // no array to filter, so the read reports a dangling-reference error.
+  const SINGLE = gql`
+    query {
+      featured {
+        id
+        text
+      }
+    }
+  `;
+  const single = new InMemoryCache();
+  single.writeQuery({
+    query: SINGLE,
+    data: { featured: { __typename: "Todo", id: 9, text: "nine" } },
+  });
+  single.evict({ id: "Todo:9" });
+  const singleDiff = single.diff({ query: SINGLE, optimistic: false, returnPartialData: true });
+  show("singular field after evicting its target", {
+    complete: singleDiff.complete,
+    missing: singleDiff.missing?.missing,
+  });
+  check("a dangling singular reference produces a dangling-reference error", () => {
+    assert.equal(singleDiff.complete, false);
+    assert.match(String(singleDiff.missing.missing.featured), /^Dangling reference to missing Todo:9 object$/);
+  });
+}
+
 // ---------------------------------------------------------------------------
 section("reset() and restore(): lifecycle of watches and result caches");
 // ---------------------------------------------------------------------------
