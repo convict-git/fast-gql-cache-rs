@@ -4950,6 +4950,933 @@ property — but as of 4.2.11 nothing inside `src/` branches on it. Treat it as 
 advertising its immutability contract to application and integration code rather than as a
 switch that changes client behaviour.
 
-<!-- CHUNK-MARKER -->
+---
 
+## Part 8 — The cache in the Apollo Client pipeline
+
+Parts 0–7 treated the cache as a closed system. This part opens the boundary: who calls
+which method, in what order, and — most importantly — **which client behaviours are actually
+cache behaviours in disguise**. Several things people believe are `InMemoryCache` features
+(deduplicated notifications, "the query didn't re-render", `@nonreactive`) live partly or
+wholly in `QueryManager` and `ObservableQuery`.
+
+### 8.0 The call map
+
+Every arrow below is a real call site. Nothing else in `src/` touches the cache.
+
+```mermaid
+flowchart TB
+    subgraph app["Application surface"]
+        AC["ApolloClient"]:::ext
+        HK["useFragment ·<br/>useSuspenseFragment"]:::ext
+    end
+
+    subgraph core["Core orchestration"]
+        QM["QueryManager"]:::ext
+        OQ["ObservableQuery"]:::ext
+        QI["QueryInfo"]:::ext
+        LS["LocalState"]:::ext
+        MK["maskOperation ·<br/>maskFragment"]:::ext
+    end
+
+    subgraph cache["InMemoryCache"]
+        RD["read · diff"]:::read
+        WR["write"]:::write
+        WA["watch"]:::memo
+        BA["batch"]:::write
+        MU["modify · evict ·<br/>removeOptimistic · reset"]:::dirty
+        MI["identify · transformDocument ·<br/>fragmentMatches · lookupFragment ·<br/>resolvesClientField · extract · restore"]:::api
+    end
+
+    AC -->|"readQuery/readFragment<br/>writeQuery/writeFragment<br/>watchFragment<br/>extract/restore"| MI
+    HK -->|"identify"| MI
+    QM -->|"transformDocument (via DocumentTransform)<br/>transformForLink"| MI
+    QM -->|"diff — fetchQueryByPolicy.readCache()"| RD
+    QM -->|"batch — refetchQueries"| BA
+    QM -->|"removeOptimistic · reset"| MU
+    OQ -->|"diff — getCacheDiff()"| RD
+    OQ -->|"watch — resubscribeCache()"| WA
+    OQ -->|"batch — fetchMore"| BA
+    QI -->|"diff before/after write"| RD
+    QI -->|"writeQuery inside batch"| WR
+    QI -->|"recordOptimisticTransaction"| BA
+    QI -->|"modify ROOT_MUTATION scrub"| MU
+    QI -.->|"wraps evict/modify/reset<br/>to count destructive ops"| MU
+    LS -->|"fragmentMatches"| MI
+    MK -->|"fragmentMatches · lookupFragment"| MI
+    WA -.->|"broadcast callback"| OQ
+
+    classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
+    classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
+    classDef ext fill:#e2e8f0,stroke:#475569,stroke-width:2px,color:#0f172a
+```
+
+Read the map as three tiers:
+
+| Tier | Members | Cache relationship |
+| --- | --- | --- |
+| **Owner** | `ApolloClient` | constructs the cache, forwards the convenience API verbatim |
+| **Orchestrators** | `QueryManager`, `ObservableQuery`, `QueryInfo` | the only code that writes, watches, and transacts |
+| **Consultants** | `LocalState`, masking, `useFragment` | read-only metadata queries (`fragmentMatches`, `lookupFragment`, `identify`) |
+
+### 8.1 Document transforms — what the cache sees is not what you wrote
+
+`QueryManager` wraps `cache.transformDocument` in a `DocumentTransform` and — critically —
+disables that transform's own cache:
+
+```ts
+const defaultDocumentTransform = new DocumentTransform(
+  (document) => this.cache.transformDocument(document),
+  // Allow the apollo cache to manage its own transform caches
+  { cache: false }
+);
+```
+
+When a user transform is configured, the default transform runs **twice**, sandwiching it:
+
+```ts
+this.documentTransform =
+  documentTransform ?
+    defaultDocumentTransform
+      .concat(documentTransform)
+      // The custom document transform may add new fragment spreads or new
+      // field selections, so we want to give the cache a chance to run
+      // again. For example, the InMemoryCache adds __typename to field
+      // selections and fragments from the fragment registry.
+      .concat(defaultDocumentTransform)
+  : defaultDocumentTransform;
+```
+
+This is why §7.15's `transformDocument` must be **idempotent**: the second pass sees a
+document that already has `__typename` everywhere and must return it unchanged (and,
+because of `addTypenameTransform`'s own memo, return it `===`-identical).
+
+```mermaid
+flowchart LR
+    U["User document<br/><i>query Q { todo { text } }</i>"]:::ext
+    T1["defaultDocumentTransform<br/>= cache.transformDocument<br/><i>fragment registry + __typename</i>"]:::api
+    T2["user documentTransform"]:::ext
+    T3["defaultDocumentTransform<br/><i>again — idempotent</i>"]:::api
+    D["transformed document<br/><i>the cache's key everywhere</i>"]:::store
+
+    U --> T1 --> T2 --> T3 --> D
+
+    D --> GDI["getDocumentInfo(document)<br/><i>AutoCleanedWeakCache, 2000</i>"]:::memo
+    GDI --> SQ["serverQuery<br/><i>@client/@connection/@nonreactive/@unmask stripped</i>"]:::ext
+    GDI --> CQ["clientQuery"]:::ext
+    GDI --> AQ["asQuery<br/><i>mutation/subscription → query</i>"]:::read
+    GDI --> NRQ["nonReactiveQuery"]:::ext
+
+    D --> TFL["cache.transformForLink<br/><i>identity for InMemoryCache</i>"]:::api
+
+    classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
+    classDef store fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef ext fill:#e2e8f0,stroke:#475569,stroke-width:2px,color:#0f172a
+```
+
+Two derived documents matter to the cache:
+
+- **`asQuery`** rewrites `operation: "mutation" | "subscription"` to `"query"`. Both
+  `StoreReader` and `StoreWriter` call `getOperationDefinition`-style helpers that assume a
+  query; `QueryInfo.markMutationResult` passes `asQuery` to `cache.diff` for exactly this
+  reason ("The cache complains if passed a mutation where it expects a query").
+- **`serverQuery`** strips `@client`, `@connection`, `@nonreactive` and `@unmask` before the
+  link chain sees it. The cache never sees `serverQuery` — it always works with the full
+  transformed document, which is why `@connection` (Part 3.3) and `@nonreactive`
+  (Part 4.3) are cache-visible directives at all.
+
+> **Sharp edge.** The document identity that reaches the cache is the *transformed* one.
+> `StoreReader`'s memo keys and `Policies`' `keyArgs` closures are keyed off nodes inside
+> it. Two `gql` documents that print identically but are distinct objects produce distinct
+> memo entries — `DocumentTransform`'s own `WeakCache` is what normally collapses them.
+
+### 8.2 `ObservableQuery` — the cache's principal client
+
+An `ObservableQuery` holds **exactly one** cache watch at a time, installed by
+`resubscribeCache()` and torn down on query/variable change:
+
+```ts
+const watch: ObservableQuery.CacheWatchOptions<TData, TVariables> = {
+  query,
+  variables,
+  optimistic: true,
+  watcher: this,
+  callback: (diff) => { /* ... */ },
+};
+const cancelWatch = this.cache.watch(watch);
+```
+
+`watcher: this` is the extension field referenced throughout Part 6 — it is how
+`onWatchUpdated` callbacks in `QueryInfo` and `QueryManager` recognise "is this watch mine?"
+
+Three fetch policies **do not watch at all**:
+
+```ts
+const shouldUnsubscribe =
+  fetchPolicy === "standby" ||
+  fetchPolicy === "no-cache" ||
+  this.waitForNetworkResult;
+```
+
+`waitForNetworkResult` is initialised to `fetchPolicy === "network-only"` and cleared the
+first time a network notification arrives, at which point `resubscribeCache()` runs again.
+So a `network-only` query is *invisible to the cache's broadcast* until its first response
+lands.
+
+#### The watch callback's four gates
+
+```mermaid
+flowchart TB
+    CB["callback(diff) from broadcastWatch"]:::memo
+    G0{"info.hasClientExports<br/>|| hasForcedResolvers?"}:::dirty
+    G0X["watch.lastDiff = undefined<br/><i>defeat the equality gate so future<br/>equal diffs still arrive</i>"]:::dirty
+    G1{"watch.lastOwnDiff === diff?"}:::dirty
+    G1X["return — this broadcast is<br/>the echo of our own write"]:::dirty
+    G2{"!diff.complete AND<br/>(previous.error || previous is<br/>uninitialized/empty)?"}:::dirty
+    G2X["return — let the refetch repair<br/>the partial result instead"]:::dirty
+    G3{"equal(previousResult.data,<br/>diff.result)?"}:::dirty
+    G3X["return — no observable change"]:::dirty
+    OK["scheduleNotify()<br/><i>dirty = true; setTimeout(notify, 0)</i>"]:::write
+
+    CB --> G0
+    G0 -->|yes| G0X --> G1
+    G0 -->|no| G1
+    G1 -->|yes| G1X
+    G1 -->|no| G2
+    G2 -->|yes| G2X
+    G2 -->|no| G3
+    G3 -->|yes| G3X
+    G3 -->|no| OK
+
+    classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
+```
+
+Gate 0 is a deliberate defeat of the cache's own optimisation. The comment is explicit
+about the coupling:
+
+```ts
+// This is based on an implementation detail of `InMemoryCache`, which
+// is not optimal - but the only alternative to this would be to
+// resubscribe to the cache asynchonouly, which would bear the risk of
+// missing further synchronous updates.
+watch.lastDiff = undefined;
+```
+
+Recall from §6.2 that `broadcastWatch` skips the callback when `equal(lastDiff.result,
+diff.result)`. A query with `@client @export` variables or forced resolvers may produce a
+*different* final result from an *identical* cache diff, so it clears `lastDiff` to force
+every future broadcast through.
+
+Gate 1 is the "own write" suppression. `QueryInfo.markQueryResult` stamps
+`watch.lastOwnDiff = diff` from inside the `batch`'s `onWatchUpdated`; when the deferred
+broadcast then delivers that same `diff` object, the callback drops it by **reference
+identity**, not deep equality. The doc comment on the field explains why full suppression
+is not an option:
+
+```ts
+/**
+ * @internal
+ * We cannot suppress the broadcast completely, since that would
+ * ...
+ * Without the `own B` being broadcast, the `cache.watch` would swallow
+ * C.
+ * So instead we track the last "own diff" and suppress further processing
+ * in the callback.
+ */
+lastOwnDiff?: Cache.DiffResult<TData>;
+```
+
+Suppressing the broadcast would leave `watch.lastDiff` stale at `A`, and the *next*
+genuine change `C` would be compared against `A` instead of `B`. The watch must see `B` to
+keep its equality baseline honest — it just must not act on it.
+
+### 8.3 Fetch policies as a cache-interaction table
+
+`fetchQueryByPolicy` is where a fetch policy becomes concrete cache calls. Its `readCache`
+helper is fixed:
+
+```ts
+const readCache = () =>
+  this.cache.diff<any>({
+    query,
+    variables,
+    returnPartialData: true,
+    optimistic: true,
+  });
+```
+
+Note `returnPartialData: true` unconditionally — the *user's* `returnPartialData` is applied
+later in `toResult`, which blanks `data` to `undefined` when `!diff.complete`. The cache is
+always asked for everything it has.
+
+| `fetchPolicy` | Reads cache? | Watches cache? | Writes result? | Emission shape |
+| --- | --- | --- | --- | --- |
+| `cache-first` | yes | yes | `MERGE` | cache alone if `complete`; else cache-then-link when `returnPartialData`, else link only |
+| `cache-and-network` | yes | yes | `MERGE` | `concat(cache, link)` when `complete \|\| returnPartialData` |
+| `cache-only` | yes | yes | — | cache only, `NetworkStatus.ready` |
+| `network-only` | no | **after first result** | `MERGE`/`OVERWRITE` | link only |
+| `no-cache` | no | no | `FORBID` | link only |
+| `standby` | no | no | — | `EMPTY` |
+
+`CacheWriteBehavior` is chosen once per fetch and threaded into `QueryInfo`:
+
+```ts
+const cacheWriteBehavior =
+  fetchPolicy === "no-cache" ? CacheWriteBehavior.FORBID
+    // Watched queries must opt into overwriting existing data on refetch,
+    // by passing refetchWritePolicy: "overwrite" in their WatchQueryOptions.
+  : (
+    networkStatus === NetworkStatus.refetch &&
+    normalized.refetchWritePolicy !== "merge"
+  ) ?
+    CacheWriteBehavior.OVERWRITE
+  : CacheWriteBehavior.MERGE;
+```
+
+| Behaviour | Effect on the cache |
+| --- | --- |
+| `FORBID` | no `diff`, no `write` — `markQueryResult` returns the raw network result |
+| `OVERWRITE` | `writeQuery({ overwrite: true })` → `StoreWriter` sets `overwrite` in `WriteContext`, which suppresses `warnAboutDataLoss` **and** makes paginated `merge` functions receive `existing === undefined` |
+| `MERGE` | the normal write |
+
+`OVERWRITE` is the mechanism behind `refetchWritePolicy: "overwrite"` (the default for
+refetches). Without it, a refetch of `feed(offset: 0)` would append to the existing list via
+the user's `merge` function rather than replacing it.
+
+### 8.4 `QueryInfo.markQueryResult` — the write path and the feud breaker
+
+This is the single most important cache interaction in the client. Every network result for
+a watched query goes through it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant L as Link result
+    participant QI as QueryInfo
+    participant C as InMemoryCache
+    participant W as StoreWriter
+    participant OQ as ObservableQuery watch
+
+    L->>QI: markQueryResult(incoming, opInfo)
+    QI->>OQ: resetNotifications() — cancel pending notify
+    QI->>C: diff({ returnPartialData: true, optimistic: true })
+    C-->>QI: lastDiff
+    Note over QI: incremental (@defer) merge uses lastDiff.result as the base
+    QI->>C: batch({ update, onWatchUpdated })
+    activate C
+    Note over C: txCount++ — broadcasts deferred
+    alt shouldWrite(result, variables)
+        QI->>C: cache.writeQuery({ query, data, variables, overwrite })
+        C->>W: writeToStore
+        W-->>C: dirty fields
+        Note over QI: lastWrite = { result, variables, dmCount }
+    else identical to lastWrite
+        Note over QI: skip the write — feud breaker
+        alt lastDiff.complete
+            Note over QI: result.data = lastDiff.result; return early
+        end
+    end
+    QI->>C: cache.diff(diffOptions) — read back
+    C-->>QI: diff
+    alt diff.complete
+        Note over QI: result.data = diff.result<br/>(read functions now applied)
+    else __DEV__ && written && !hasNext
+        Note over QI: warnAboutPartialCacheResult
+    end
+    Note over C: txCount-- → broadcastWatches()
+    C->>QI: onWatchUpdated(watch, diff)
+    Note over QI: if watch.watcher === this.observableQuery<br/>watch.lastOwnDiff = diff
+    C->>OQ: callback(diff) — dropped by gate 1
+    deactivate C
+```
+
+Three things deserve emphasis.
+
+**Why a `batch` at all.** The comment says it plainly:
+
+```ts
+// Using a transaction here so we have a chance to read the result
+// back from the cache before the watch callback fires as a result
+// of writeQuery, so we can store the new diff quietly and ignore
+// it when we receive it redundantly from the watch callback.
+```
+
+The `update` function writes *and then* re-reads, all while `txCount > 0`. Only when the
+batch unwinds does the broadcast fire, and by then `onWatchUpdated` has already tagged the
+watch with `lastOwnDiff`.
+
+**The read-back replaces the network result.** If the cache can produce a complete result,
+`result.data` becomes the *cache's* version, not the server's:
+
+```ts
+if (diff.complete) {
+  result = { ...result, data: diff.result };
+}
+```
+
+This is how `read` functions, `merge` functions, and normalization-driven cross-query
+consistency reach the caller. It is also why a `read` function that drops a field triggers
+`warnAboutPartialCacheResult` — the client wrote data it then could not read back, so it
+falls back to the raw network result and loses all `read`-function output.
+
+**The feud breaker.** `shouldWrite` guards against two queries repeatedly clobbering each
+other's version of the same entity:
+
+```ts
+private shouldWrite(result, variables) {
+  const { lastWrite } = this;
+  return !(
+    lastWrite &&
+    // If cache.evict has been called since the last time we wrote this
+    // data into the cache, there's a chance writing this result into
+    // the cache will repair what was evicted.
+    lastWrite.dmCount === destructiveMethodCounts.get(this.cache) &&
+    equal(variables, lastWrite.variables) &&
+    equal(result.data, lastWrite.result.data) &&
+    result.extensions?.[streamInfoSymbol] ===
+      lastWrite.result.extensions?.[streamInfoSymbol]
+  );
+}
+```
+
+`destructiveMethodCounts` is maintained by monkey-patching the cache — the one place in
+Apollo Client where the cache's own methods are wrapped from outside:
+
+```ts
+function wrapDestructiveCacheMethod(cache: ApolloCache, methodName: "evict" | "modify" | "reset") {
+  const original = cache[methodName];
+  if (typeof original === "function") {
+    cache[methodName] = function () {
+      destructiveMethodCounts.set(cache, (destructiveMethodCounts.get(cache)! + 1) % 1e15);
+      return original.apply(this, arguments);
+    };
+  }
+}
+```
+
+The counter is installed once per cache (guarded by `destructiveMethodCounts.has(cache)`)
+by the first `QueryInfo` constructed for that cache. Any `evict`/`modify`/`reset` bumps it,
+which forces the next identical network result to be written again — because eviction may
+have removed exactly the data this result would restore.
+
+> **Re-implementation note.** A drop-in `InMemoryCache` replacement must keep `evict`,
+> `modify` and `reset` as **writable own-or-prototype properties assignable on the
+> instance**. If they were defined as non-writable, or as class fields captured by internal
+> closures that bypass the patched property, the feud breaker silently stops seeing
+> destructive operations and stale results stop being repaired.
+
+### 8.5 Mutations — optimistic layer, final write, root-field scrub
+
+```mermaid
+stateDiagram-v2
+    direction TB
+    [*] --> Optimistic: optimisticResponse provided
+    [*] --> InFlight: no optimisticResponse
+
+    Optimistic: markMutationOptimistic
+    Optimistic: recordOptimisticTransaction(tx, queryInfo.id)
+    Optimistic: → Layer(id = queryInfo.id) on optimisticData
+    Optimistic: writes ROOT_MUTATION + runs update() in the layer
+    Optimistic --> InFlight: link request starts
+
+    InFlight --> Success: link emits result
+    InFlight --> Failure: link errors
+
+    Success: markMutationResult
+    Success: refetchQueries({ optimistic:false, removeOptimistic: id })
+    Success: → cache.batch removes the layer AND writes root, one broadcast
+    Success --> Scrubbed
+
+    Scrubbed: cache.modify({ id: "ROOT_MUTATION", fields → DELETE })
+    Scrubbed: keeps only __typename
+    Scrubbed --> [*]
+
+    Failure: cache.removeOptimistic(queryInfo.id)
+    Failure: broadcastQueries()
+    Failure --> [*]
+```
+
+The optimistic entry point is tiny — it simply replays the *whole* result-marking path
+inside a recorded transaction:
+
+```ts
+this.cache.recordOptimisticTransaction((cache) => {
+  try {
+    this.markMutationResult({ data }, mutation, cache as TCache);
+  } catch (error) {
+    invariant.error(error);
+  }
+}, this.id);
+```
+
+Because `markMutationResult` takes the cache as a parameter (defaulting to `this.cache`),
+the optimistic run writes to the **layer** handed to the transaction, while the real run
+writes to the root. Same code, two targets — this is why `update` functions must be pure
+enough to run twice.
+
+The layer id is `queryInfo.id` (a per-`QueryManager` counter stringified), and the same
+string is passed as `removeOptimistic` to the final `refetchQueries`, so removal and the
+authoritative write collapse into a single `batch` and therefore a single broadcast (§6.4).
+
+Three cache-visible details:
+
+- **`ROOT_MUTATION` is written and then scrubbed.** The write is needed so `update`
+  functions can `cache.diff({ id: "ROOT_MUTATION" })` and see `read`-function output. The
+  scrub is a `modify` rather than an `evict` because it must be rollback-safe:
+
+  ```ts
+  // TODO Do this with cache.evict({ id: 'ROOT_MUTATION' }) but make it
+  // shallow to allow rolling back optimistic evictions.
+  cache.modify({
+    id: "ROOT_MUTATION",
+    fields(value, { fieldName, DELETE }) {
+      return fieldName === "__typename" ? value : DELETE;
+    },
+  });
+  ```
+
+  `keepRootFields: true` skips it. Entities referenced from `ROOT_MUTATION` survive the
+  scrub — only the root's own fields go, and the entities are reachable from `ROOT_QUERY`
+  or retained elsewhere (or become garbage at the next `gc()`).
+- **`updateQueries` reads through `getCacheDiff({ optimistic: false })`** and only runs the
+  reducer when `complete` — an incomplete query is skipped silently.
+- **Nothing is scrubbed while `hasNext`** (`@defer` still streaming), so partial mutation
+  payloads accumulate on `ROOT_MUTATION` until the final chunk.
+
+### 8.6 `refetchQueries` — the batch-and-collect protocol
+
+`QueryManager.refetchQueries` is the most elaborate `cache.batch` caller in the codebase,
+and the reason `onWatchUpdated`'s return value is meaningful (§6.4).
+
+```mermaid
+flowchart TB
+    START["refetchQueries({ updateCache, include,<br/>optimistic, removeOptimistic, onQueryUpdated })"]:::api
+    INC["include → getObservableQueries(include)<br/>seed includedQueriesByOq with lastDiff<br/><i>skips cache-only and variablesUnknown</i>"]:::read
+    BATCH["cache.batch({ update: updateCache,<br/>optimistic: (optimistic &amp;&amp; removeOptimistic) || false,<br/>removeOptimistic, onWatchUpdated })"]:::write
+    OWU{"onWatchUpdated(watch, diff, lastDiff)<br/>watch.watcher instanceof ObservableQuery<br/>&amp;&amp; not already handled?"}:::memo
+    HAS["onQueryUpdated provided?"]:::memo
+    CALL["result = onQueryUpdated(oq, diff, lastDiff)<br/>true → oq.refetch().retain()<br/>false → skip AND suppress broadcast<br/>other → collected into results"]:::write
+    DEF["onQueryUpdated !== null &amp;&amp;<br/>fetchPolicy !== 'cache-only'<br/>→ add to includedQueriesByOq"]:::read
+    AFTER["for each includedQueriesByOq entry:<br/>onQueryUpdated ?? refetch().retain()"]:::write
+    RM["removeOptimistic (again, defensively —<br/>no-op if batch already removed it)"]:::dirty
+    OUT["Map&lt;ObservableQuery, result&gt;"]:::store
+
+    START --> INC --> BATCH --> OWU
+    OWU -->|yes| HAS
+    HAS -->|yes| CALL
+    HAS -->|no| DEF
+    OWU -->|no| BATCH
+    CALL --> AFTER
+    DEF --> AFTER
+    AFTER --> RM --> OUT
+
+    classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
+    classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef store fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
+```
+
+The `optimistic` translation is the subtle part:
+
+```ts
+optimistic: (optimistic && removeOptimistic) || false,
+```
+
+`refetchQueries` accepts only `true`/`false`, but `cache.batch` accepts `false | true |
+string`. `true` is translated into the **string** form, which (§6.4) creates a temporary
+layer, runs `updateCache` inside it, and — paired with `removeOptimistic` — discards it
+immediately. That gives "run this update, notify everyone about its effects, then roll it
+back" in a single broadcast. The comment spells out the deliberate non-support:
+
+```ts
+// In other words, we are deliberately not supporting the use case of
+// writing to an *existing* optimistic layer (using the refetchQueries
+// updateCache function), since that would potentially interfere with
+// other optimistic updates in progress.
+```
+
+`onQueryUpdated` returning `false` is the only way application code can **suppress a cache
+broadcast to a specific watcher** — it propagates back into `broadcastWatches`'s
+`onWatchUpdated` return check (§6.4).
+
+### 8.7 Broadcast → notify → reobserve
+
+There are two independent notification systems, and confusing them is a common source of
+bugs. The cache's broadcast is *per-watch and synchronous*; `QueryManager.broadcastQueries`
+is *global and imperative*.
+
+```mermaid
+flowchart TB
+    subgraph cacheside["Cache-driven (per-watch, synchronous)"]
+        BW["cache.broadcastWatches()"]:::memo
+        MBW["maybeBroadcastWatch(watch)<br/><i>memoized; equality gate</i>"]:::memo
+        CB["watch.callback(diff)"]:::memo
+        SN["oq.scheduleNotify()<br/><i>dirty = true; setTimeout(…, 0)</i>"]:::write
+    end
+
+    subgraph clientside["Client-driven (global, imperative)"]
+        BQ["queryManager.broadcastQueries()"]:::ext
+        NF["oq.notify() for every obsQuery"]:::ext
+    end
+
+    NOTIFY["ObservableQuery.notify(scheduled)"]:::api
+    GATE{"dirty AND<br/>(cache-only || cache-and-network<br/>|| no active operations)?"}:::dirty
+    DROP["drop"]:::dirty
+    OPTCHK{"equal(optimistic diff,<br/>non-optimistic diff)?"}:::dirty
+    RCF["reobserveCacheFirst()<br/><i>may hit the network</i>"]:::write
+    PUSH["input.next({ source: 'cache' })<br/><i>never hits the network</i>"]:::read
+
+    BW --> MBW --> CB --> SN --> NOTIFY
+    BQ --> NF --> NOTIFY
+    NOTIFY --> GATE
+    GATE -->|no| DROP
+    GATE -->|yes| OPTCHK
+    OPTCHK -->|yes: not optimistic| RCF
+    OPTCHK -->|no: optimistic in play| PUSH
+
+    classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
+    classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
+    classDef ext fill:#e2e8f0,stroke:#475569,stroke-width:2px,color:#0f172a
+```
+
+`broadcastQueries` is deliberately dumb:
+
+```ts
+public broadcastQueries() {
+  if (this.onBroadcast) this.onBroadcast();
+  this.obsQueries.forEach((observableQuery) => observableQuery.notify());
+}
+```
+
+It is called after mutations, after `refetchObservableQueries`, and after subscription
+results — situations where client state (not just cache state) changed. `notify(false)`
+short-circuits for `@client @export`/forced-resolver queries so those only ever wake up via
+the cache's own deferred `scheduleNotify` path.
+
+The **optimistic check inside `notify`** is a second, independent use of the cache:
+
+```ts
+const diff = this.getCacheDiff();
+if (equal(diff.result, this.getCacheDiff({ optimistic: false }).result)) {
+  this.reobserveCacheFirst();
+} else {
+  this.input.next({ /* deliver the optimistic data, no network */ });
+}
+```
+
+Two full `diff` calls — one against `optimisticData`, one against `data` — run on every
+notification. When they agree, the query is free to reobserve (possibly refetching); when
+they differ, an optimistic layer is in play and the client refuses to start a network
+request in the middle of it. §7.2's `fromOptimisticTransaction` flag exists for the
+`broadcastWatch` path; this comparison is the equivalent for the `notify` path, and the
+comment says so: *"`fromOptimisticTransaction` is not available through the `cache.diff`
+code path, so we need to check it this way."*
+
+> **Performance note.** These two diffs are usually cheap — both hit `StoreReader`'s memo,
+> and the optimistic one hits the *same* memo entries when no layer exists, because
+> `optimisticData === data` in that case (§2.1). With a layer on the stack the optimistic
+> read uses a different `CacheGroup` and cannot share entries. The companion performance
+> document covers the cost profile.
+
+### 8.8 Local state and `@client` fields
+
+`LocalState` is a cache *consultant*, not a cache writer. It touches the cache in exactly
+two ways:
+
+```ts
+cache.fragmentMatches(selection, rootValue.__typename)   // inline fragments
+cache.fragmentMatches(fragment, typename ?? "")          // named fragment spreads
+```
+
+and, from `QueryManager`, via `resolvesClientField` (§7.16), which decides whether a
+`@client` field is the *cache's* responsibility (a `read` function in `typePolicies`) or
+the *resolver's*. If neither provides it, local state warns and writes `null`.
+
+The `hasForcedResolvers` path is the interesting one for cache semantics. When a query has
+`@client(always: true)` fields, `fetchQueryByPolicy` runs local resolvers **over the cache
+diff result**, so the emitted data is `cache diff → resolver overlay`, and — per §8.2 gate 0
+— the watch's equality gate is disabled because the overlay can change while the diff does
+not.
+
+### 8.9 Data masking
+
+Masking sits *after* the cache and consumes two metadata methods:
+
+| Call | Purpose |
+| --- | --- |
+| `cache.fragmentMatches(inlineFragment, data.__typename)` | decide whether an inline fragment's fields belong to this object's masked view |
+| `cache.lookupFragment(fragmentName)` | resolve a spread whose definition lives only in the fragment registry |
+
+This is why §7.16 flags `fragmentMatches` as load-bearing: the base-class default returns
+`true` with a warning, which makes masking permissive (nothing gets masked behind an
+interface condition) rather than incorrect-but-silent.
+
+`QueryManager` also injects `@nonreactive` onto every non-`@unmask` fragment spread when
+building `nonReactiveQuery` (`addNonReactiveToNamedFragments`), so that a masked fragment's
+fields do not wake up a parent query — the cache honours that directive in
+`StoreReader`/`StoreWriter` field flattening (Part 4.3).
+
+### 8.10 `resetStore` and `clearStore`
+
+```ts
+public clearStore(options: Cache.ResetOptions = { discardWatches: true }): Promise<void> {
+  this.cancelPendingFetches(
+    newInvariantError("Store reset while query was in flight (not completed in link chain)")
+  );
+  this.obsQueries.forEach((observableQuery) => { observableQuery.reset(); });
+  if (this.mutationStore) { this.mutationStore = {}; }
+  return this.cache.reset(options);
+}
+```
+
+The ordering matters and maps directly onto §7.13:
+
+1. **Cancel in-flight fetches first.** Their results depend on data that is about to
+   disappear; writing them back afterwards would resurrect a partial store.
+2. **Reset the observable queries** so they do not deliver stale results.
+3. **Then** reset the cache. `discardWatches: true` (the `clearStore` default) drops every
+   watch and skips the broadcast entirely; `client.resetStore()` uses
+   `discardWatches: false` and then calls `refetchObservableQueries()`.
+
+### 8.11 Memory internals — the cache's own telemetry
+
+In development, `client.getMemoryInternals()` reaches into the cache's private memo state.
+This doubles as an authoritative list of every memoized function the cache owns:
+
+```ts
+function _getInMemoryCacheMemoryInternals(this: InMemoryCache) {
+  return {
+    ..._getApolloCacheMemoryInternals.apply(this as any),
+    addTypenameDocumentTransform: transformInfo(this["addTypenameTransform"]),
+    inMemoryCache: {
+      executeSelectionSet: getWrapperInformation(this["storeReader"]["executeSelectionSet"]),
+      executeSubSelectedArray: getWrapperInformation(this["storeReader"]["executeSubSelectedArray"]),
+      maybeBroadcastWatch: getWrapperInformation(this["maybeBroadcastWatch"]),
+    },
+    fragmentRegistry: {
+      findFragmentSpreads: getWrapperInformation(fragments?.findFragmentSpreads),
+      lookup: getWrapperInformation(fragments?.lookup),
+      transform: getWrapperInformation(fragments?.transform),
+    },
+  };
+}
+```
+
+| Memo | Configuration key | Default limit |
+| --- | --- | --- |
+| `StoreReader.executeSelectionSet` | `inMemoryCache.executeSelectionSet` | 50 000 |
+| `StoreReader.executeSubSelectedArray` | `inMemoryCache.executeSubSelectedArray` | 10 000 |
+| `InMemoryCache.maybeBroadcastWatch` | `inMemoryCache.maybeBroadcastWatch` | 5 000 |
+| `ApolloCache.getFragmentDoc` | `cache.fragmentQueryDocuments` | 1 000 |
+| `canonicalStringify` | `canonicalStringify` | 1 000 |
+| `FragmentRegistry.lookup` / `.transform` / `.findFragmentSpreads` | `fragmentRegistry.*` | 1 000 / 2 000 / 4 000 |
+
+All are overridable through `import { cacheSizes } from "@apollo/client/utilities"`. Every
+one is a *bounded LRU*, so exceeding a limit degrades to recomputation, never to incorrect
+results — the correctness of the cache never depends on a memo entry surviving.
+
+---
+
+## Part 9 — Invariants and a re-implementation checklist
+
+This part is the specification distilled. If a re-implementation satisfies every invariant
+here and passes `docs/probes/cache-behavior-probe.mjs`, it is behaviourally compatible with
+`InMemoryCache` for the surface Apollo Client itself depends on.
+
+### 9.1 The invariants
+
+Each invariant names the part that derives it and the failure mode of violating it.
+
+#### Storage
+
+| # | Invariant | Derived in | Violation shows up as |
+| --- | --- | --- | --- |
+| S1 | The store is a **flat** `Record<string, StoreObject>`; nesting exists only inside non-normalizable values. | 2.0 | unbounded duplication; cross-query updates stop propagating |
+| S2 | Every normalizable object is replaced by `{ __ref: id }` at its parent's field. Reference identity is the *string*, not the object. | 2.0, 4.5 | `===` comparisons on `Reference` objects silently fail |
+| S3 | A field's storage key is `getStoreFieldName(typename, fieldName, args, directives, keyArgs)`, not the field's response name. | 3.3 | two argument sets collide; aliases produce phantom fields |
+| S4 | `ROOT_QUERY`, `ROOT_MUTATION`, `ROOT_SUBSCRIPTION` are ordinary entries distinguished only by being implicitly retained. | 2.9 | roots get garbage-collected |
+| S5 | `extract()` output round-trips through `restore()` exactly, including `__META.extraRootIds` (sorted). | 7.11, 7.12 | SSR hydration loses `retain` state |
+| S6 | Writing a field to the value it already holds (`===` or deep-equal per `storeObjectReconciler`) must **not** dirty it. | 2.6 | broadcast storms; infinite render loops |
+
+#### Layers
+
+| # | Invariant | Derived in | Violation shows up as |
+| --- | --- | --- | --- |
+| L1 | Layers form a singly-linked parent chain; lookup walks child→parent and stops at the first entry that has the `dataId`. | 2.1, 2.2 | optimistic data leaks into non-optimistic reads |
+| L2 | `optimisticData === data` when no layer exists. Reads with `optimistic: true` and `false` then share memo entries. | 2.1 | double the read cost on every notification (§8.7) |
+| L3 | The `Stump` is created on the first `batch`/`recordOptimisticTransaction` and **never removed**, so optimistic reads have a stable `CacheGroup`. | 2.1 | optimistic dependencies get dropped when the last layer pops |
+| L4 | Removing a layer **replays** every surviving layer above it, in order, and dirties the union of fields that differ. | 2.10 | rollback leaves stale optimistic values visible |
+| L5 | A layer's `CacheGroup` has `caching = true` only when the group is the optimistic one; the root group's `keyMaker` is separate. | 2.4 | root reads observe optimistic invalidations |
+
+#### Dependency tracking and reactivity
+
+| # | Invariant | Derived in | Violation shows up as |
+| --- | --- | --- | --- |
+| D1 | Every field *read* registers a dependency on `(dataId, storeFieldName)` in the reading group. | 2.4, 5.7 | reads go stale after a write |
+| D2 | Every field *write that changed something* dirties `(dataId, storeFieldName)` in the writing group **and its parent groups**. | 2.4, 2.6 | optimistic layer writes do not invalidate root readers |
+| D3 | Deleting an entity dirties `(dataId, "__exists")` in addition to each field. | 2.8 | dangling-reference reads keep returning cached results |
+| D4 | `broadcastWatches` is a no-op while `txCount > 0`; the count is decremented in a `finally`. | 6.3, 6.4 | a throwing `update` function permanently silences the cache |
+| D5 | A watch callback fires only when the new diff is **not** `equal` to `watch.lastDiff` — unless `lastDiff` was cleared. | 6.2 | either missed updates or infinite loops, depending on direction |
+| D6 | `watch({ immediate: true })` fires the callback synchronously during `watch()`, before returning the unsubscribe function. | 6.1, 7.6 | first render misses data |
+| D7 | `onWatchUpdated` returning `false` suppresses that watch's callback for this broadcast only. | 6.4, 8.6 | `refetchQueries`' skip semantics break |
+
+#### Reads
+
+| # | Invariant | Derived in | Violation shows up as |
+| --- | --- | --- | --- |
+| R1 | Reads are memoized on `(selectionSet, parentObjectOrReference, variables-as-canonical-string, context)` and the memo is invalidated purely through the dependency graph. | 5.1 | quadratic re-reads, or stale reads |
+| R2 | Equal inputs must produce `===`-identical output subtrees. Structure sharing is a **contract**, not an optimization. | 5.6 | React re-renders on every broadcast |
+| R3 | Results are deeply frozen under `__DEV__`. | 1.7, 5.6 | accidental mutation corrupts the store |
+| R4 | A dangling `Reference` inside a **list** is filtered out and the read stays `complete`; a dangling reference in a **singular** field makes the read incomplete with a `Dangling reference` `MissingFieldError`. | 5.4 | either spurious incompleteness or silently-missing list items |
+| R5 | `returnPartialData: false` collapses an incomplete read to `null`; `diff` always returns the partial tree plus `missing`. | 5.2, 7.1 | `read` and `diff` diverge |
+| R6 | `@nonreactive` fields are read but **not** depended upon by the enclosing watch. | 4.3 | over-broadcasting |
+
+#### Writes
+
+| # | Invariant | Derived in | Violation shows up as |
+| --- | --- | --- | --- |
+| W1 | The write is two-phase: `processSelectionSet` stages `incomingById` without touching the store, then a single effectful merge applies it. | 4.1 | a throwing `merge` function leaves the store half-written |
+| W2 | Every entity in one write is merged **once**, no matter how many times it appears in the payload. | 4.1, 4.7 | O(occurrences) merges; `merge` functions run repeatedly |
+| W3 | `context.written` breaks cycles by `(dataId, selectionSet)`; the `isFresh` check short-circuits re-processing. | 4.7 | infinite recursion on cyclic payloads |
+| W4 | User `merge` functions run during `applyMerges`, after normalization, with `existing` read through the same store the write targets. | 4.6 | pagination helpers see references they cannot resolve |
+| W5 | `overwrite: true` suppresses `warnAboutDataLoss` and passes `existing: undefined` to merge functions. | 8.3 | refetches append instead of replacing |
+| W6 | Writing to a `Layer` writes only to that layer; parent layers are never mutated. | 2.1 | optimistic writes become permanent |
+
+#### Policies
+
+| # | Invariant | Derived in | Violation shows up as |
+| --- | --- | --- | --- |
+| P1 | `identify` returns `[id, keyObject?]`; a `keyFields` function may return a falsy value to mean "not normalizable". | 3.2 | objects that should stay embedded get IDs |
+| P2 | `keyFields` order is the **specifier's** order in the resulting id string; nested object values are key-sorted by `extractKeyPath`'s normalizer. | 3.2 | ids differ between writes of the same entity |
+| P3 | `keyArgs`/`keyFields` are resolved through the type-policy inheritance chain (supertypes contribute, subtypes win). | 3.1 | interface-level policies are ignored |
+| P4 | `read` functions run inside `cacheSlot`, so reactive variables read there register a dependency. | 3.4, 6.6 | `makeVar` updates do not propagate |
+| P5 | `fragmentMatches` uses `possibleTypes` and falls back to fuzzy subtype matching for unknown types, warning once. | 3.6 | interface fragments silently never match |
+
+### 9.2 Build order for a re-implementation
+
+The dependency graph is strict — each stage is testable in isolation with the probe subset
+named beside it.
+
+```mermaid
+flowchart TB
+    S1["<b>1. Primitives</b><br/>canonicalStringify · DeepMerger<br/>deep equality · maybeDeepFreeze"]:::store
+    S2["<b>2. Dependency engine</b><br/>Entry graph · dep() · wrap()<br/>bounded LRU + Trie key maker"]:::memo
+    S3["<b>3. EntityStore.Root</b><br/>flat map · merge · lookup<br/>CacheGroup depend/dirty"]:::store
+    S4["<b>4. Policies</b><br/>identify · getStoreFieldName<br/>readField · fragmentMatches"]:::api
+    S5["<b>5. StoreWriter</b><br/>two-phase write · MergeTree<br/>merge functions"]:::write
+    S6["<b>6. StoreReader</b><br/>memoized executeSelectionSet<br/>missing tree · canRead filtering"]:::read
+    S7["<b>7. Watches + broadcast</b><br/>watch · maybeBroadcastWatch<br/>txCount batching"]:::memo
+    S8["<b>8. Layers</b><br/>Stump · Layer · removeLayer replay<br/>batch optimistic modes"]:::dirty
+    S9["<b>9. Lifecycle</b><br/>modify · evict · gc<br/>retain/release · extract/restore"]:::dirty
+    S10["<b>10. Client integration</b><br/>transformDocument idempotence<br/>writable evict/modify/reset<br/>watcher/lastOwnDiff passthrough"]:::ext
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10
+
+    S1 -.->|"probe: immutability,<br/>canonical keys"| S1
+    S3 -.->|"probe: normalization,<br/>identity"| S3
+    S5 -.->|"probe: merge functions,<br/>field keys"| S5
+    S6 -.->|"probe: result caching,<br/>dangling refs"| S6
+    S7 -.->|"probe: broadcast gating"| S7
+    S8 -.->|"probe: optimistic layers"| S8
+    S9 -.->|"probe: modify, evict, gc,<br/>reset/restore"| S9
+
+    classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
+    classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef store fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
+    classDef ext fill:#e2e8f0,stroke:#475569,stroke-width:2px,color:#0f172a
+```
+
+Stage 2 is the one most often underestimated. The dependency engine is not an optimization
+layer bolted on top of a working cache — invariants D1–D3 and R1–R2 mean **the memo graph
+is the cache's change-detection mechanism**. A correct-but-unmemoized reader would still
+break `ObservableQuery`, because R2 (`===`-stable subtrees) is what stops React from
+re-rendering on every unrelated write.
+
+### 9.3 Cross-boundary requirements
+
+A replacement cache that only satisfies Parts 2–7 will still misbehave inside Apollo Client
+unless it also honours these:
+
+| Requirement | Why | Part |
+| --- | --- | --- |
+| `transformDocument` must be idempotent **and** return `===`-stable documents | it is applied twice around user transforms; document identity keys every downstream memo | 8.1 |
+| `evict`, `modify` and `reset` must be instance-assignable | `QueryInfo` monkey-patches them to count destructive operations; the feud breaker depends on it | 8.4 |
+| `Cache.WatchOptions` must be passed through to `onWatchUpdated` **by reference**, preserving unknown extension fields | `watcher` and `lastOwnDiff` are set by client code on the same object | 8.2, 8.6 |
+| The `diff` object handed to `onWatchUpdated` must be the **same object** later handed to `watch.callback` | gate 1 compares by reference | 8.2 |
+| `batch` must call `onWatchUpdated` for every dirtied watch and respect a `false` return | `refetchQueries`' skip semantics | 8.6 |
+| `diff` results must carry `fromOptimisticTransaction` when broadcast from a string-id optimistic transaction | `ObservableQuery` refuses network requests mid-optimistic-update | 7.2, 8.7 |
+| `assumeImmutableResults` must be `true` and honestly so | `ApolloClient` propagates it as a capability declaration | 7.18 |
+| `getMemoryInternals` is optional | absent → the dev tool reports fewer sections, nothing breaks | 8.11 |
+
+### 9.4 The minimum viable surface
+
+For a cache that only needs to work with `ApolloClient` (not with third-party code reaching
+into `cache.policies`), implementing these eleven methods is sufficient; the remaining
+`ApolloCache` surface is inherited or optional.
+
+```mermaid
+flowchart LR
+    subgraph must["Must implement — client will call these"]
+        M1["read · diff"]:::read
+        M2["write"]:::write
+        M3["watch"]:::memo
+        M4["batch / performTransaction"]:::write
+        M5["removeOptimistic"]:::dirty
+        M6["evict · modify · reset"]:::dirty
+        M7["identify"]:::api
+        M8["transformDocument"]:::api
+        M9["fragmentMatches · lookupFragment"]:::api
+        M10["extract · restore"]:::store
+        M11["gc · retain · release"]:::dirty
+    end
+
+    subgraph free["Free once the above are correct"]
+        F1["readQuery · readFragment<br/>writeQuery · writeFragment<br/>updateQuery · updateFragment<br/>watchFragment · recordOptimisticTransaction"]:::ext
+    end
+
+    must --> free
+
+    classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
+    classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef store fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
+    classDef ext fill:#e2e8f0,stroke:#475569,stroke-width:2px,color:#0f172a
+```
+
+`resolvesClientField` is genuinely optional (it degrades local-state handling of `@client`
+fields backed by cache `read` functions), and `gc`/`retain`/`release` are never called by
+the client itself — only by application code — but omitting them turns the cache into an
+unbounded leak for any application that evicts.
+
+### 9.5 Where to look when something is wrong
+
+| Symptom | First suspect | Part |
+| --- | --- | --- |
+| Component re-renders on every unrelated write | R2 structure sharing broken, or `watch.lastDiff` cleared | 5.6, 6.2 |
+| Update written but component never re-renders | dependency not registered (D1), or `txCount` leak (D4) | 2.4, 6.3 |
+| "Cache data may be lost" warning | field returned a non-normalized object where one was previously stored | 4.8 |
+| Read comes back partial after a successful write | a `read`/`merge` function dropped a field — see `warnAboutPartialCacheResult` | 8.4 |
+| Optimistic update never rolls back | layer replay (L4) or `removeOptimistic` id mismatch | 2.10, 8.5 |
+| Two queries fight, network request loop | feud breaker disabled — check that `evict`/`modify`/`reset` are patchable | 8.4 |
+| List grows on refetch instead of replacing | `refetchWritePolicy` / `overwrite` not threaded to the writer | 8.3 |
+| Entity duplicated under two ids | `keyFields` ordering (P2) or a missing `__typename` | 3.2 |
+| `makeVar` update ignored | `read` function not invoked inside `cacheSlot` (P4) | 3.4, 6.6 |
+| Data disappears after `gc()` | missing `retain`, or `__META.extraRootIds` lost on restore (S5) | 2.9, 7.12 |
 
