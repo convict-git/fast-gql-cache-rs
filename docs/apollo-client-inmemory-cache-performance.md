@@ -18,6 +18,67 @@
 > the absolute values as indicative and the **scaling exponents and ratios** as the
 > real result — those are stable across machines.
 
+
+
+---
+
+## Table of contents
+
+- [How to read this document](#how-to-read-this-document)
+  - [Notation](#notation)
+- [Part 1 — The cost model in one page](#part-1--the-cost-model-in-one-page)
+  - [1.1 The four costs that matter](#11-the-four-costs-that-matter)
+  - [1.2 Headline complexity table](#12-headline-complexity-table)
+  - [1.3 Measured: the shape of the curves](#13-measured-the-shape-of-the-curves)
+  - [1.4 The one diagram to remember](#14-the-one-diagram-to-remember)
+- [Part 2 — The write path](#part-2--the-write-path)
+  - [2.1 Where the time goes](#21-where-the-time-goes)
+  - [2.2 The per-entity and per-field allocation budget](#22-the-per-entity-and-per-field-allocation-budget)
+  - [2.3 The deep-equality tax](#23-the-deep-equality-tax)
+  - [2.4 Field-key construction](#24-field-key-construction)
+  - [2.5 Identity extraction](#25-identity-extraction)
+  - [2.6 Merge functions](#26-merge-functions)
+  - [2.7 Measured: write scaling](#27-measured-write-scaling)
+- [Part 3 — The read path](#part-3--the-read-path)
+  - [3.1 The memo graph *is* the read path](#31-the-memo-graph-is-the-read-path)
+  - [3.2 The cost of a cold read](#32-the-cost-of-a-cold-read)
+  - [3.3 Invalidation blast radius — the single most important read-path concept](#33-invalidation-blast-radius--the-single-most-important-read-path-concept)
+  - [3.4 Structure sharing](#34-structure-sharing)
+  - [3.5 Arrays](#35-arrays)
+  - [3.6 The dev-build tax](#36-the-dev-build-tax)
+- [Part 4 — The dependency graph and broadcast](#part-4--the-dependency-graph-and-broadcast)
+  - [4.1 `depend` and `dirty`](#41-depend-and-dirty)
+  - [4.2 Optimistic reads maintain a *second* set of memo entries](#42-optimistic-reads-maintain-a-second-set-of-memo-entries)
+  - [4.3 The memo LRU cliff](#43-the-memo-lru-cliff)
+  - [4.4 Broadcast fan-out](#44-broadcast-fan-out)
+  - [4.5 Memo fragmentation by document identity](#45-memo-fragmentation-by-document-identity)
+  - [4.6 Batching](#46-batching)
+- [Part 5 — Layers and optimistic updates](#part-5--layers-and-optimistic-updates)
+- [Part 6 — Lifecycle operations](#part-6--lifecycle-operations)
+  - [6.1 `gc()` is `O(store)` unconditionally](#61-gc-is-ostore-unconditionally)
+  - [6.2 `evict` is cheap, its consequences are not](#62-evict-is-cheap-its-consequences-are-not)
+  - [6.3 `restore` versus `write`](#63-restore-versus-write)
+- [Part 7 — Structural properties that stress the hot paths](#part-7--structural-properties-that-stress-the-hot-paths)
+  - [7.0 The stress matrix](#70-the-stress-matrix)
+  - [7.1 Depth (the worst offender)](#71-depth-the-worst-offender)
+  - [7.2 Breadth](#72-breadth)
+  - [7.3 Typed (normalized) versus untyped (embedded) data](#73-typed-normalized-versus-untyped-embedded-data)
+  - [7.4 The untyped-blob pathology](#74-the-untyped-blob-pathology)
+  - [7.5 Arrays of arrays](#75-arrays-of-arrays)
+  - [7.6 Fan-in: many parents referencing one entity](#76-fan-in-many-parents-referencing-one-entity)
+  - [7.7 Argument-heavy fields](#77-argument-heavy-fields)
+  - [7.8 Polymorphism and fragments](#78-polymorphism-and-fragments)
+  - [7.9 Cycles](#79-cycles)
+- [Part 8 — Worst-case shapes and a stress corpus](#part-8--worst-case-shapes-and-a-stress-corpus)
+  - [8.1 The four adversarial payloads](#81-the-four-adversarial-payloads)
+  - [8.2 A stress-test corpus for a re-implementation](#82-a-stress-test-corpus-for-a-re-implementation)
+- [Part 9 — Optimization playbook](#part-9--optimization-playbook)
+  - [9.1 Decision tree](#91-decision-tree)
+  - [9.2 Diagnostics](#92-diagnostics)
+  - [9.3 Tuning knobs the cache actually exposes](#93-tuning-knobs-the-cache-actually-exposes)
+  - [9.4 What a Rust/WASM re-implementation should target](#94-what-a-rustwasm-re-implementation-should-target)
+- [Appendix A — Full probe output](#appendix-a--full-probe-output)
+
 ---
 
 ## How to read this document
