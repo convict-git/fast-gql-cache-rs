@@ -1788,7 +1788,7 @@ flowchart LR
     EX1 --> CSP["collectSpecifierPaths<br/>DeepMerger over<br/>{title:...} then {author:{name:...}}"]:::memo
     EX2 --> CSP
     CSP --> KO["keyObject - insertion order = path order<br/>{ title: 'Fahrenheit 451',<br/>&nbsp; author: { name: 'Ray Bradbury' } }"]:::store
-    KO --> OUT["dataId<br/>Book:{&quot;title&quot;:&quot;Fahrenheit 451&quot;,&quot;author&quot;:{&quot;name&quot;:&quot;Ray Bradbury&quot;}}"]:::api
+    KO --> OUT["dataId<br/>Book:{'title':'Fahrenheit 451','author':{'name':'Ray Bradbury'}}"]:::api
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
@@ -3282,7 +3282,7 @@ flowchart TB
 
     KIND -->|"yes"| RF["fieldValue = policies.readField({ fieldName, field, variables, from: obj }, context)<br/>resultName = alias ?? fieldName"]:::store
     RF --> UND{"fieldValue === undefined?"}:::read
-    UND -->|"yes"| MISSING["record missing[resultName] =<br/>&quot;Can't find field 'x' on Y object&quot;<br/><i>unless __typename was auto-added</i>"]:::dirty
+    UND -->|"yes"| MISSING["record missing[resultName] =<br/>'Can't find field 'x' on Y object'<br/><i>unless __typename was auto-added</i>"]:::dirty
     UND -->|"no"| ARR{"isArray(fieldValue)?"}:::read
     ARR -->|"yes, length &gt; 0"| SUB["executeSubSelectedArray({ field, array, enclosingRef, context })"]:::memo
     ARR -->|"no"| SEL{"selection.selectionSet?"}:::read
@@ -3492,7 +3492,7 @@ flowchart LR
         SS["ROOT_QUERY.todos = [Ref(Todo:1), Ref(Todo:2)]"]:::store
     end
     subgraph m["MissingTree"]
-        MT["{ todos: {<br/>&nbsp; 0: { author: { name: &quot;Can't find field 'name' on Author:1 object&quot; } },<br/>&nbsp; 1: { author: &quot;Can't find field 'author' on Todo:2 object&quot; }<br/>} }"]:::dirty
+        MT["{ todos: {<br/>&nbsp; 0: { author: { name: 'Can't find field 'name' on Author:1 object' } },<br/>&nbsp; 1: { author: 'Can't find field 'author' on Todo:2 object' }<br/>} }"]:::dirty
     end
     subgraph e["MissingFieldError"]
         ME["message = firstMissing(tree)<br/>path    = the whole tree<br/>missing = the whole tree<br/>query, variables"]:::dirty
