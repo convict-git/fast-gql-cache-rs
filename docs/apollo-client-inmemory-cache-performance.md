@@ -148,17 +148,17 @@ Three readings, in descending order of importance:
 
 ```mermaid
 flowchart TB
-    subgraph writeside["WRITE — always full cost"]
+    subgraph writeside["WRITE - always full cost"]
         direction TB
         WA["payload arrives"]:::write
-        WB["traverse selection set x result<br/><i>O(E·F)</i>"]:::write
+        WB["traverse selection set x result<br/><i>O(E+F)</i>"]:::write
         WC["identify() every object<br/><i>O(E) + keyFields extraction</i>"]:::write
         WD["deep-equality vs. existing<br/><i>O(bytes changed + bytes compared)</i>"]:::dirty
         WE["dirty each changed field<br/><i>O(changed fields)</i>"]:::dirty
         WA --> WB --> WC --> WD --> WE
     end
 
-    subgraph readside["READ — cost proportional to INVALIDATION, not size"]
+    subgraph readside["READ - cost proportional to INVALIDATION, not size"]
         direction TB
         RA["read requested"]:::read
         RB{"memo entry clean?"}:::memo
@@ -195,16 +195,16 @@ payload; phase 2 touches the store.
 flowchart TB
     START["writeToStore(store, { query, result, dataId, variables })"]:::api
 
-    subgraph phase1["Phase 1 — staging (no store mutation)"]
+    subgraph phase1["Phase 1 - staging (no store mutation)"]
         direction TB
-        P1A["canonicalStringify(variables) → varString<br/><i>once per write</i>"]:::memo
-        P1B["processSelectionSet — recursive<br/><b>per entity:</b> new Set, new Map, new Trie<br/><b>per field:</b> new path array, getStoreFieldName,<br/>getChildMergeTree, getMergeFunction, DeepMerger.merge"]:::write
+        P1A["canonicalStringify(variables) -> varString<br/><i>once per write</i>"]:::memo
+        P1B["processSelectionSet - recursive<br/><b>per entity:</b> new Set, new Map, new Trie<br/><b>per field:</b> new path array, getStoreFieldName,<br/>getChildMergeTree, getMergeFunction, DeepMerger.merge"]:::write
         P1C["policies.identify(result) per object<br/><i>keyFields extraction + canonicalStringify</i>"]:::write
         P1D["context.incomingById: Map&lt;dataId, staged&gt;<br/><i>duplicate entities collapse here</i>"]:::store
         P1A --> P1B --> P1C --> P1D
     end
 
-    subgraph phase2["Phase 2 — effectful merge"]
+    subgraph phase2["Phase 2 - effectful merge"]
         direction TB
         P2A["for each staged entity:<br/>applyMerges (user merge functions)"]:::write
         P2B["__DEV__ only: warnAboutDataLoss<br/><i>per field with a selection set</i>"]:::dirty
@@ -442,7 +442,7 @@ flowchart LR
     C["page 3<br/>merge: 2k + k = 3k"]:::write
     D["page P<br/>merge: (P-1)k + k = Pk"]:::dirty
     A --> B --> C --> D
-    T["total copied: k·P(P+1)/2 = O(P²k)<br/>plus one equal() over the accumulated list per write"]:::dirty
+    T["total copied: k+P(P+1)/2 = O(P^2k)<br/>plus one equal() over the accumulated list per write"]:::dirty
     D --> T
 
     classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
@@ -583,7 +583,7 @@ flowchart TB
         LIST --> EN
     end
 
-    DIRTY["modify Item:i0.f0<br/>→ group.dirty('Item:i0', 'f0')"]:::dirty
+    DIRTY["modify Item:i0.f0<br/>-> group.dirty('Item:i0', 'f0')"]:::dirty
     DIRTY -.->|invalidates| E1
     E1 -.->|"parent chain"| LIST
     LIST -.->|"parent chain"| ROOT
@@ -945,7 +945,7 @@ queries parsed separately share **nothing**.
 
 ```mermaid
 flowchart TB
-    subgraph good["Shared document — one memo entry per entity"]
+    subgraph good["Shared document - one memo entry per entity"]
         direction LR
         G1["watch 1"]:::api
         G2["watch 2"]:::api
@@ -956,7 +956,7 @@ flowchart TB
         G3 --> GM
     end
 
-    subgraph bad["Distinct documents — W memo entries per entity"]
+    subgraph bad["Distinct documents - W memo entries per entity"]
         direction LR
         B1["watch 1"]:::api
         B2["watch 2"]:::api
@@ -1036,18 +1036,18 @@ Three distinct costs:
 flowchart TB
     subgraph reading["Reading through L layers"]
         R1["EntityStore.lookup(dataId)"]:::read
-        R2["walk child → parent until a layer has the dataId<br/><i>O(L) per MISS, O(1) per hit at the top</i>"]:::read
+        R2["walk child -> parent until a layer has the dataId<br/><i>O(L) per MISS, O(1) per hit at the top</i>"]:::read
         R1 --> R2
     end
 
     subgraph memoing["Memo entries"]
-        M1["optimisticData (the Stump) has its own CacheGroup<br/>→ its own keyMaker Trie<br/>→ a SECOND full set of memo entries"]:::memo
-        M2["This holds with ZERO layers active —<br/>optimisticData is NEVER === data (§4.2)"]:::dirty
+        M1["optimisticData (the Stump) has its own CacheGroup<br/>-> its own keyMaker Trie<br/>-> a SECOND full set of memo entries"]:::memo
+        M2["This holds with ZERO layers active -<br/>optimisticData is NEVER === data (section4.2)"]:::dirty
     end
 
     subgraph removing["Removing a layer"]
-        D1["removeLayer(id) on the TOP layer<br/>→ dirty the fields it shadowed<br/><i>O(layer size)</i>"]:::dirty
-        D2["removeLayer(id) BELOW the top<br/>→ rebuild + replay EVERY layer above it<br/><i>O(L · layer size)</i>"]:::dirty
+        D1["removeLayer(id) on the TOP layer<br/>-> dirty the fields it shadowed<br/><i>O(layer size)</i>"]:::dirty
+        D2["removeLayer(id) BELOW the top<br/>-> rebuild + replay EVERY layer above it<br/><i>O(L + layer size)</i>"]:::dirty
     end
 
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
@@ -1181,7 +1181,7 @@ Depth hurts in three independent places:
 flowchart TB
     D["Selection set of depth D"]:::api
 
-    D --> W["<b>WRITE</b><br/>path = [...currentPath, name]<br/>allocated per field<br/><i>O(E·F·D) words</i>"]:::write
+    D --> W["<b>WRITE</b><br/>path = [...currentPath, name]<br/>allocated per field<br/><i>O(E+F+D) words</i>"]:::write
     D --> R["<b>READ (cold)</b><br/>D nested executeSelectionSet frames<br/><i>O(D) recursion, one memo entry per level</i>"]:::read
     D --> I["<b>INVALIDATION</b><br/>dirty at depth D invalidates<br/>D ancestor memo entries<br/><i>a point change costs MORE than a cold read</i>"]:::dirty
 
@@ -1231,7 +1231,7 @@ flowchart TB
     subgraph norm["Normalized (has __typename + id / keyFields)"]
         direction TB
         N1["one store entry per entity"]:::store
-        N2["parent stores { __ref } — O(1) to compare"]:::store
+        N2["parent stores { __ref } - O(1) to compare"]:::store
         N3["dirty granularity: ONE FIELD of ONE entity"]:::memo
         N4["shared across every query that names it"]:::memo
         N5["<b>costs:</b> identify() per object,<br/>reference indirection on read,<br/>bigger store, gc must traverse it"]:::dirty
@@ -1394,7 +1394,7 @@ flowchart TB
     E["User:1<br/><i>one store entry</i>"]:::store
     Q1["Query: Header"]:::read
     Q2["Query: Sidebar"]:::read
-    Q3["Query: CommentList (500 comments,<br/>each with author → User:1)"]:::read
+    Q3["Query: CommentList (500 comments,<br/>each with author -> User:1)"]:::read
 
     E -.->|"depend"| Q1
     E -.->|"depend"| Q2
@@ -1495,25 +1495,25 @@ and `context.written` terminates the write recursion.
 
 ```mermaid
 flowchart TB
-    subgraph s1["Shape 1 — the deep chain"]
-        A1["root → child → child → ... (D = 128)<br/>every level normalized"]:::dirty
+    subgraph s1["Shape 1 - the deep chain"]
+        A1["root -> child -> child -> ... (D = 128)<br/>every level normalized"]:::dirty
         A2["<b>stresses:</b> invalidation blast radius,<br/>path allocation, recursion depth"]:::dirty
         A1 --> A2
     end
 
-    subgraph s2["Shape 2 — the fat blob"]
+    subgraph s2["Shape 2 - the fat blob"]
         B1["one field holding a 1 MB untyped object,<br/>rewritten every poll"]:::dirty
         B2["<b>stresses:</b> storeObjectReconciler equal(),<br/>cloneDeep in dev, DeepMerger pastCopies"]:::dirty
         B1 --> B2
     end
 
-    subgraph s3["Shape 3 — the ragged matrix"]
+    subgraph s3["Shape 3 - the ragged matrix"]
         C1["groups: [ rows: [ cells: [...] ] ]<br/>three levels of arrays, entities at the leaves,<br/>total entities near the 50 000 memo limit"]:::dirty
-        C2["<b>stresses:</b> array-instance memo keys,<br/>filter+map double allocation per level,<br/>and the LRU cliff (§4.3)"]:::dirty
+        C2["<b>stresses:</b> array-instance memo keys,<br/>filter+map double allocation per level,<br/>and the LRU cliff (section4.3)"]:::dirty
         C1 --> C2
     end
 
-    subgraph s4["Shape 4 — the document explosion"]
+    subgraph s4["Shape 4 - the document explosion"]
         D1["N components each building their own<br/>gql document at render time"]:::dirty
         D2["<b>stresses:</b> memo key fragmentation,<br/>LRU eviction, every broadcast cold"]:::dirty
         D1 --> D2
@@ -1557,16 +1557,16 @@ identity — if it does not, everything downstream re-renders forever).
 flowchart TB
     START{"What is slow?"}:::api
 
-    START -->|"first render /<br/>cold read"| COLD["Cold read is O(E·F).<br/>→ select fewer fields<br/>→ split into smaller queries<br/>→ check you are not resetting the result cache"]:::read
+    START -->|"first render /<br/>cold read"| COLD["Cold read is O(E+F).<br/>-> select fewer fields<br/>-> split into smaller queries<br/>-> check you are not resetting the result cache"]:::read
     START -->|"every write /<br/>polling"| WRITE{"Is the payload<br/>mostly unchanged?"}:::write
-    WRITE -->|yes| BLOB["The deep-equality tax (§2.3).<br/>→ find the big embedded field<br/>→ normalize it, or add a version-aware merge<br/>→ stop selecting it"]:::dirty
-    WRITE -->|no| REAL["Genuine work.<br/>→ reduce payload size<br/>→ batch related writes (§4.4)"]:::write
-    START -->|"re-renders on<br/>unrelated changes"| REND["Over-broad dependencies.<br/>→ @nonreactive on display-only spreads<br/>→ narrower selection sets<br/>→ useFragment on the leaf entity"]:::memo
-    START -->|"one update →<br/>whole tree recomputes"| DEEP["Depth (§7.1).<br/>→ subscribe to the leaf entity directly<br/>→ shorten the reactive path"]:::dirty
+    WRITE -->|yes| BLOB["The deep-equality tax (section2.3).<br/>-> find the big embedded field<br/>-> normalize it, or add a version-aware merge<br/>-> stop selecting it"]:::dirty
+    WRITE -->|no| REAL["Genuine work.<br/>-> reduce payload size<br/>-> batch related writes (section4.4)"]:::write
+    START -->|"re-renders on<br/>unrelated changes"| REND["Over-broad dependencies.<br/>-> @nonreactive on display-only spreads<br/>-> narrower selection sets<br/>-> useFragment on the leaf entity"]:::memo
+    START -->|"one update -><br/>whole tree recomputes"| DEEP["Depth (section7.1).<br/>-> subscribe to the leaf entity directly<br/>-> shorten the reactive path"]:::dirty
     START -->|"gets slower<br/>over time"| GROW{"Store or memo<br/>growth?"}:::store
-    GROW -->|store| GC["→ evict + gc() after bulk changes<br/>→ check retain/release balance"]:::store
-    GROW -->|memo| DOC["Document identity (§4.5).<br/>→ hoist gql out of render<br/>→ verify DocumentTransform caching<br/>→ inspect client.getMemoryInternals()"]:::dirty
-    START -->|"fast until it<br/>suddenly isn't"| CLIFF["Memo LRU cliff (§4.3).<br/>→ compare memo size against its limit<br/>→ remember watched queries use 2x (§4.2)<br/>→ raise cacheSizes or read fewer entities"]:::dirty
+    GROW -->|store| GC["-> evict + gc() after bulk changes<br/>-> check retain/release balance"]:::store
+    GROW -->|memo| DOC["Document identity (section4.5).<br/>-> hoist gql out of render<br/>-> verify DocumentTransform caching<br/>-> inspect client.getMemoryInternals()"]:::dirty
+    START -->|"fast until it<br/>suddenly isn't"| CLIFF["Memo LRU cliff (section4.3).<br/>-> compare memo size against its limit<br/>-> remember watched queries use 2x (section4.2)<br/>-> raise cacheSizes or read fewer entities"]:::dirty
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
