@@ -1128,8 +1128,11 @@ triggers are the cost.
 
 One detail that matters with layers active: `InMemoryCache.evict` calls
 `this.optimisticData.evict(options, this.data)`, and `EntityStore.evict` recurses to its
-parent until it reaches the `limit` (the `Root`). So an evict walks the entire layer chain
-and is `O(L · F)`, not `O(F)`, when optimistic layers are stacked.
+parent until it reaches that `limit`. So an evict walks the entire layer chain and is
+`O(L · F)`, not `O(F)`, when optimistic layers are stacked. The `limit` argument is what
+bounds the walk: normally `this.data` is the `Root`, so the eviction reaches all the way
+down, but *during* an optimistic update `this.data` is temporarily the current `Layer`,
+which stops the eviction from escaping it.
 
 ### 6.3 `restore` versus `write`
 
