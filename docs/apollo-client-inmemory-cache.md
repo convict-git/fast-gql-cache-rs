@@ -131,13 +131,13 @@ for the rest of this document:
 
 ```mermaid
 flowchart TB
-    subgraph core["cache/core — cache-agnostic contract"]
+    subgraph core["cache/core - cache-agnostic contract"]
         CACHE["cache.ts<br/><b>ApolloCache</b> abstract base<br/>readQuery / writeQuery / readFragment /<br/>writeFragment / updateQuery / watchFragment"]:::api
         CTYPES["types/Cache.ts<br/>ReadOptions, WriteOptions, DiffOptions,<br/>WatchOptions, BatchOptions, DiffResult"]:::api
         COMMON["types/common.ts<br/>MissingFieldError, Modifier,<br/>ReadFieldOptions, SafeReadonly"]:::api
     end
 
-    subgraph inmem["cache/inmemory — the InMemoryCache implementation"]
+    subgraph inmem["cache/inmemory - the InMemoryCache implementation"]
         IMC["inMemoryCache.ts<br/><b>InMemoryCache</b><br/>orchestration, watches, batch, gc"]:::api
         ES["entityStore.ts<br/><b>EntityStore</b> / Root / Stump / Layer<br/><b>CacheGroup</b> dependency tracking"]:::store
         POL["policies.ts<br/><b>Policies</b><br/>identify, getStoreFieldName,<br/>readField, merge fns, fragmentMatches"]:::write
@@ -222,7 +222,7 @@ flowchart TB
         QI["QueryInfo<br/>markQueryResult /<br/>markMutationResult"]:::ext
     end
 
-    subgraph api["InMemoryCache — public surface"]
+    subgraph api["InMemoryCache - public surface"]
         direction LR
         W["write / writeQuery /<br/>writeFragment"]:::api
         R["read / readQuery /<br/>readFragment / diff"]:::api
@@ -232,14 +232,14 @@ flowchart TB
 
     subgraph engine["Engine"]
         direction TB
-        SW["<b>StoreWriter</b><br/>processSelectionSet →<br/>MergeTree → applyMerges"]:::write
+        SW["<b>StoreWriter</b><br/>processSelectionSet -><br/>MergeTree -> applyMerges"]:::write
         SR["<b>StoreReader</b><br/>executeSelectionSet<br/>(memoized)"]:::read
-        P["<b>Policies</b><br/>identify · getStoreFieldName ·<br/>readField · merge · fragmentMatches"]:::write
+        P["<b>Policies</b><br/>identify + getStoreFieldName +<br/>readField + merge + fragmentMatches"]:::write
     end
 
     subgraph storage["Storage &amp; reactivity"]
         direction TB
-        OD["optimisticData<br/>Layer → … → Stump"]:::store
+        OD["optimisticData<br/>Layer -> ... -> Stump"]:::store
         D["data<br/>EntityStore.Root<br/>NormalizedCacheObject"]:::store
         CG["CacheGroup<br/>dep(fieldName#dataId)<br/>keyMaker: Trie"]:::memo
         MBW["maybeBroadcastWatch<br/>optimism wrap, LRU 5000"]:::memo
@@ -262,7 +262,7 @@ flowchart TB
     CG -.->|"invalidate memo entries"| SR
     CG -.->|"invalidate"| MBW
     WATCH --> MBW --> SR
-    MBW -->|"diff changed → callback"| OQ
+    MBW -->|"diff changed -> callback"| OQ
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
@@ -288,8 +288,8 @@ without equivalents for these is not possible.
 ```mermaid
 flowchart TB
     subgraph prims["Foundation primitives"]
-        OPT["<b>optimism</b><br/>wrap() · Entry · dep() · Slot"]:::memo
-        TRIE["<b>@wry/trie</b><br/>Trie&lt;Data&gt;<br/>tuple → stable object"]:::memo
+        OPT["<b>optimism</b><br/>wrap() + Entry + dep() + Slot"]:::memo
+        TRIE["<b>@wry/trie</b><br/>Trie&lt;Data&gt;<br/>tuple -> stable object"]:::memo
         LRU["<b>@wry/caches</b><br/>StrongCache / WeakCache<br/>doubly-linked LRU"]:::memo
         EQ["<b>@wry/equality</b><br/>equal(a, b)<br/>cycle-tolerant deep equality"]:::read
         DM["<b>DeepMerger</b><br/>structure-sharing deep merge"]:::write
@@ -1022,12 +1022,12 @@ produces exactly the desired semantics:
 
 ```mermaid
 flowchart LR
-    subgraph reads["Dependency registration — depend() chains upward"]
+    subgraph reads["Dependency registration - depend() chains upward"]
         ORD["optimistic read<br/>store = Layer/Stump"]:::read -->|depend| OG["optimistic group"]:::memo
         OG -->|"parent.depend"| RG["root group"]:::memo
         RRD["non-optimistic read<br/>store = Root"]:::read -->|depend| RG
     end
-    subgraph writes["Invalidation — dirty() does NOT chain"]
+    subgraph writes["Invalidation - dirty() does NOT chain"]
         LW["Layer.merge<br/>(optimistic write)"]:::write -->|dirty| OG2["optimistic group"]:::memo
         RW["Root.merge<br/>(server write)"]:::write -->|dirty| RG2["root group"]:::memo
     end
@@ -1332,10 +1332,10 @@ well-known root ids plus anything explicitly retained.
 
 ```mermaid
 flowchart TB
-    subgraph roots["1. Compute the root set — getRootIdSet()"]
+    subgraph roots["1. Compute the root set - getRootIdSet()"]
         R1["this.rootIds<br/>(retain/release counters<br/>for this store)"]:::store
         R2["parent.getRootIdSet()<br/>(walk up every Layer)"]:::store
-        R3["policies.rootTypenamesById keys<br/>ROOT_QUERY / ROOT_MUTATION /<br/>ROOT_SUBSCRIPTION<br/>— always roots"]:::store
+        R3["policies.rootTypenamesById keys<br/>ROOT_QUERY / ROOT_MUTATION /<br/>ROOT_SUBSCRIPTION<br/>- always roots"]:::store
         R1 --> RS["ids: Set&lt;string&gt;"]:::store
         R2 --> RS
         R3 --> RS
@@ -1344,7 +1344,7 @@ flowchart TB
     RS --> SNAP["2. snapshot = this.toObject()<br/>(flattened view of the whole chain)"]:::store
 
     SNAP --> MARK["3. Mark: ids.forEach(id =&gt; ...)<br/>if snapshot has id:<br/>  add findChildRefIds(id) to ids<br/>  delete snapshot[id]"]:::read
-    MARK -->|"Set.forEach visits<br/>newly added ids too —<br/>this IS the BFS"| MARK
+    MARK -->|"Set.forEach visits<br/>newly added ids too -<br/>this IS the BFS"| MARK
 
     MARK --> SWEEP["4. idsToRemove = Object.keys(snapshot)<br/>(everything never marked)"]:::dirty
     SWEEP --> DEL["5. walk to the Root, then<br/>idsToRemove.forEach(id =&gt; root.delete(id))<br/>each delete() dirties __exists"]:::dirty
@@ -1474,10 +1474,10 @@ sequenceDiagram
     end
 
     rect rgb(254, 202, 202)
-    Note over L1: 2. id matches — dirty everything this layer shadowed
+    Note over L1: 2. id matches - dirty everything this layer shadowed
     loop for each dataId in L1.data
         alt parent has no such entity
-            L1->>L1: this.delete(dataId) — dirty removed fields
+            L1->>L1: this.delete(dataId) - dirty removed fields
         else layer stored a tombstone (undefined)
             L1->>L1: dirty(dataId, "__exists") + dirty every parent field
         else objects differ
@@ -1488,7 +1488,7 @@ sequenceDiagram
     end
 
     rect rgb(253, 230, 138)
-    Note over L2: 3. Parent changed — recreate this layer on it
+    Note over L2: 3. Parent changed - recreate this layer on it
     L2->>ST: parent.addLayer("B", this.replay)
     ST->>ST: new Layer("B", Stump, replay, group)
     Note right of ST: constructor calls replay(this),<br/>re-running the original update fn<br/>against the new parent
@@ -1538,8 +1538,8 @@ cache (1216 lines) and the only one that user configuration flows into.
 ```mermaid
 flowchart TB
     subgraph cfg["Configuration in"]
-        TP["typePolicies<br/>keyFields · merge ·<br/>queryType/mutationType/subscriptionType ·<br/>fields{keyArgs, read, merge}"]:::ext
-        PT["possibleTypes<br/>supertype → subtypes[]"]:::ext
+        TP["typePolicies<br/>keyFields + merge +<br/>queryType/mutationType/subscriptionType +<br/>fields{keyArgs, read, merge}"]:::ext
+        PT["possibleTypes<br/>supertype -> subtypes[]"]:::ext
         DIF["dataIdFromObject<br/>(legacy global fallback)"]:::ext
     end
 
@@ -1552,9 +1552,9 @@ flowchart TB
     end
 
     subgraph api["Public surface"]
-        ID["identify(object, ctx)<br/>→ [dataId?, keyObject?]"]:::write
-        SFN["getStoreFieldName(fieldSpec)<br/>→ storeFieldName"]:::write
-        RF["readField(options, ctx)<br/>→ value (runs read fns)"]:::read
+        ID["identify(object, ctx)<br/>-> [dataId?, keyObject?]"]:::write
+        SFN["getStoreFieldName(fieldSpec)<br/>-> storeFieldName"]:::write
+        RF["readField(options, ctx)<br/>-> value (runs read fns)"]:::read
         GM["getMergeFunction(parent, field, child)<br/>runMergeFunction(...)"]:::write
         FM["fragmentMatches(fragment, typename,<br/>result?, variables?)"]:::read
         HKA["hasKeyArgs(typename, fieldName)"]:::read
@@ -1612,8 +1612,8 @@ once per typename** and then drains any pending updates:
 ```mermaid
 flowchart TB
     CALL["getTypePolicy(typename)"]:::api --> HAS{"hasOwn(this.typePolicies, typename)?"}:::read
-    HAS -->|"yes — already materialised"| DRAIN
-    HAS -->|"no — first access"| CREATE["typePolicies[typename] = { fields: {} }"]:::store
+    HAS -->|"yes - already materialised"| DRAIN
+    HAS -->|"no - first access"| CREATE["typePolicies[typename] = { fields: {} }"]:::store
     CREATE --> SUP["supertypes = supertypeMap.get(typename)"]:::read
     SUP -->|"none, and fuzzySubtypes.size"| FUZZ["create empty supertype set,<br/>add supertypes of every fuzzy<br/>RegExp that matches typename"]:::read
     SUP -->|"found"| INH
@@ -1666,7 +1666,7 @@ flowchart TB
     LOOP -->|"undefined"| NOID["id = undefined"]:::dirty
     LOOP -->|"defined"| RUN["specifierOrId = keyFn({...object, ...storeObject}, context)<br/><i>inside disableWarningsSlot.withValue(true)</i>"]:::write
     RUN --> ARR{"isArray(specifierOrId)?"}:::write
-    ARR -->|"yes — a KeySpecifier"| COMPILE["keyFn = keyFieldsFnFromSpecifier(specifierOrId)<br/>loop again"]:::memo
+    ARR -->|"yes - a KeySpecifier"| COMPILE["keyFn = keyFieldsFnFromSpecifier(specifierOrId)<br/>loop again"]:::memo
     COMPILE --> LOOP
     ARR -->|"no"| SET["id = specifierOrId; break"]:::write
     SET --> COERCE["id = id ? String(id) : undefined"]:::dirty
@@ -1783,11 +1783,11 @@ flowchart LR
     SPEC["KeySpecifier<br/>['title', 'author', ['name']]"]:::ext --> GSP["getSpecifierPaths"]:::memo
     GSP --> P1["path: ['title']"]:::store
     GSP --> P2["path: ['author', 'name']"]:::store
-    P1 --> EX1["extractKeyPath(storeObject, ['title'], readField)<br/>→ 'Fahrenheit 451'"]:::read
-    P2 --> EX2["extractKeyPath(storeObject, ['author','name'], readField)<br/>→ 'Ray Bradbury'<br/><i>readField sees through {__ref}</i>"]:::read
+    P1 --> EX1["extractKeyPath(storeObject, ['title'], readField)<br/>-> 'Fahrenheit 451'"]:::read
+    P2 --> EX2["extractKeyPath(storeObject, ['author','name'], readField)<br/>-> 'Ray Bradbury'<br/><i>readField sees through {__ref}</i>"]:::read
     EX1 --> CSP["collectSpecifierPaths<br/>DeepMerger over<br/>{title:...} then {author:{name:...}}"]:::memo
     EX2 --> CSP
-    CSP --> KO["keyObject — insertion order = path order<br/>{ title: 'Fahrenheit 451',<br/>&nbsp; author: { name: 'Ray Bradbury' } }"]:::store
+    CSP --> KO["keyObject - insertion order = path order<br/>{ title: 'Fahrenheit 451',<br/>&nbsp; author: { name: 'Ray Bradbury' } }"]:::store
     KO --> OUT["dataId<br/>Book:{&quot;title&quot;:&quot;Fahrenheit 451&quot;,&quot;author&quot;:{&quot;name&quot;:&quot;Ray Bradbury&quot;}}"]:::api
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
@@ -1863,10 +1863,10 @@ flowchart TB
     UNDEF -->|"yes"| DEF["field ?<br/>storeKeyNameFromField(field, variables)<br/>: getStoreKeyName(fieldName, args)"]:::write
     UNDEF -->|"no"| FALSE
     DEF --> FALSE{"storeFieldName === false?"}:::write
-    FALSE -->|"yes — dynamic keyArgs:false"| RETF["return fieldName"]:::api
+    FALSE -->|"yes - dynamic keyArgs:false"| RETF["return fieldName"]:::api
     FALSE -->|"no"| PREFIX{"fieldName === fieldNameFromStoreName(storeFieldName)?"}:::read
     PREFIX -->|"yes"| RET1["return storeFieldName"]:::api
-    PREFIX -->|"no — custom key lost the prefix"| RET2["return fieldName + ':' + storeFieldName"]:::api
+    PREFIX -->|"no - custom key lost the prefix"| RET2["return fieldName + ':' + storeFieldName"]:::api
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
@@ -1949,10 +1949,10 @@ sequenceDiagram
     participant CS as canonicalStringify
 
     SW->>P: getStoreFieldName({typename:"Query", fieldName:"feed", field, variables})
-    P->>P: getFieldPolicy("Query","feed") → { keyFn? }
+    P->>P: getFieldPolicy("Query","feed") -> { keyFn? }
     alt keyArgs configured
         P->>KE: keyArgsFnFromSpecifier(["type"])  (memoized by JSON.stringify(spec))
-        KE->>KE: collectSpecifierPaths → { type: "top" }
+        KE->>KE: collectSpecifierPaths -> { type: "top" }
         KE-->>P: 'feed:{"type":"top"}'
     else no keyArgs
         P->>P: storeKeyNameFromField(field, variables)
@@ -2017,10 +2017,10 @@ flowchart TB
     SFN --> GET["existing = store.getFieldValue(from, storeFieldName)<br/><i>maybeDeepFreeze + group.depend</i>"]:::store
     GET --> RD{"field policy has read?"}:::read
     RD -->|"no"| RETE["return existing"]:::api
-    RD -->|"yes"| OPTS["build FieldFunctionOptions:<br/>args · fieldName · storeFieldName · field ·<br/>variables · isReference · toReference ·<br/>storage · cache · canRead · readField · mergeObjects"]:::write
+    RD -->|"yes"| OPTS["build FieldFunctionOptions:<br/>args + fieldName + storeFieldName + field +<br/>variables + isReference + toReference +<br/>storage + cache + canRead + readField + mergeObjects"]:::write
     OPTS --> SLOT["cacheSlot.withValue(this.cache, read, [existing, options])"]:::memo
     SLOT --> RV["reactive vars read inside<br/>attach to this cache and<br/>register a dep"]:::memo
-    SLOT --> RETR["return read(...) — may be undefined<br/>(counts as a missing field)"]:::api
+    SLOT --> RETR["return read(...) - may be undefined<br/>(counts as a missing field)"]:::api
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
@@ -2093,7 +2093,7 @@ flowchart LR
     F -->|"found"| USE["use it"]:::store
     F -->|"not found"| T["2. child type policy<br/>typePolicies.Author.merge"]:::write
     T -->|"found"| USE
-    T -->|"not found"| NONE["undefined → no merge<br/>incoming replaces existing<br/><i>(and __DEV__ may warn)</i>"]:::dirty
+    T -->|"not found"| NONE["undefined -> no merge<br/>incoming replaces existing<br/><i>(and __DEV__ may warn)</i>"]:::dirty
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
@@ -2237,7 +2237,7 @@ With `possibleTypes`, the search runs **upwards** over the inverted map:
 flowchart TB
     subgraph inv["Why the map is inverted"]
         CFG["possibleTypes: {<br/>&nbsp; Character: ['Jedi', 'Droid'],<br/>&nbsp; Jedi: ['Padawan']<br/>}"]:::ext
-        CFG --> MAP["supertypeMap:<br/>Character → {}<br/>Jedi → { Character }<br/>Droid → { Character }<br/>Padawan → { Jedi }"]:::store
+        CFG --> MAP["supertypeMap:<br/>Character -> {}<br/>Jedi -> { Character }<br/>Droid -> { Character }<br/>Padawan -> { Jedi }"]:::store
     end
 
     subgraph bfs["fragmentMatches('Character', typename = 'Padawan')"]
@@ -2248,7 +2248,7 @@ flowchart TB
         S3 -->|"yes"| S4["memoize: supertypeSet('Padawan').add('Character')<br/>return true"]:::memo
     end
 
-    subgraph fz["Fuzzy subtypes — writes only"]
+    subgraph fz["Fuzzy subtypes - writes only"]
         F0["typename unmatched after<br/>the non-fuzzy queue is exhausted"]:::dirty
         F0 --> F1{"result provided AND<br/>selectionSetMatchesResult(fragment, result)?"}:::read
         F1 -->|"no"| F2["return false"]:::dirty
@@ -2317,12 +2317,12 @@ shredded into a staging map first, and only then is anything written to the
 
 ```mermaid
 flowchart TB
-    subgraph phase1["Phase 1 — pure. No store mutation."]
+    subgraph phase1["Phase 1 - pure. No store mutation."]
         direction TB
         PSS["processSelectionSet<br/>recursive descent over<br/>(result, selectionSet)"]:::write
         FF["flattenFields<br/>field collection +<br/>@client / @defer flavors"]:::write
         PFV["processFieldValue<br/>arrays, scalars, recursion"]:::write
-        ID["policies.identify<br/>→ dataId + keyObject"]:::write
+        ID["policies.identify<br/>-> dataId + keyObject"]:::write
         STAGE["context.incomingById<br/>Map&lt;dataId, {storeObject, mergeTree, fieldNodeSet}&gt;"]:::store
         MT["mergeTree<br/>where merge functions live,<br/>mirroring the result shape"]:::memo
 
@@ -2333,11 +2333,11 @@ flowchart TB
         PSS --> MT
     end
 
-    subgraph phase2["Phase 2 — effectful. One pass over incomingById."]
+    subgraph phase2["Phase 2 - effectful. One pass over incomingById."]
         direction TB
         AM["applyMerges<br/>run user merge functions<br/>bottom-up"]:::write
         WARN["__DEV__ warnAboutDataLoss"]:::dirty
-        SM["store.merge(dataId, storeObject)<br/>→ dirties CacheGroup"]:::store
+        SM["store.merge(dataId, storeObject)<br/>-> dirties CacheGroup"]:::store
         RET["store.retain(ref.__ref)"]:::store
         AM --> WARN --> SM --> RET
     end
@@ -2440,7 +2440,7 @@ flowchart TB
     FLAT --> LOOP["for each (field, fieldContext)"]:::write
     LOOP --> RK["resultFieldKey = alias ?? field.name<br/>value = result[resultFieldKey]<br/>path = [...path, field.name.value]"]:::read
     RK --> DEF{"value === undefined?"}:::read
-    DEF -->|"yes"| MISS["__DEV__ and not @client / @defer /<br/>auto-added __typename / read-function field<br/>→ invariant.error 'Missing field ... while writing result'"]:::dirty
+    DEF -->|"yes"| MISS["__DEV__ and not @client / @defer /<br/>auto-added __typename / read-function field<br/>-> invariant.error 'Missing field ... while writing result'"]:::dirty
     DEF -->|"no"| SFN["storeFieldName = policies.getStoreFieldName({typename, fieldName, field, variables})"]:::write
     SFN --> CT["childTree = getChildMergeTree(mergeTree, storeFieldName)"]:::memo
     CT --> PFV["incomingValue = processFieldValue(value, field, ctx', childTree, path)<br/><i>ctx' resets clientOnly/deferred when field has a selectionSet</i>"]:::write
@@ -2448,7 +2448,7 @@ flowchart TB
     CTN --> MRG{"policies.getMergeFunction(typename, fieldName, childTypename)"}:::write
     MRG -->|"found"| INFO["childTree.info = { field, typename, merge, path }"]:::memo
     MRG -->|"none, but @stream"| STR["childTree.info = { ..., merge: defaultStreamFieldMergeFn }"]:::memo
-    MRG -->|"none"| REC["maybeRecycleChildMergeTree — return the empty tree to the pool"]:::memo
+    MRG -->|"none"| REC["maybeRecycleChildMergeTree - return the empty tree to the pool"]:::memo
     INFO --> ACC
     STR --> ACC
     REC --> ACC["incoming = context.merge(incoming, { [storeFieldName]: incomingValue })"]:::store
@@ -2456,12 +2456,12 @@ flowchart TB
 
     LOOP -->|"done"| IDF["policies.identify(result, { typename, selectionSet, fragmentMap, storeObject: incoming, readField })<br/>dataId ??= id<br/>if keyObject: incoming = context.merge(incoming, keyObject)<br/><i>try/catch: rethrow only if no explicit dataId</i>"]:::write
     IDF --> HASID{"typeof dataId === 'string'?"}:::read
-    HASID -->|"no — not normalizable"| RETI["return incoming (inline StoreObject)"]:::api
+    HASID -->|"no - not normalizable"| RETI["return incoming (inline StoreObject)"]:::api
     HASID -->|"yes"| CYC{"context.written[dataId] already<br/>contains this selectionSet?"}:::read
-    CYC -->|"yes"| RETR1["return makeReference(dataId) — cycle broken"]:::api
+    CYC -->|"yes"| RETR1["return makeReference(dataId) - cycle broken"]:::api
     CYC -->|"no"| PUSH["written[dataId].push(selectionSet)"]:::store
     PUSH --> FRESH{"reader.isFresh(result, dataRef, selectionSet, context)?"}:::memo
-    FRESH -->|"yes"| RETR2["return dataRef — subtree provably unchanged"]:::api
+    FRESH -->|"yes"| RETR2["return dataRef - subtree provably unchanged"]:::api
     FRESH -->|"no"| STG["stage into context.incomingById:<br/>merge storeObject, mergeMergeTrees, union fieldNodeSet"]:::store
     STG --> RETR3["return dataRef"]:::api
 
@@ -2583,7 +2583,7 @@ private flattenFields<TContext extends ...>(
 
 ```mermaid
 flowchart TB
-    subgraph trie["limitingTrie — the visited set"]
+    subgraph trie["limitingTrie - the visited set"]
         K["key = (selectionSet, clientOnly, deferred)"]:::memo
         K --> N["node.visited"]:::memo
         NOTE["The spec dedupes on fragment name.<br/>Apollo dedupes on selectionSet identity<br/>(1:1 with the name) plus directive state,<br/>because the same fragment may be spread<br/>once inside @client and once outside."]:::ext
@@ -2595,9 +2595,9 @@ flowchart TB
     end
 
     subgraph skip["Directive handling"]
-        S1["@skip / @include<br/>evaluated by shouldInclude —<br/>excluded fields never enter the map"]:::dirty
-        S2["@client → clientOnly = true"]:::write
-        S3["@defer → deferred = true,<br/>unless @defer(if: false)"]:::write
+        S1["@skip / @include<br/>evaluated by shouldInclude -<br/>excluded fields never enter the map"]:::dirty
+        S2["@client -> clientOnly = true"]:::write
+        S3["@defer -> deferred = true,<br/>unless @defer(if: false)"]:::write
     end
 
     classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
@@ -2728,7 +2728,7 @@ sequenceDiagram
     participant STG as context.incomingById
     participant ES as EntityStore
 
-    Note over PSS: children already processed —<br/>incoming.author === { __ref: "Author:7" }<br/>but Author:7 is NOT in the store yet
+    Note over PSS: children already processed -<br/>incoming.author === { __ref: "Author:7" }<br/>but Author:7 is NOT in the store yet
     PSS->>KE: identify(result, { storeObject: incoming, readField })
     KE->>RFC: readField("name", { __ref: "Author:7" })
     RFC->>STG: incomingById.get("Author:7")
@@ -2757,20 +2757,20 @@ flowchart TB
     subgraph shape["Result shape"]
         R["ROOT_QUERY"]:::store
         R --> F["feed({...})<br/>[ item0, item1 ]"]:::store
-        F --> I0["item 0<br/>→ Post:1"]:::store
+        F --> I0["item 0<br/>-> Post:1"]:::store
         I0 --> C["comments<br/>[ ... ]"]:::store
     end
     subgraph tree["MergeTree for ROOT_QUERY"]
-        T0["{ map: { 'feed({...})' → T1 } }"]:::memo
+        T0["{ map: { 'feed({...})' -> T1 } }"]:::memo
         T1["{ info: { merge: relayStylePagination.merge,<br/>&nbsp; field, typename:'Query', path:['feed'] },<br/>&nbsp; map: {} }"]:::memo
         T0 --> T1
     end
     subgraph tree2["MergeTree for Post:1 (its own incomingById entry)"]
-        U0["{ map: { comments → U1 } }"]:::memo
+        U0["{ map: { comments -> U1 } }"]:::memo
         U1["{ info: { merge: mergeTrueFn, path:['feed',0,'comments'] } }"]:::memo
         U0 --> U1
     end
-    NOTE["Each normalized entity gets its own MergeTree<br/>in incomingById. Nesting inside a tree stops at<br/>entity boundaries, because processSelectionSet<br/>starts a fresh tree per entity — but `path` keeps<br/>accumulating across boundaries, so merge functions<br/>see the full response path."]:::ext
+    NOTE["Each normalized entity gets its own MergeTree<br/>in incomingById. Nesting inside a tree stops at<br/>entity boundaries, because processSelectionSet<br/>starts a fresh tree per entity - but `path` keeps<br/>accumulating across boundaries, so merge functions<br/>see the full response path."]:::ext
 
     classDef store fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
     classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
@@ -2906,10 +2906,10 @@ public isFresh(result, parent, selectionSet, context): boolean {
 flowchart LR
     W["StoreWriter<br/>about to shred a subtree"]:::write -->|"isFresh(result, ref, selectionSet, context)"| R["StoreReader"]:::read
     R --> KR{"knownResults.get(result) === selectionSet?<br/><i>WeakMap populated by execSelectionSetImpl</i>"}:::memo
-    KR -->|"no"| F["false — do the work"]:::dirty
+    KR -->|"no"| F["false - do the work"]:::dirty
     KR -->|"yes"| PK{"executeSelectionSet.peek(...)<br/>returns an entry whose<br/>.result === result?"}:::memo
     PK -->|"no (dirty or evicted)"| F
-    PK -->|"yes"| T["true — return the Reference,<br/>skip the entire subtree"]:::store
+    PK -->|"yes"| T["true - return the Reference,<br/>skip the entire subtree"]:::store
 
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
     classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
@@ -2958,11 +2958,11 @@ flowchart TB
     G1 -->|"yes"| G2{"incoming child is<br/>an object?"}:::read
     G2 -->|"no"| SK
     G2 -->|"yes"| G3{"isReference(existing)?"}:::read
-    G3 -->|"yes — data lives elsewhere,<br/>replacing a pointer is safe"| SK
+    G3 -->|"yes - data lives elsewhere,<br/>replacing a pointer is safe"| SK
     G3 -->|"no"| G4{"equal(existing, incoming)?"}:::read
     G4 -->|"yes"| SK
     G4 -->|"no"| G5{"every key of existing<br/>is present in incoming?"}:::read
-    G5 -->|"yes — nothing is actually lost"| SK
+    G5 -->|"yes - nothing is actually lost"| SK
     G5 -->|"no"| G6{"already warned for<br/>`${parentType}.${fieldName}`?"}:::read
     G6 -->|"yes"| SK
     G6 -->|"no"| WARN["invariant.warn(...)<br/>module-level `warnings` Set<br/>dedupes for the process lifetime"]:::dirty
@@ -2994,22 +2994,22 @@ sequenceDiagram
     IMC->>SW: writeToStore(this.data, options)
 
     rect rgb(253, 230, 138)
-    Note over SW,P: PHASE 1 — pure
+    Note over SW,P: PHASE 1 - pure
     SW->>SW: build WriteContext (variables + defaults, varString, fragmentMap)
     loop recursive descent
-        SW->>SW: flattenFields → Map<FieldNode, ctx>
+        SW->>SW: flattenFields -> Map<FieldNode, ctx>
         SW->>P: getStoreFieldName(...) per field
-        SW->>SW: processFieldValue → recurse / map arrays / cloneDeep scalars
-        SW->>P: getMergeFunction(parent, field, child) → mergeTree.info
+        SW->>SW: processFieldValue -> recurse / map arrays / cloneDeep scalars
+        SW->>P: getMergeFunction(parent, field, child) -> mergeTree.info
         SW->>P: identify(result, { storeObject: incoming, readField })
         SW->>SR: isFresh(result, ref, selectionSet, context)?
-        SR-->>SW: true → skip subtree
+        SR-->>SW: true -> skip subtree
         SW->>SW: stage into incomingById
     end
     end
 
     rect rgb(220, 252, 231)
-    Note over SW,CG: PHASE 2 — effectful
+    Note over SW,CG: PHASE 2 - effectful
     loop for each staged (dataId, storeObject, mergeTree)
         SW->>SW: applyMerges (children first)
         SW->>P: runMergeFunction(existing, incoming, info, context, storage)
@@ -3035,17 +3035,17 @@ stateDiagram-v2
     [*] --> Raw : GraphQL result tree
 
     Raw --> Flattened : flattenFields<br/>fragments inlined, @skip/@include applied
-    Flattened --> Shredded : processFieldValue + processSelectionSet<br/>identifiable children → Reference
+    Flattened --> Shredded : processFieldValue + processSelectionSet<br/>identifiable children -> Reference
     Shredded --> Identified : policies.identify<br/>keyObject merged into incoming
 
     Identified --> Staged : incomingById.set(dataId, ...)
-    Identified --> Inline : no dataId — object stays nested in its parent
+    Identified --> Inline : no dataId - object stays nested in its parent
     Identified --> Skipped : written[dataId] contains selectionSet<br/>(cycle) OR reader.isFresh (unchanged)
 
-    Staged --> Merged : applyMerges → runMergeFunction
+    Staged --> Merged : applyMerges -> runMergeFunction
     Merged --> Committed : store.merge(dataId, storeObject)
     Committed --> Dirtied : group.dirty per changed field
-    Committed --> Quiet : storeObjectReconciler found deep equality —<br/>no dirty, no broadcast
+    Committed --> Quiet : storeObjectReconciler found deep equality -<br/>no dirty, no broadcast
     Committed --> Retained : store.retain(ref.__ref)
 
     Dirtied --> [*]
@@ -3077,7 +3077,7 @@ flowchart TB
     AIMPL --> ESS
     AIMPL --> ESA
 
-    IMPL -->|"every field read"| PRF["policies.readField → store.getFieldValue<br/>→ group.depend(dataId, storeFieldName)"]:::store
+    IMPL -->|"every field read"| PRF["policies.readField -> store.getFieldValue<br/>-> group.depend(dataId, storeFieldName)"]:::store
 
     ESS --> OUT["ExecResult { result, missing? }"]:::read
     OUT --> DIFF["Cache.DiffResult { result, complete, missing }"]:::api
@@ -3274,10 +3274,10 @@ flowchart TB
     TN --> WS["workSet = new Set(selectionSet.selections)"]:::store
     WS --> FE["workSet.forEach(selection)"]:::read
     FE --> SI{"shouldInclude(selection, variables)?"}:::read
-    SI -->|"no — @skip/@include"| FE
+    SI -->|"no - @skip/@include"| FE
     SI -->|"yes"| KIND{"isField(selection)?"}:::read
 
-    KIND -->|"no — fragment"| FR["fragment = getFragmentFromSelection(selection, lookupFragment)<br/>throw if a named spread is unresolvable<br/>if policies.fragmentMatches(fragment, typename):<br/>&nbsp; <b>workSet.add(...fragment.selections)</b><br/><i>Set.forEach visits them in this same loop</i>"]:::write
+    KIND -->|"no - fragment"| FR["fragment = getFragmentFromSelection(selection, lookupFragment)<br/>throw if a named spread is unresolvable<br/>if policies.fragmentMatches(fragment, typename):<br/>&nbsp; <b>workSet.add(...fragment.selections)</b><br/><i>Set.forEach visits them in this same loop</i>"]:::write
     FR --> FE
 
     KIND -->|"yes"| RF["fieldValue = policies.readField({ fieldName, field, variables, from: obj }, context)<br/>resultName = alias ?? fieldName"]:::store
@@ -3286,7 +3286,7 @@ flowchart TB
     UND -->|"no"| ARR{"isArray(fieldValue)?"}:::read
     ARR -->|"yes, length &gt; 0"| SUB["executeSubSelectedArray({ field, array, enclosingRef, context })"]:::memo
     ARR -->|"no"| SEL{"selection.selectionSet?"}:::read
-    SEL -->|"absent — scalar"| KEEP["keep fieldValue as-is"]:::store
+    SEL -->|"absent - scalar"| KEEP["keep fieldValue as-is"]:::store
     SEL -->|"present and fieldValue != null"| REC["executeSelectionSet({ selectionSet, objectOrReference: fieldValue,<br/>enclosingRef: isReference(fieldValue) ? fieldValue : enclosingRef, context })"]:::memo
     SUB --> PUSH
     KEEP --> PUSH
@@ -3403,13 +3403,13 @@ private execSubSelectedArrayImpl({ field, array, enclosingRef, context }): ExecR
 flowchart TB
     A["array from the store<br/>[ Ref(A), Ref(B-evicted), null, [nested], scalar ]"]:::store
     A --> F{"field.selectionSet?"}:::read
-    F -->|"yes"| FILT["<b>filter</b>: keep item if<br/>item === undefined || store.canRead(item)<br/><i>dangling References are dropped —<br/>the array silently shrinks</i>"]:::dirty
+    F -->|"yes"| FILT["<b>filter</b>: keep item if<br/>item === undefined || store.canRead(item)<br/><i>dangling References are dropped -<br/>the array silently shrinks</i>"]:::dirty
     F -->|"no"| MAP
     FILT --> MAP["map each item"]:::read
-    MAP --> N1["null → null"]:::store
-    MAP --> N2["array → recurse executeSubSelectedArray"]:::memo
-    MAP --> N3["object/Reference (with selectionSet)<br/>→ executeSelectionSet"]:::memo
-    MAP --> N4["scalar (no selectionSet)<br/>→ pass through<br/>__DEV__: assertSelectionSetForIdValue"]:::store
+    MAP --> N1["null -> null"]:::store
+    MAP --> N2["array -> recurse executeSubSelectedArray"]:::memo
+    MAP --> N3["object/Reference (with selectionSet)<br/>-> executeSelectionSet"]:::memo
+    MAP --> N4["scalar (no selectionSet)<br/>-> pass through<br/>__DEV__: assertSelectionSetForIdValue"]:::store
     N1 --> OUT["{ result: newArray, missing }"]:::read
     N2 --> OUT
     N3 --> OUT
@@ -3488,7 +3488,7 @@ flowchart LR
     subgraph q["Query"]
         QQ["{ todos { id text author { name } } }"]:::ext
     end
-    subgraph s["Store — Todo:2 has no author, Author:1 has no name"]
+    subgraph s["Store - Todo:2 has no author, Author:1 has no name"]
         SS["ROOT_QUERY.todos = [Ref(Todo:1), Ref(Todo:2)]"]:::store
     end
     subgraph m["MissingTree"]
@@ -3551,7 +3551,7 @@ graph connecting `optimism` `Entry` objects to `(dataId, storeFieldName)` dep ke
 
 ```mermaid
 flowchart TB
-    subgraph entries["optimism Entry graph (parent → child via parentEntrySlot)"]
+    subgraph entries["optimism Entry graph (parent -> child via parentEntrySlot)"]
         E0["Entry: maybeBroadcastWatch(watch)"]:::memo
         E1["Entry: executeSelectionSet<br/>(rootSelectionSet, 'ROOT_QUERY', varString)"]:::memo
         E2["Entry: executeSubSelectedArray<br/>(todosFieldNode, arrayObj, varString)"]:::memo
@@ -3562,7 +3562,7 @@ flowchart TB
         E2 --> E4
     end
 
-    subgraph deps["CacheGroup dep leaves — key = storeFieldName + '#' + dataId"]
+    subgraph deps["CacheGroup dep leaves - key = storeFieldName + '#' + dataId"]
         D1["__exists#ROOT_QUERY"]:::store
         D2["todos#ROOT_QUERY"]:::store
         D3["__exists#Todo:1"]:::store
@@ -3649,7 +3649,7 @@ flowchart LR
     S2 --> G2["root CacheGroup<br/>keyMaker: Trie #1"]:::memo
     G1 --> E1["Entry set A"]:::memo
     G2 --> E2["Entry set B"]:::memo
-    NOTE["Same query, same variables →<br/>two independent memo entries and<br/>two independent result objects."]:::ext
+    NOTE["Same query, same variables -><br/>two independent memo entries and<br/>two independent result objects."]:::ext
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef store fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
@@ -3683,14 +3683,14 @@ flowchart TB
     T7 -->|"getCacheInfo(cache).dep.dirty(rv)<br/>then broadcast(cache)"| BW
 
     TX --> BW["broadcastWatches(options?)<br/>watches.forEach(c =&gt; maybeBroadcastWatch(c, options))"]:::api
-    BW --> MBW["<b>maybeBroadcastWatch</b> — optimism wrap, LRU 5000<br/>key = store.makeCacheKey(query, callback,<br/>canonicalStringify({optimistic, id, variables}))"]:::memo
-    MBW -->|"entry clean"| SKIP["nothing happens —<br/>neither diff nor callback runs"]:::store
+    BW --> MBW["<b>maybeBroadcastWatch</b> - optimism wrap, LRU 5000<br/>key = store.makeCacheKey(query, callback,<br/>canonicalStringify({optimistic, id, variables}))"]:::memo
+    MBW -->|"entry clean"| SKIP["nothing happens -<br/>neither diff nor callback runs"]:::store
     MBW -->|"entry dirty"| BWI["broadcastWatch(c, options)"]:::read
     BWI --> D["diff = this.diff(c)<br/><i>c doubles as DiffOptions</i>"]:::read
     D --> OWU{"options.onWatchUpdated?.(c, diff, lastDiff) === false?"}:::read
-    OWU -->|"yes"| SUP["suppressed — callback not called"]:::dirty
+    OWU -->|"yes"| SUP["suppressed - callback not called"]:::dirty
     OWU -->|"no"| EQ{"!lastDiff || !equal(lastDiff.result, diff.result)"}:::read
-    EQ -->|"equal"| SKIP2["no callback — the result did not change"]:::store
+    EQ -->|"equal"| SKIP2["no callback - the result did not change"]:::store
     EQ -->|"different"| CB["c.callback((c.lastDiff = diff), lastDiff)"]:::api
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
@@ -3743,10 +3743,10 @@ stateDiagram-v2
     direction LR
     [*] --> NoWatches : new InMemoryCache()
 
-    NoWatches --> Watching : watch(c) — first one<br/>recallCache(this) reattaches<br/>reactive variables
-    Watching --> Watching : watch(c') — subsequent
-    Watching --> Watching : unsubscribe(c') — not the last
-    Watching --> NoWatches : unsubscribe — last one<br/>forgetCache(this) detaches<br/>reactive variables
+    NoWatches --> Watching : watch(c) - first one<br/>recallCache(this) reattaches<br/>reactive variables
+    Watching --> Watching : watch(c') - subsequent
+    Watching --> Watching : unsubscribe(c') - not the last
+    Watching --> NoWatches : unsubscribe - last one<br/>forgetCache(this) detaches<br/>reactive variables
 
     note right of NoWatches
         With no watches, broadcastWatches
@@ -3853,22 +3853,22 @@ sequenceDiagram
 
     Note over IMC: txCount = 0
     U->>IMC: batch({ update })
-    IMC->>IMC: ++txCount  → 1
+    IMC->>IMC: ++txCount  -> 1
     activate IMC
     IMC->>U: update(cache)
     U->>IMC: writeQuery(A)
-    IMC->>IMC: ++txCount → 2
+    IMC->>IMC: ++txCount -> 2
     IMC->>ES: merge
-    IMC->>IMC: --txCount → 1, non-zero → NO broadcast
+    IMC->>IMC: --txCount -> 1, non-zero -> NO broadcast
     U->>IMC: writeQuery(B)
-    IMC->>IMC: ++txCount → 2
+    IMC->>IMC: ++txCount -> 2
     IMC->>ES: merge
-    IMC->>IMC: --txCount → 1, non-zero → NO broadcast
+    IMC->>IMC: --txCount -> 1, non-zero -> NO broadcast
     U->>IMC: evict(C)
-    IMC->>IMC: ++txCount → 2 … → 1, NO broadcast
+    IMC->>IMC: ++txCount -> 2 ... -> 1, NO broadcast
     deactivate IMC
-    IMC->>IMC: --txCount → 0
-    IMC->>IMC: broadcastWatches(options) — exactly one broadcast
+    IMC->>IMC: --txCount -> 0
+    IMC->>IMC: broadcastWatches(options) - exactly one broadcast
 ```
 
 Each method's `finally` block follows the same shape:
@@ -3950,7 +3950,7 @@ public batch<TUpdateResult>(options: Cache.BatchOptions<InMemoryCache, TUpdateRe
 
 ```mermaid
 flowchart TB
-    subgraph M1["optimistic: string — write into a NEW layer"]
+    subgraph M1["optimistic: string - write into a NEW layer"]
         direction TB
         A1["optimisticData = optimisticData.addLayer(id, perform)"]:::write
         A2["Layer constructor calls replay(this)"]:::memo
@@ -3961,7 +3961,7 @@ flowchart TB
         NOTE1["Rollback is free: removeLayer(id).<br/>evict's `limit` is this.data === the layer,<br/>so evictions cannot escape."]:::ext
     end
 
-    subgraph M2["optimistic: false — write into the Root, ignore layers"]
+    subgraph M2["optimistic: false - write into the Root, ignore layers"]
         direction TB
         B1["perform(this.data)"]:::write
         B2["this.data = this.optimisticData = Root"]:::store
@@ -3969,7 +3969,7 @@ flowchart TB
         B1 --> B2 --> B3
     end
 
-    subgraph M3["optimistic: true (default) — no layer, just batching"]
+    subgraph M3["optimistic: true (default) - no layer, just batching"]
         direction TB
         C1["perform() with no layer argument"]:::write
         C2["data / optimisticData unchanged"]:::store
@@ -4004,22 +4004,22 @@ sequenceDiagram
 
     Note over IMC: onWatchUpdated provided and txCount === 0
     rect rgb(254, 202, 202)
-    Note over IMC,W1: Pre-pass — find watches that were ALREADY dirty
+    Note over IMC,W1: Pre-pass - find watches that were ALREADY dirty
     IMC->>IMC: broadcastWatches({ onWatchUpdated: w => { alreadyDirty.add(w)#59; return false } })
-    IMC->>W1: maybeBroadcastWatch → dirty → diff computed
-    Note right of W1: returns false → no callback,<br/>but the memo entry is now CLEAN<br/>and alreadyDirty = { A }
-    IMC->>W2: maybeBroadcastWatch → clean → skipped entirely
+    IMC->>W1: maybeBroadcastWatch -> dirty -> diff computed
+    Note right of W1: returns false -> no callback,<br/>but the memo entry is now CLEAN<br/>and alreadyDirty = { A }
+    IMC->>W2: maybeBroadcastWatch -> clean -> skipped entirely
     end
 
     rect rgb(253, 230, 138)
     Note over IMC: Run the update
-    IMC->>IMC: perform(...) — dirties watch B
+    IMC->>IMC: perform(...) - dirties watch B
     end
 
     rect rgb(219, 234, 254)
-    Note over IMC,W2: Post-pass — only update-affected watches are dirty now
+    Note over IMC,W2: Post-pass - only update-affected watches are dirty now
     IMC->>IMC: broadcastWatches({ onWatchUpdated: wrapped })
-    IMC->>W2: dirty → onQueryUpdated(B, diff, lastDiff)
+    IMC->>W2: dirty -> onQueryUpdated(B, diff, lastDiff)
     Note right of W2: not in alreadyDirty, so it is<br/>reported to the caller
     end
 
@@ -4090,9 +4090,9 @@ sequenceDiagram
     rect rgb(253, 230, 138)
     Note over QI,OD: 1. Optimistic response
     QI->>IMC: recordOptimisticTransaction(update, mutationId)
-    IMC->>IMC: performTransaction(update, mutationId) → batch({ optimistic: mutationId })
+    IMC->>IMC: performTransaction(update, mutationId) -> batch({ optimistic: mutationId })
     IMC->>OD: addLayer(mutationId, perform)
-    OD->>OD: new Layer(id, parent, replay, group) → replay(layer)
+    OD->>OD: new Layer(id, parent, replay, group) -> replay(layer)
     Note right of OD: markMutationResult writes into the layer
     IMC->>IMC: broadcastWatches()
     IMC->>OQ: callback(diff with fromOptimisticTransaction = true)
@@ -4103,7 +4103,7 @@ sequenceDiagram
     end
 
     rect rgb(219, 234, 254)
-    Note over QI,RT: 3. Server response — one atomic batch
+    Note over QI,RT: 3. Server response - one atomic batch
     QI->>IMC: cache.batch({ update: writes server data, removeOptimistic: mutationId, onWatchUpdated })
     IMC->>RT: writes land in this.data (the Root)
     IMC->>OD: removeLayer(mutationId)
@@ -4193,11 +4193,11 @@ export function makeVar<T>(value: T): ReactiveVar<T> {
 flowchart TB
     subgraph readpath["Reading a variable inside a field read function"]
         R1["StoreReader.execSelectionSetImpl<br/>(inside an optimism Entry)"]:::memo
-        R1 --> R2["policies.readField → cacheSlot.withValue(this.cache, read, ...)"]:::read
+        R1 --> R2["policies.readField -> cacheSlot.withValue(this.cache, read, ...)"]:::read
         R2 --> R3["user read fn calls myVar()"]:::ext
-        R3 --> R4["cacheSlot.getValue() → the cache"]:::memo
+        R3 --> R4["cacheSlot.getValue() -> the cache"]:::memo
         R4 --> R5["rv.attachCache(cache)<br/>caches.add(cache); cacheInfo.vars.add(rv)"]:::store
-        R5 --> R6["cacheInfo.dep(rv)<br/>→ registers the enclosing Entry<br/>as a dependent of this variable"]:::memo
+        R5 --> R6["cacheInfo.dep(rv)<br/>-> registers the enclosing Entry<br/>as a dependent of this variable"]:::memo
     end
 
     subgraph writepath["Assigning a new value"]
@@ -4205,15 +4205,15 @@ flowchart TB
         W1 --> W2{"value !== newValue?<br/><i>strict identity, not deep equality</i>"}:::read
         W2 -->|"no"| W3["nothing happens at all"]:::store
         W2 -->|"yes"| W4["for each attached cache:<br/>cacheInfo.dep.dirty(rv)"]:::dirty
-        W4 --> W5["every memo Entry that read the variable<br/>is marked dirty — transitively up to<br/>maybeBroadcastWatch"]:::dirty
-        W5 --> W6["broadcast(cache) → cache.broadcastWatches()"]:::api
+        W4 --> W5["every memo Entry that read the variable<br/>is marked dirty - transitively up to<br/>maybeBroadcastWatch"]:::dirty
+        W5 --> W6["broadcast(cache) -> cache.broadcastWatches()"]:::api
         W6 --> W7["onNextChange listeners fire once, then clear"]:::ext
     end
 
     subgraph attach["Cache attachment lifecycle"]
-        A1["watch() with watches.size === 0<br/>→ recallCache(cache)<br/>→ every remembered var re-attaches"]:::store
-        A2["last unsubscribe<br/>→ forgetCache(cache)<br/>→ vars drop the cache from their Set"]:::dirty
-        A3["cacheInfoMap is a WeakMap, so the<br/>var↔cache memory survives forget<br/>but never pins the cache"]:::ext
+        A1["watch() with watches.size === 0<br/>-> recallCache(cache)<br/>-> every remembered var re-attaches"]:::store
+        A2["last unsubscribe<br/>-> forgetCache(cache)<br/>-> vars drop the cache from their Set"]:::dirty
+        A3["cacheInfoMap is a WeakMap, so the<br/>var<->cache memory survives forget<br/>but never pins the cache"]:::ext
     end
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
@@ -4249,16 +4249,16 @@ wrapper over `watch`.
 ```mermaid
 flowchart TB
     WF["cache.watchFragment({ fragment, fragmentName, from, variables, optimistic })"]:::api
-    WF --> DOC["query = getFragmentDoc(fragment, fragmentName)<br/><i>optimism wrap + WeakCache, LRU 1000 —<br/>guarantees the same (===) DocumentNode</i>"]:::memo
+    WF --> DOC["query = getFragmentDoc(fragment, fragmentName)<br/><i>optimism wrap + WeakCache, LRU 1000 -<br/>guarantees the same (===) DocumentNode</i>"]:::memo
     DOC --> IDS["fromArray.map(toCacheId)<br/>string passes through; otherwise cache.identify<br/>__DEV__ warns when the id is undefined"]:::read
     IDS --> SPLIT{"Array.isArray(from)?"}:::read
 
     SPLIT -->|"no"| ONE["watchSingleFragment(id, query, options)"]:::read
     ONE --> NULLC{"id === null?"}:::read
-    NULLC -->|"yes"| NOBS["nullObservable — a frozen<br/>{ data: null, complete: true } singleton"]:::store
+    NULLC -->|"yes"| NOBS["nullObservable - a frozen<br/>{ data: null, complete: true } singleton"]:::store
     NULLC -->|"no"| TRIE["fragmentWatches: Trie&lt;{observable?}&gt;<br/>key = [fragmentQuery, canonicalStringify({id, optimistic, variables})]<br/><i>identical watches share ONE observable</i>"]:::memo
     TRIE --> OBS["new Observable(observer =&gt; cache.watch({ ... immediate: true, callback }))<br/>.pipe(distinctUntilChanged(),<br/>&nbsp; share({ connector: ReplaySubject(1),<br/>&nbsp;&nbsp; resetOnRefCountZero: () =&gt; timer(0) }))"]:::memo
-    OBS --> EBQ["callback → onAfterBroadcast(() =&gt;<br/>&nbsp; observer.next(getNewestResult(diff)))<br/>getNewestResult reuses currentResult unless<br/><b>equalByQuery</b> says the data changed"]:::read
+    OBS --> EBQ["callback -> onAfterBroadcast(() =&gt;<br/>&nbsp; observer.next(getNewestResult(diff)))<br/>getNewestResult reuses currentResult unless<br/><b>equalByQuery</b> says the data changed"]:::read
 
     SPLIT -->|"yes"| MANY["combineLatestBatched(observables)<br/>.pipe(map(toResult), shareReplay({bufferSize:1, refCount:true}))"]:::memo
     MANY --> AGG["toResult folds into<br/>{ data: [...], complete: AND of all,<br/>&nbsp; dataState, missing: { [idx]: tree } }"]:::read
@@ -4309,17 +4309,17 @@ behave correctly, and **overridden** methods replace a base-class default.
 
 ```mermaid
 flowchart TB
-    subgraph abs["Abstract — must implement (9)"]
-        AB["read · write · diff · watch<br/>reset · evict · restore · extract<br/>removeOptimistic · fragmentMatches<br/>performTransaction"]:::api
+    subgraph abs["Abstract - must implement (9)"]
+        AB["read + write + diff + watch<br/>reset + evict + restore + extract<br/>removeOptimistic + fragmentMatches<br/>performTransaction"]:::api
     end
     subgraph over["Overridden in InMemoryCache (8)"]
-        OV["batch · transformDocument · identify<br/>gc · modify · lookupFragment<br/>resolvesClientField · broadcastWatches"]:::write
+        OV["batch + transformDocument + identify<br/>gc + modify + lookupFragment<br/>resolvesClientField + broadcastWatches"]:::write
     end
     subgraph inh["Inherited unchanged from ApolloCache (10)"]
-        IN["readQuery · readFragment<br/>writeQuery · writeFragment<br/>updateQuery · updateFragment<br/>watchFragment · recordOptimisticTransaction<br/>transformForLink · onAfterBroadcast"]:::read
+        IN["readQuery + readFragment<br/>writeQuery + writeFragment<br/>updateQuery + updateFragment<br/>watchFragment + recordOptimisticTransaction<br/>transformForLink + onAfterBroadcast"]:::read
     end
     subgraph extra["InMemoryCache-only additions (4)"]
-        EX["retain · release · policies · makeVar"]:::store
+        EX["retain + release + policies + makeVar"]:::store
     end
 
     inh --> abs
@@ -4538,7 +4538,7 @@ flowchart TB
     ID -->|"absent"| DEF["id = 'ROOT_QUERY'"]:::store
     ID -->|"truthy"| GO
     DEF --> GO["optimisticData.evict(options, limit = this.data)"]:::write
-    GO --> CH["descend Layer → … → limit,<br/>calling delete(id, fieldName, args) at each level"]:::write
+    GO --> CH["descend Layer -> ... -> limit,<br/>calling delete(id, fieldName, args) at each level"]:::write
     CH --> DRT["group.dirty(id, fieldName || '__exists')<br/><i>unconditional when fieldName was given</i>"]:::dirty
     DRT --> RET["return true iff any level removed data"]:::api
 
@@ -4645,7 +4645,7 @@ flowchart TB
     C1 --> C2["ids = optimisticData.gc()<br/>mark &amp; sweep from the TOP of the layer chain,<br/>deleting from the Root"]:::write
     C2 --> C3{"resetResultCache AND txCount === 0?"}:::read
     C3 -->|"no"| RET["return ids"]:::api
-    C3 -->|"yes"| C4["resetResultCache():<br/>· addTypenameTransform.resetCache()<br/>· fragments?.resetCaches()<br/>· new StoreReader + new StoreWriter<br/>· new maybeBroadcastWatch<br/>· group.resetCaching() on both CacheGroups"]:::dirty
+    C3 -->|"yes"| C4["resetResultCache():<br/>+ addTypenameTransform.resetCache()<br/>+ fragments?.resetCaches()<br/>+ new StoreReader + new StoreWriter<br/>+ new maybeBroadcastWatch<br/>+ group.resetCaching() on both CacheGroups"]:::dirty
     C4 --> RET
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
@@ -4741,13 +4741,13 @@ sequenceDiagram
 
     U->>IMC: restore(snapshot)
     IMC->>IMC: init()
-    Note right of IMC: new EntityStore.Root · new Stump<br/>optimisticData = stump<br/><b>all optimistic layers are discarded</b>
-    IMC->>SR: resetResultCache() — new StoreReader/StoreWriter,<br/>new maybeBroadcastWatch, group.resetCaching()
+    Note right of IMC: new EntityStore.Root + new Stump<br/>optimisticData = stump<br/><b>all optimistic layers are discarded</b>
+    IMC->>SR: resetResultCache() - new StoreReader/StoreWriter,<br/>new maybeBroadcastWatch, group.resetCaching()
     IMC->>RT: data.replace(snapshot)
     RT->>RT: delete ids absent from the snapshot (a no-op on a fresh Root)
     RT->>RT: merge every { dataId: storeObject }
     RT->>RT: __META.extraRootIds.forEach(retain)
-    Note over IMC: NO broadcast — watches see stale data<br/>until something else broadcasts
+    Note over IMC: NO broadcast - watches see stale data<br/>until something else broadcasts
 ```
 
 **Sharp edges.**
@@ -4789,8 +4789,8 @@ stateDiagram-v2
     direction TB
     [*] --> Populated
 
-    Populated --> Emptied : reset() — init() replaces Root, Stump,<br/>StoreReader, StoreWriter, maybeBroadcastWatch
-    Emptied --> Rebroadcast : default — broadcastWatches()<br/>every watcher gets an incomplete diff
+    Populated --> Emptied : reset() - init() replaces Root, Stump,<br/>StoreReader, StoreWriter, maybeBroadcastWatch
+    Emptied --> Rebroadcast : default - broadcastWatches()<br/>every watcher gets an incomplete diff
     Emptied --> Silent : discardWatches: true<br/>forget every watch, clear the Set,<br/>forgetCache(this)
 
     Rebroadcast --> [*] : watches remain registered
@@ -4857,7 +4857,7 @@ flowchart LR
     FR -->|"no"| AT
     FT --> AT["addTypenameTransform.transformDocument<br/><i>DocumentTransform, LRU 2000</i>"]:::memo
     AT --> OUT["document with __typename added<br/>to every object selection set"]:::store
-    NOTE["Identity stability here is what makes<br/>StoreReader's (selectionSet, …) memo keys work.<br/>Two calls with the same input document must<br/>return the === same output document."]:::ext
+    NOTE["Identity stability here is what makes<br/>StoreReader's (selectionSet, ...) memo keys work.<br/>Two calls with the same input document must<br/>return the === same output document."]:::ext
 
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
     classDef store fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
@@ -4982,7 +4982,7 @@ Every arrow below is a real call site. Nothing else in `src/` touches the cache.
 flowchart TB
     subgraph app["Application surface"]
         AC["ApolloClient"]:::ext
-        HK["useFragment ·<br/>useSuspenseFragment"]:::ext
+        HK["useFragment +<br/>useSuspenseFragment"]:::ext
     end
 
     subgraph core["Core orchestration"]
@@ -4990,34 +4990,34 @@ flowchart TB
         OQ["ObservableQuery"]:::ext
         QI["QueryInfo"]:::ext
         LS["LocalState"]:::ext
-        MK["maskOperation ·<br/>maskFragment"]:::ext
+        MK["maskOperation +<br/>maskFragment"]:::ext
     end
 
     subgraph cache["InMemoryCache"]
-        RD["read · diff"]:::read
+        RD["read + diff"]:::read
         WR["write"]:::write
         WA["watch"]:::memo
         BA["batch"]:::write
-        MU["modify · evict ·<br/>removeOptimistic · reset"]:::dirty
-        MI["identify · transformDocument ·<br/>fragmentMatches · lookupFragment ·<br/>resolvesClientField · extract · restore"]:::api
+        MU["modify + evict +<br/>removeOptimistic + reset"]:::dirty
+        MI["identify + transformDocument +<br/>fragmentMatches + lookupFragment +<br/>resolvesClientField + extract + restore"]:::api
     end
 
     AC -->|"readQuery/readFragment<br/>writeQuery/writeFragment<br/>watchFragment<br/>extract/restore"| MI
     HK -->|"identify"| MI
     QM -->|"transformDocument (via DocumentTransform)<br/>transformForLink"| MI
-    QM -->|"diff — fetchQueryByPolicy.readCache()"| RD
-    QM -->|"batch — refetchQueries"| BA
-    QM -->|"removeOptimistic · reset"| MU
-    OQ -->|"diff — getCacheDiff()"| RD
-    OQ -->|"watch — resubscribeCache()"| WA
-    OQ -->|"batch — fetchMore"| BA
+    QM -->|"diff - fetchQueryByPolicy.readCache()"| RD
+    QM -->|"batch - refetchQueries"| BA
+    QM -->|"removeOptimistic + reset"| MU
+    OQ -->|"diff - getCacheDiff()"| RD
+    OQ -->|"watch - resubscribeCache()"| WA
+    OQ -->|"batch - fetchMore"| BA
     QI -->|"diff before/after write"| RD
     QI -->|"writeQuery inside batch"| WR
     QI -->|"recordOptimisticTransaction"| BA
     QI -->|"modify ROOT_MUTATION scrub"| MU
     QI -.->|"wraps evict/modify/reset<br/>to count destructive ops"| MU
     LS -->|"fragmentMatches"| MI
-    MK -->|"fragmentMatches · lookupFragment"| MI
+    MK -->|"fragmentMatches + lookupFragment"| MI
     WA -.->|"broadcast callback"| OQ
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
@@ -5073,7 +5073,7 @@ flowchart LR
     U["User document<br/><i>query Q { todo { text } }</i>"]:::ext
     T1["defaultDocumentTransform<br/>= cache.transformDocument<br/><i>fragment registry + __typename</i>"]:::api
     T2["user documentTransform"]:::ext
-    T3["defaultDocumentTransform<br/><i>again — idempotent</i>"]:::api
+    T3["defaultDocumentTransform<br/><i>again - idempotent</i>"]:::api
     D["transformed document<br/><i>the cache's key everywhere</i>"]:::store
 
     U --> T1 --> T2 --> T3 --> D
@@ -5081,7 +5081,7 @@ flowchart LR
     D --> GDI["getDocumentInfo(document)<br/><i>AutoCleanedWeakCache, 2000</i>"]:::memo
     GDI --> SQ["serverQuery<br/><i>@client/@connection/@nonreactive/@unmask stripped</i>"]:::ext
     GDI --> CQ["clientQuery"]:::ext
-    GDI --> AQ["asQuery<br/><i>mutation/subscription → query</i>"]:::read
+    GDI --> AQ["asQuery<br/><i>mutation/subscription -> query</i>"]:::read
     GDI --> NRQ["nonReactiveQuery"]:::ext
 
     D --> TFL["cache.transformForLink<br/><i>identity for InMemoryCache</i>"]:::api
@@ -5150,11 +5150,11 @@ flowchart TB
     G0{"info.hasClientExports<br/>|| hasForcedResolvers?"}:::dirty
     G0X["watch.lastDiff = undefined<br/><i>defeat the equality gate so future<br/>equal diffs still arrive</i>"]:::dirty
     G1{"watch.lastOwnDiff === diff?"}:::dirty
-    G1X["return — this broadcast is<br/>the echo of our own write"]:::dirty
+    G1X["return - this broadcast is<br/>the echo of our own write"]:::dirty
     G2{"!diff.complete AND<br/>(previous.error || previous is<br/>uninitialized/empty)?"}:::dirty
-    G2X["return — let the refetch repair<br/>the partial result instead"]:::dirty
+    G2X["return - let the refetch repair<br/>the partial result instead"]:::dirty
     G3{"equal(previousResult.data,<br/>diff.result)?"}:::dirty
-    G3X["return — no observable change"]:::dirty
+    G3X["return - no observable change"]:::dirty
     OK["scheduleNotify()<br/><i>dirty = true; setTimeout(notify, 0)</i>"]:::write
 
     CB --> G0
@@ -5279,35 +5279,35 @@ sequenceDiagram
     participant OQ as ObservableQuery watch
 
     L->>QI: markQueryResult(incoming, opInfo)
-    QI->>OQ: resetNotifications() — cancel pending notify
+    QI->>OQ: resetNotifications() - cancel pending notify
     QI->>C: diff({ returnPartialData: true, optimistic: true })
     C-->>QI: lastDiff
     Note over QI: incremental (@defer) merge uses lastDiff.result as the base
     QI->>C: batch({ update, onWatchUpdated })
     activate C
-    Note over C: txCount++ — broadcasts deferred
+    Note over C: txCount++ - broadcasts deferred
     alt shouldWrite(result, variables)
         QI->>C: cache.writeQuery({ query, data, variables, overwrite })
         C->>W: writeToStore
         W-->>C: dirty fields
         Note over QI: lastWrite = { result, variables, dmCount }
     else identical to lastWrite
-        Note over QI: skip the write — feud breaker
+        Note over QI: skip the write - feud breaker
         alt lastDiff.complete
             Note over QI: result.data = lastDiff.result#59; return early
         end
     end
-    QI->>C: cache.diff(diffOptions) — read back
+    QI->>C: cache.diff(diffOptions) - read back
     C-->>QI: diff
     alt diff.complete
         Note over QI: result.data = diff.result<br/>(read functions now applied)
     else __DEV__ && written && !hasNext
         Note over QI: warnAboutPartialCacheResult
     end
-    Note over C: txCount-- → broadcastWatches()
+    Note over C: txCount-- -> broadcastWatches()
     C->>QI: onWatchUpdated(watch, diff)
     Note over QI: if watch.watcher === this.observableQuery<br/>watch.lastOwnDiff = diff
-    C->>OQ: callback(diff) — dropped by gate 1
+    C->>OQ: callback(diff) - dropped by gate 1
     deactivate C
 ```
 
@@ -5396,7 +5396,7 @@ stateDiagram-v2
 
     Optimistic: markMutationOptimistic
     Optimistic: recordOptimisticTransaction(tx, queryInfo.id)
-    Optimistic: → Layer(id = queryInfo.id) on optimisticData
+    Optimistic: -> Layer(id = queryInfo.id) on optimisticData
     Optimistic: writes ROOT_MUTATION + runs update() in the layer
     Optimistic --> InFlight: link request starts
 
@@ -5405,10 +5405,10 @@ stateDiagram-v2
 
     Success: markMutationResult
     Success: refetchQueries({ optimistic:false, removeOptimistic: id })
-    Success: → cache.batch removes the layer AND writes root, one broadcast
+    Success: -> cache.batch removes the layer AND writes root, one broadcast
     Success --> Scrubbed
 
-    Scrubbed: cache.modify({ id: "ROOT_MUTATION", fields → DELETE })
+    Scrubbed: cache.modify({ id: "ROOT_MUTATION", fields -> DELETE })
     Scrubbed: keeps only __typename
     Scrubbed --> [*]
 
@@ -5472,14 +5472,14 @@ and the reason `onWatchUpdated`'s return value is meaningful (§6.4).
 ```mermaid
 flowchart TB
     START["refetchQueries({ updateCache, include,<br/>optimistic, removeOptimistic, onQueryUpdated })"]:::api
-    INC["include → getObservableQueries(include)<br/>seed includedQueriesByOq with lastDiff<br/><i>skips cache-only and variablesUnknown</i>"]:::read
+    INC["include -> getObservableQueries(include)<br/>seed includedQueriesByOq with lastDiff<br/><i>skips cache-only and variablesUnknown</i>"]:::read
     BATCH["cache.batch({ update: updateCache,<br/>optimistic: (optimistic &amp;&amp; removeOptimistic) || false,<br/>removeOptimistic, onWatchUpdated })"]:::write
     OWU{"onWatchUpdated(watch, diff, lastDiff)<br/>watch.watcher instanceof ObservableQuery<br/>&amp;&amp; not already handled?"}:::memo
     HAS["onQueryUpdated provided?"]:::memo
-    CALL["result = onQueryUpdated(oq, diff, lastDiff)<br/>true → oq.refetch().retain()<br/>false → skip AND suppress broadcast<br/>other → collected into results"]:::write
-    DEF["onQueryUpdated !== null &amp;&amp;<br/>fetchPolicy !== 'cache-only'<br/>→ add to includedQueriesByOq"]:::read
+    CALL["result = onQueryUpdated(oq, diff, lastDiff)<br/>true -> oq.refetch().retain()<br/>false -> skip AND suppress broadcast<br/>other -> collected into results"]:::write
+    DEF["onQueryUpdated !== null &amp;&amp;<br/>fetchPolicy !== 'cache-only'<br/>-> add to includedQueriesByOq"]:::read
     AFTER["for each includedQueriesByOq entry:<br/>onQueryUpdated ?? refetch().retain()"]:::write
-    RM["removeOptimistic (again, defensively —<br/>no-op if batch already removed it)"]:::dirty
+    RM["removeOptimistic (again, defensively -<br/>no-op if batch already removed it)"]:::dirty
     OUT["Map&lt;ObservableQuery, result&gt;"]:::store
 
     START --> INC --> BATCH --> OWU
@@ -5534,7 +5534,7 @@ flowchart TB
         BW["cache.broadcastWatches()"]:::memo
         MBW["maybeBroadcastWatch(watch)<br/><i>memoized; equality gate</i>"]:::memo
         CB["watch.callback(diff)"]:::memo
-        SN["oq.scheduleNotify()<br/><i>dirty = true; setTimeout(…, 0)</i>"]:::write
+        SN["oq.scheduleNotify()<br/><i>dirty = true; setTimeout(..., 0)</i>"]:::write
     end
 
     subgraph clientside["Client-driven (global, imperative)"]
@@ -5786,15 +5786,15 @@ named beside it.
 
 ```mermaid
 flowchart TB
-    S1["<b>1. Primitives</b><br/>canonicalStringify · DeepMerger<br/>deep equality · maybeDeepFreeze"]:::store
-    S2["<b>2. Dependency engine</b><br/>Entry graph · dep() · wrap()<br/>bounded LRU + Trie key maker"]:::memo
-    S3["<b>3. EntityStore.Root</b><br/>flat map · merge · lookup<br/>CacheGroup depend/dirty"]:::store
-    S4["<b>4. Policies</b><br/>identify · getStoreFieldName<br/>readField · fragmentMatches"]:::api
-    S5["<b>5. StoreWriter</b><br/>two-phase write · MergeTree<br/>merge functions"]:::write
-    S6["<b>6. StoreReader</b><br/>memoized executeSelectionSet<br/>missing tree · canRead filtering"]:::read
-    S7["<b>7. Watches + broadcast</b><br/>watch · maybeBroadcastWatch<br/>txCount batching"]:::memo
-    S8["<b>8. Layers</b><br/>Stump · Layer · removeLayer replay<br/>batch optimistic modes"]:::dirty
-    S9["<b>9. Lifecycle</b><br/>modify · evict · gc<br/>retain/release · extract/restore"]:::dirty
+    S1["<b>1. Primitives</b><br/>canonicalStringify + DeepMerger<br/>deep equality + maybeDeepFreeze"]:::store
+    S2["<b>2. Dependency engine</b><br/>Entry graph + dep() + wrap()<br/>bounded LRU + Trie key maker"]:::memo
+    S3["<b>3. EntityStore.Root</b><br/>flat map + merge + lookup<br/>CacheGroup depend/dirty"]:::store
+    S4["<b>4. Policies</b><br/>identify + getStoreFieldName<br/>readField + fragmentMatches"]:::api
+    S5["<b>5. StoreWriter</b><br/>two-phase write + MergeTree<br/>merge functions"]:::write
+    S6["<b>6. StoreReader</b><br/>memoized executeSelectionSet<br/>missing tree + canRead filtering"]:::read
+    S7["<b>7. Watches + broadcast</b><br/>watch + maybeBroadcastWatch<br/>txCount batching"]:::memo
+    S8["<b>8. Layers</b><br/>Stump + Layer + removeLayer replay<br/>batch optimistic modes"]:::dirty
+    S9["<b>9. Lifecycle</b><br/>modify + evict + gc<br/>retain/release + extract/restore"]:::dirty
     S10["<b>10. Client integration</b><br/>transformDocument idempotence<br/>writable evict/modify/reset<br/>watcher/lastOwnDiff passthrough"]:::ext
 
     S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10
@@ -5846,22 +5846,22 @@ into `cache.policies`), implementing these eleven methods is sufficient; the rem
 
 ```mermaid
 flowchart LR
-    subgraph must["Must implement — client will call these"]
-        M1["read · diff"]:::read
+    subgraph must["Must implement - client will call these"]
+        M1["read + diff"]:::read
         M2["write"]:::write
         M3["watch"]:::memo
         M4["batch / performTransaction"]:::write
         M5["removeOptimistic"]:::dirty
-        M6["evict · modify · reset"]:::dirty
+        M6["evict + modify + reset"]:::dirty
         M7["identify"]:::api
         M8["transformDocument"]:::api
-        M9["fragmentMatches · lookupFragment"]:::api
-        M10["extract · restore"]:::store
-        M11["gc · retain · release"]:::dirty
+        M9["fragmentMatches + lookupFragment"]:::api
+        M10["extract + restore"]:::store
+        M11["gc + retain + release"]:::dirty
     end
 
     subgraph free["Free once the above are correct"]
-        F1["readQuery · readFragment<br/>writeQuery · writeFragment<br/>updateQuery · updateFragment<br/>watchFragment · recordOptimisticTransaction"]:::ext
+        F1["readQuery + readFragment<br/>writeQuery + writeFragment<br/>updateQuery + updateFragment<br/>watchFragment + recordOptimisticTransaction"]:::ext
     end
 
     must --> free
