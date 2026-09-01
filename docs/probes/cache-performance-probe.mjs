@@ -341,6 +341,49 @@ if (section("Write cost vs. list breadth (normalized entities)")) {
       `  unchanged payload, because the writer cannot know it is unchanged until it\n` +
       `  has normalized it.`
   );
+
+  // The "cold" column is inflated at small n by one-time per-cache setup, not by
+  // per-entity work. Isolate it by writing into a cache that is empty but has
+  // already transformed this document and materialized its policies.
+  {
+    const shape = wideNormalized(100);
+    const primed = () => {
+      const c = freshCache();
+      c.writeQuery({ query: shape.query, data: { feed: [] } });
+      c.evict({ id: "ROOT_QUERY", fieldName: "feed" });
+      return c;
+    };
+    const coldFresh = bench("write 100 into a brand-new cache", {
+      setup: () => freshCache(),
+      run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
+    });
+    const coldPrimed = bench("write 100 into a primed EMPTY cache", {
+      setup: primed,
+      run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
+    });
+    const overwrite = bench("overwrite 100 existing entities", {
+      setup: () => written(shape),
+      run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
+    });
+    note(
+      `  Why the n=100 "cold" cell above is disproportionately high (it drags the\n` +
+        `  next row's scale well below 1.00n). Re-measuring the same three writes here,\n` +
+        `  after the process has warmed up:\n` +
+        `    write cold n=100, as measured first : ${fmt(rows[0][2].cold)}\n` +
+        `    brand-new cache, 100 new entities   : ${fmt(coldFresh)}\n` +
+        `    primed EMPTY cache, 100 new         : ${fmt(coldPrimed)}\n` +
+        `    overwrite of 100 existing           : ${fmt(overwrite)}\n` +
+        `  Two separate effects, neither of them per-entity work:\n` +
+        `    1. JIT. The table's cold n=100 is the FIRST measurement in the process;\n` +
+        `       the identical operation re-measured here is cheaper.\n` +
+        `    2. One-time per-cache setup (document transform, type policies, fresh\n` +
+        `       StoreReader/StoreWriter): the gap between "brand-new" and "primed".\n` +
+        `  With both removed, CREATING n entities and OVERWRITING n identical ones cost\n` +
+        `  the same: the dirtying a creation does is worth about the same as the equal()\n` +
+        `  calls an overwrite does. Per-entity write cost does not depend on whether the\n` +
+        `  entity already existed.`
+    );
+  }
 }
 
 // ===========================================================================
@@ -846,6 +889,34 @@ if (section("Transactions, optimistic layers, and layer depth")) {
       run: (cache) => cache.removeOptimistic("layer-0"),
     });
 
+    const stack = (cache) => {
+      for (let i = 0; i < layers; i++) {
+        cache.recordOptimisticTransaction((c) => {
+          c.writeQuery({
+            query: shape.query,
+            data: { feed: [{ ...shape.data.feed[0], f0: `opt${i}` }] },
+          });
+        }, `layer-${i}`);
+      }
+      return cache;
+    };
+
+    // Unwinding order is the whole story: LIFO pops the top layer each time,
+    // FIFO removes the bottom and replays everything above it.
+    const teardownLifo = bench(`unwind ${layers} layers LIFO`, {
+      setup: () => stack(written(shape)),
+      run: (cache) => {
+        for (let i = layers - 1; i >= 0; i--) cache.removeOptimistic(`layer-${i}`);
+      },
+    });
+
+    const teardownFifo = bench(`unwind ${layers} layers FIFO`, {
+      setup: () => stack(written(shape)),
+      run: (cache) => {
+        for (let i = 0; i < layers; i++) cache.removeOptimistic(`layer-${i}`);
+      },
+    });
+
     rows.push([
       layers,
       layers,
@@ -853,19 +924,36 @@ if (section("Transactions, optimistic layers, and layer depth")) {
         "add+remove": addRemove,
         "read through": readThrough,
         "remove bottom": removeBottom,
+        "unwind LIFO": teardownLifo,
+        "unwind FIFO": teardownFifo,
       },
     ]);
   }
   table(
     "k stacked optimistic layers over a 2000-entity store",
-    ["add+remove", "read through", "remove bottom"],
+    [
+      "add+remove",
+      "read through",
+      "remove bottom",
+      "unwind LIFO",
+      "unwind FIFO",
+    ],
     rows
   );
   note(
     `  "remove bottom" is the expensive one: removing a layer that is not on top\n` +
       `  replays every layer above it (EntityStore.removeLayer -> Layer.newLayer +\n` +
       `  replay), so the cost is proportional to the number of layers above it times\n` +
-      `  the size of each layer's write.`
+      `  the size of each layer's write.\n` +
+      `\n` +
+      `  Compare the last two columns: unwinding the SAME stack costs O(k) popping from\n` +
+      `  the top and O(k^2) removing from the bottom, because every FIFO removal replays\n` +
+      `  the layers above it. "add+remove" uses the FIFO order, which is why it inherits\n` +
+      `  the same quadratic scale column.\n` +
+      `\n` +
+      `  "read through" is FLAT in k, and that is not a contradiction: the read is warm,\n` +
+      `  so it is a memo hit at the top of the chain and never walks the layers at all.\n` +
+      `  The O(k) lookup chain is only paid on a memo MISS.`
   );
 
   // Batching: one broadcast vs. N broadcasts.

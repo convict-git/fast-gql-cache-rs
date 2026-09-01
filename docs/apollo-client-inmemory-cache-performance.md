@@ -102,14 +102,14 @@ The single most important structural fact:
 
 | Operation | Complexity | Memoized? | Dominant term |
 | --- | --- | --- | --- |
-| `write` (cold) | `O(E · F)` + `O(total scalar bytes)` for equality | no | traversal + `identify` + allocation |
-| `write` (identical payload) | `O(E · F)` + full deep equality | no | `storeObjectReconciler` → `equal()` |
+| `write` (entities are new) | `O(E · F)` | no | traversal + `identify` + allocation + dirtying every field |
+| `write` (overwrite, identical payload) | `O(E · F)` + `O(bytes compared)` | no | `storeObjectReconciler` → `equal()` |
 | `read` / `diff` (cold) | `O(E · F)` | — | traversal + `mergeDeepArray` |
 | `read` / `diff` (warm, nothing dirty) | `O(1)` amortized | **yes** | one Trie lookup |
 | `read` after `k` dirty entities | `O(k · F + ancestors)` | partial | recompute only invalidated subtrees |
 | `broadcast` (nothing relevant dirty) | `O(W)` cheap checks | yes | `maybeBroadcastWatch` memo hit |
 | `broadcast` (relevant write) | `O(W · affected subtree)` | partial | one re-read per distinct document |
-| `modify` / `evict` (single id) | `O(F)` | — | dirty propagation |
+| `modify` / `evict` (single id) | `O(F)`, `O(L · F)` with `L` layers | — | dirty propagation |
 | `gc()` | `O(S · F)` **always** | no | mark-and-sweep over the whole store |
 | `extract()` | `O(S · F)` | no | `toObject` + `__META` |
 | `restore()` | `O(S)` | no | direct merge, no normalization |
@@ -118,7 +118,31 @@ The single most important structural fact:
 
 ### 1.3 Measured: the shape of the curves
 
-<!-- MEASURED:HEADLINE -->
+One list of `n` normalized entities, six scalar fields each, measured end to end:
+
+| `n` | write cold | write identical payload | read cold | read warm | read after 1 dirty field |
+| --- | --- | --- | --- | --- | --- |
+| 100 | 1.50 ms | 796 µs | 1.56 ms | **2.9 µs** | 187 µs |
+| 1 000 | 8.79 ms | 7.75 ms | 15.70 ms | **2.5 µs** | 1.66 ms |
+| 5 000 | 44.00 ms | 39.65 ms | 78.63 ms | **2.7 µs** | 8.87 ms |
+| 20 000 | 182.46 ms | 164.33 ms | 333.45 ms | **2.5 µs** | 45.08 ms |
+
+Three readings, in descending order of importance:
+
+1. **The warm-read column is flat.** 2.5–2.9 µs whether the list holds 100 entities or
+   20 000. That is the memo graph doing its job, and it is why the read path rarely shows
+   up in a profile of a healthy application.
+2. **Writing a byte-identical payload costs 90 % of a cold write** — 164 ms against 182 ms
+   at `n = 20 000`. Polling an unchanged response is almost as expensive as receiving a new
+   one.
+3. **One dirty field costs ~7× less than a cold read but still scales linearly.** 45 ms to
+   re-read a 20 000-entity list after a single field changed. Memoization improves the
+   constant here, not the exponent (§3.3).
+
+> **Reading the `scale` column** in the tables that follow: it is the growth factor divided
+> by the size ratio, so `1.00n` is linear, `2.00n` quadratic, and anything under about
+> `0.3n` is flat. It is the number to trust — absolute timings vary by machine, exponents
+> do not.
 
 ### 1.4 The one diagram to remember
 
@@ -173,7 +197,7 @@ flowchart TB
 
     subgraph phase1["Phase 1 — staging (no store mutation)"]
         direction TB
-        P1A["canonicalStringify(variables)<br/><i>once per write, memoized</i>"]:::memo
+        P1A["canonicalStringify(variables) → varString<br/><i>once per write</i>"]:::memo
         P1B["processSelectionSet — recursive<br/><b>per entity:</b> new Set, new Map, new Trie<br/><b>per field:</b> new path array, getStoreFieldName,<br/>getChildMergeTree, getMergeFunction, DeepMerger.merge"]:::write
         P1C["policies.identify(result) per object<br/><i>keyFields extraction + canonicalStringify</i>"]:::write
         P1D["context.incomingById: Map&lt;dataId, staged&gt;<br/><i>duplicate entities collapse here</i>"]:::store
@@ -296,6 +320,11 @@ function storeObjectReconciler(existingObject, incomingObject, property) {
 every entity whose incoming value is not `===` the stored value** — which, for data
 arriving fresh off the network, is every field.
 
+It does *not* run when the entity is new: `EntityStore.merge` calls
+`new DeepMerger(storeObjectReconciler).merge(existing, incoming)`, and with no `existing`
+there is nothing to reconcile. That is why creating an entity and overwriting it with
+identical data cost about the same (§2.7) — one pays for dirtying, the other for comparing.
+
 This is a deliberate trade: pay `O(size of the field value)` on the write to preserve
 referential identity, so the read path's memo entries stay valid and React does not
 re-render. The comment says so explicitly. But it means:
@@ -344,19 +373,47 @@ per field per entity on both the read and the write path and rebuilds the key ev
 Argument cost is therefore paid per field occurrence, and it scales with the *size of the
 argument structure*, not with how many distinct values it takes:
 
-<!-- MEASURED:ARGS -->
+| argument nesting depth `d` | write, same `variables` object | write, **fresh** `variables` object each call |
+| --- | --- | --- |
+| 1 | 18.0 µs | 17.0 µs |
+| 8 | 23.9 µs | 24.9 µs |
+| 32 | 49.1 µs | 53.5 µs |
+| 128 | 150.3 µs | 154.3 µs |
+
+The two columns are identical within noise, which is the direct confirmation that nothing is
+memoized per *value* — reusing the same `variables` object buys nothing. Cost tracks the
+size of the argument structure, close to linearly.
+
+Argument **count**, by contrast, vanishes into the noise as soon as there is a real result
+to traverse: 0, 2, 8 and 24 arguments on a field over a 50-item result all write in
+259–305 µs. Large or deep arguments cost; many shallow ones do not.
+
+The resulting key is the fully serialized, key-sorted form, which is also what makes
+`feed(type: "top", limit: 10)` and `feed(limit: 10, type: "top")` collide correctly:
+
+```
+search({"filter":{"a":2,"nested":{"a":2,"nested":{"a":2,"m":3,"z":1},"z":1},"z":1}})
+```
 
 ### 2.5 Identity extraction
 
 Every normalizable object pays `policies.identify` on write. Cost by configuration:
 
-<!-- MEASURED:KEYFIELDS -->
+| `keyFields` configuration | write, 2 000 books | vs. default |
+| --- | --- | --- |
+| default (`__typename` + `id`) | 21.64 ms | 1.00× |
+| `["isbn"]` | 27.94 ms | 1.29× |
+| `["isbn", "title", "year"]` | 29.76 ms | 1.37× |
+| `["isbn", "author", ["name"]]` (nested path) | 30.88 ms | 1.43× |
+| `false` (object stays embedded) | 21.69 ms | 1.00× |
 
 The ranking follows directly from `key-extractor.ts`:
 
-- **default `__typename` + `id`** — two property reads, one string concat.
-- **`keyFields: ["isbn"]`** — the specifier is compiled once, then per object it walks
-  `collectSpecifierPaths` and `canonicalStringify`s the extracted key object.
+- **default `__typename` + `id`** — two property reads, one string concat. Nothing else in
+  the cache is this cheap, which is the practical argument for just having an `id`.
+- **`keyFields: ["isbn"]`** — the specifier is compiled once, but per object it walks
+  `collectSpecifierPaths` and `canonicalStringify`s the extracted key object. Adding more
+  flat key paths grows this roughly linearly (1.29× for one, 1.37× for three).
 - **nested path (`["isbn", "author", ["name"]]`)** — additionally descends into the
   sub-object via `extractKeyPath`, and `normalize`s (key-sorts) the extracted value.
 - **`keyFields: false`** — skips `identify` entirely, but the object then stays *embedded*,
@@ -394,7 +451,46 @@ flowchart LR
 
 ### 2.7 Measured: write scaling
 
-<!-- MEASURED:WRITE -->
+`writeQuery` into a list of `n` normalized entities:
+
+| `n` | cold | scale | identical payload | scale | one field changed | scale |
+| --- | --- | --- | --- | --- | --- | --- |
+| 100 | 1.50 ms | — | 796 µs | — | 757 µs | — |
+| 1 000 | 8.79 ms | 0.59n | 7.75 ms | 0.97n | 7.62 ms | 1.01n |
+| 5 000 | 44.00 ms | 1.00n | 39.65 ms | 1.02n | 39.68 ms | 1.04n |
+| 20 000 | 182.46 ms | 1.04n | 164.33 ms | 1.04n | 166.83 ms | 1.05n |
+
+Writes are **linear in `n` and insensitive to what actually changed**. The three columns
+converge as `n` grows, because the traversal, the `identify` calls, the per-field
+allocations and the `equal()` comparisons all happen regardless — dirtying fields is the
+only part a no-op write avoids, and it is the cheapest part.
+
+> There is no "nothing changed" fast path, and there cannot be one: the writer only learns
+> that the payload is unchanged by normalizing it and comparing field by field. This is the
+> single most useful fact for reasoning about polling and subscription workloads.
+
+The `n = 100` cold cell looks anomalous — it drags the next row's `scale` well below `1.00n`
+— so the probe re-measures the same three writes later in the process, once everything has
+warmed up:
+
+| write of 100 entities | time |
+| --- | --- |
+| cold `n = 100`, as measured first in the table above | 1.50 ms |
+| the same write, re-measured into a **brand-new** cache | 875 µs |
+| into a primed but **empty** cache | 840 µs |
+| overwriting 100 **existing** entities | 718 µs |
+
+Two effects, neither of them per-entity work. The first is **JIT**: the table's cold
+`n = 100` is the first measurement the process makes, and re-measuring the identical
+operation later costs 40 % less. The second is **one-time per-cache setup** — transforming
+the document, materializing type policies, allocating a fresh `StoreReader`/`StoreWriter` —
+which is the ~35 µs gap between the brand-new and primed caches.
+
+With both removed, creating entities and overwriting them land within noise of each other:
+
+> **Creating `n` entities costs the same as overwriting `n` identical ones.** The dirtying
+> a creation performs is worth about as much as the `equal()` calls an overwrite performs.
+> Per-entity write cost does not depend on whether the entity already existed.
 
 ---
 
@@ -423,7 +519,17 @@ walk. Every entity × selection-set pair is one memo entry.
 > This is why result caching is worth so much: a warm read is a handful of `Trie` node
 > lookups, not a tree traversal.
 
-<!-- MEASURED:RESULTCACHING -->
+Turning the memo graph off is the cleanest way to price it. Over 5 000 entities:
+
+| | `resultCaching: true` | `resultCaching: false` | ratio |
+| --- | --- | --- | --- |
+| warm read | 1.8 µs | 28.33 ms | **16 000× slower** |
+| write | 45.07 ms | 39.54 ms | 0.88× (12 % *cheaper*) |
+
+Memoization is a read-path optimization **paid for on the write path** through dependency
+bookkeeping. The read-side win is four orders of magnitude; the write-side cost is a modest
+constant factor. That trade is the central design decision of the whole cache, and it is
+why `resultCaching: false` is a debugging tool rather than a tuning knob.
 
 ### 3.2 The cost of a cold read
 
@@ -506,24 +612,40 @@ means a `filter` pass with `N` `canRead` calls plus an `N`-element `map` whose p
 `executeSelectionSet` calls are memo *hits*. A memo hit is cheap — a three-level `Trie`
 lookup plus an `optimism` dirty check — but it is not free, so the re-read is still `O(N)`:
 
-<!-- MEASURED:READ -->
+`readQuery` over a list of `n` normalized entities:
 
-Read the `after 1 dirty` column against `cold`: at every size the re-read is roughly **8×
-cheaper** than a cold read and scales the same way. That factor is the value of structure
-sharing; the linearity is the cost of the monolithic array entry.
+| `n` | cold | scale | warm | scale | after 1 dirty field | scale |
+| --- | --- | --- | --- | --- | --- | --- |
+| 100 | 1.56 ms | — | 2.9 µs | — | 187 µs | — |
+| 1 000 | 15.70 ms | 1.01n | 2.5 µs | 0.09n | 1.66 ms | 0.89n |
+| 5 000 | 78.63 ms | 1.00n | 2.7 µs | 0.21n | 8.87 ms | 1.07n |
+| 20 000 | 333.45 ms | 1.06n | 2.5 µs | 0.23n | 45.08 ms | 1.27n |
 
-Depth behaves completely differently:
+Read the `after 1 dirty` column against `cold`: at every size the re-read is **7–9.5× cheaper**
+than a cold read and **scales the same way**. That factor is the value of structure sharing;
+the linearity is the cost of the monolithic array entry.
 
-<!-- MEASURED:DEPTH -->
+Depth behaves completely differently. A single chain of `d` nested entities:
+
+| `d` | write normalized | scale | read cold | scale | read warm | scale | **read after leaf change** | scale |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 | 68.2 µs | — | 74.4 µs | — | 2.8 µs | — | 71.7 µs | — |
+| 16 | 170.5 µs | 0.63n | 206.4 µs | 0.69n | 2.7 µs | 0.24n | 220.6 µs | 0.77n |
+| 64 | 610.2 µs | 0.89n | 737.3 µs | 0.89n | 2.4 µs | 0.22n | 1.26 ms | 1.43n |
+| 128 | 1.15 ms | 0.94n | 1.37 ms | 0.93n | 2.4 µs | 0.50n | **3.45 ms** | 1.37n |
 
 Two things stand out.
 
-- **`deep dirty` scales superlinearly in `D`** (the `scale` column sits at ~1.4, meaning
-  roughly `O(D^1.4)`) while `read cold` is linear. Invalidating a leaf marks every ancestor
-  as `DirtyChild`; re-executing the root then walks down re-verifying each level, and each
+- **The leaf-change re-read scales superlinearly in `d`** — its `scale` column climbs to
+  ~1.4 while `read cold` stays at ~0.9 (linear). Invalidating a leaf marks every ancestor
+  `DirtyChild`; re-executing the root then walks back down re-verifying each level, and each
   level re-checks its own children. The bookkeeping compounds.
-- **At `D = 128`, re-reading after a leaf change is more expensive than a cold read of the
-  entire chain.** The memo graph is not merely useless here — it is a net cost.
+- **From `d = 16` upward, re-reading after a leaf change already costs more than a cold read
+  of the entire chain**, and the gap widens: 2.5× at `d = 128`. The memo graph is not merely
+  useless in this shape — it is a net cost.
+
+Note also that `read warm` stays flat at ~2.5 µs regardless of depth. Depth is free when
+nothing changed and disproportionately expensive when something did.
 
 So the rule is sharper than "depth is expensive":
 
@@ -533,9 +655,20 @@ So the rule is sharper than "depth is expensive":
 
 ### 3.4 Structure sharing
 
-The reason breadth is cheap is that untouched subtrees are returned by reference:
+The reason breadth is cheap is that untouched subtrees are returned by reference. Modifying
+one field of one entity in a list of 500 and comparing the previous result tree against the
+new one:
 
-<!-- MEASURED:SHARING -->
+```
+identical (===) array elements reused: 499/500
+top-level result object reused:        false
+feed array reused:                     false
+```
+
+Every untouched element object comes back **by reference**. That is what keeps React
+re-renders proportional to what actually changed, and it is also what makes the write
+path's deep-equality tax (§2.3) worth paying: `storeObjectReconciler` preserving
+`existingValue` is what allows the reader's memo entries to survive.
 
 Note what is *not* shared: the enclosing array. `executeSubSelectedArray` is one memo entry
 for the whole array, so any element change rebuilds the array object (a shallow `map`) even
@@ -565,11 +698,34 @@ array = array.map((item, i) => { /* recurse */ });
   **array instance**, so a rebuilt parent array produces a memo miss for its children's
   array entries.
 
-<!-- MEASURED:ARRAYS -->
+`outer` groups each holding `inner` normalized rows:
+
+| shape | write | scale | read cold | scale | read warm | scale | 1 row dirty | scale |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 10 × 10 | 596 µs | — | 838 µs | — | 2.6 µs | — | 78.1 µs | — |
+| 10 × 100 | 4.52 ms | 0.76n | 8.62 ms | 1.03n | 2.3 µs | 0.09n | 306 µs | 0.39n |
+| 100 × 100 | 47.74 ms | 1.06n | 88.20 ms | 1.02n | 2.1 µs | 0.09n | 570 µs | 0.19n |
+| 100 × 500 | 251.86 ms | 1.06n | 472.01 ms | 1.07n | **2.21 ms** | **207.39n** | 2.27 ms | 0.80n |
+
+Everything is linear in the total element count except one cell. The `100 × 500` warm read
+is **three orders of magnitude** slower than every other warm read, and its scale column
+reads `207.39n`.
+
+That is not an array-nesting effect. `100 × 500` rows + 100 groups + `ROOT_QUERY` = 50 101
+entities, just over the 50 000 `executeSelectionSet` limit — so the read evicts its own memo
+entries as it walks. This is the LRU cliff of §4.3, reached by accident from a shape that
+looks entirely unremarkable. It is the single best argument for checking memo sizes before
+blaming the cache.
 
 ### 3.6 The dev-build tax
 
-<!-- MEASURED:DEV -->
+Same 5 000-entity shape, production build against development build:
+
+| | production | development | ratio |
+| --- | --- | --- | --- |
+| write | 45.01 ms | 45.50 ms | 1.01× |
+| read cold | 79.76 ms | 88.21 ms | 1.11× |
+| results frozen | `false` | `true` | — |
 
 `maybeDeepFreeze` walks every returned object recursively, and `getFieldValue` calls it on
 every field value read out of the store:
@@ -639,7 +795,27 @@ this.optimisticData = rootStore.stump;
 `CacheGroup`, hence its own `keyMaker` `Trie`, hence its own memo entries — with zero
 optimistic layers active:
 
-<!-- MEASURED:OPTIMISTIC -->
+```
+optimisticData === data      : false
+optimisticData constructor   : Stump
+groups are the same object   : false
+optimistic group's parent    : the root group
+
+executeSelectionSet memo entries, 2 000-entity list, ZERO optimistic layers:
+  after write                  : 0
+  after optimistic:false diff  : 2001
+  after optimistic:true  diff  : 4002   (+2001 new)
+  root result === optimistic result : false
+```
+
+And the second read gets no benefit from the first:
+
+| | time |
+| --- | --- |
+| first `optimistic: true` diff, *after* a warm root read | 52.77 ms |
+| the same diff once warm | 1.7 µs |
+
+A warm root read buys the optimistic read nothing at all — it is a full cold read.
 
 The consequence is structural, not incidental:
 
@@ -661,7 +837,23 @@ queries — which matters given §4.3 below.
 
 Every memo is a **bounded** LRU. Exceeding a bound is not a gentle degradation:
 
-<!-- MEASURED:LRUCLIFF -->
+Warm read cost as one query's entity count crosses the `executeSelectionSet` limit of
+50 000:
+
+| entities in the result | memo entries held | warm read | over the limit? |
+| --- | --- | --- | --- |
+| 10 101 | 10 101 | 1.8 µs | no |
+| 40 101 | 40 101 | 1.7 µs | no |
+| 49 101 | 49 101 | 1.7 µs | no |
+| 50 101 | 50 000 | **2.17 ms** | **yes** |
+| 60 101 | 50 000 | **116.95 ms** | **yes** |
+
+1.7 µs at 49 101 entities; 2.17 ms — 1 300× more — at 50 101. Nothing about the data
+changed; one thousand extra entities crossed a threshold.
+
+Past the bound it keeps getting worse rather than settling: 2.17 ms at 1 % over, 117 ms at
+20 % over. The further past the limit a single read reaches, the larger the fraction of it
+that misses, until effectively none of the read is memoized.
 
 A single query whose result contains more entities than `executeSelectionSet` can hold
 evicts its own entries *while it is reading*, so by the time it finishes the earliest
@@ -685,19 +877,67 @@ remembering to double the count for watched queries per §4.2.
 
 ### 4.4 Broadcast fan-out
 
-<!-- MEASURED:BROADCAST -->
+One write with `w` watchers registered on the same query, over a 2 000-entity list:
 
-The equality gate (§6.2) is what makes an unrelated write cheap: `maybeBroadcastWatch` is
-itself memoized on `(query, callback, varString)` in the watch's `CacheGroup`, so a watch
-whose dependencies were not dirtied returns its cached value without recomputing a diff.
+| `w` | write that **dirties** what they watch | scale | write that touches **nothing** they watch | scale |
+| --- | --- | --- | --- | --- |
+| 1 | 22.57 ms | — | 101.4 µs | — |
+| 10 | 22.18 ms | 0.10n | 136.4 µs | 0.13n |
+| 50 | 22.28 ms | 0.20n | 273.7 µs | 0.40n |
+| 200 | 23.20 ms | 0.26n | 695.9 µs | 0.64n |
 
-The striking result is that broadcast cost is **flat in the number of watchers** as long as
-they share a document, because they share `StoreReader` memo entries: the first watch to be
-processed recomputes the invalidated subtrees, and the remaining `W − 1` get memo hits.
+The two columns behave differently, and both results are useful.
+
+The **relevant** column is flat: 200 watchers cost 3 % more than one. Note what the
+absolute number is made of — most of those 22 ms is the write of the 2 000-entity list
+itself, and the *marginal* cost is about 3 µs per additional watcher. The watches share
+`StoreReader` memo entries, so the first one processed recomputes the invalidated subtrees
+and the remaining `W − 1` get memo hits. Broadcast cost is therefore governed by *how much
+was invalidated*, not by how many watchers there are — as long as they share a document
+(§4.5). The final `equal(lastDiff.result, diff.result)` in `broadcastWatch` stays cheap for
+the same reason structure sharing keeps React fast: untouched subtrees come back `===` and
+`equal` short-circuits on them (§3.4).
+
+The **unrelated** column grows, but at roughly 3 µs per watcher — it is a per-watch
+constant, not a per-watch re-read. That is the equality gate (§6.2): `maybeBroadcastWatch`
+is itself memoized, so a watch whose dependencies were not dirtied returns its cached value
+without computing a diff at all. Its key is built from the *store's* `CacheGroup` — the
+`Stump`'s group for `optimistic: true` watches, the root's otherwise:
+
+```ts
+makeCacheKey: (c: Cache.WatchOptions) => {
+  const store = c.optimistic ? this.optimisticData : this.data;
+  if (supportsResultCaching(store)) {
+    const { optimistic, id, variables } = c;
+    return store.makeCacheKey(
+      c.query,
+      // ...if their callbacks are different, the (identical) result needs to
+      // be delivered to each distinct callback. See issue #5733.
+      c.callback,
+      canonicalStringify({ optimistic, id, variables })
+    );
+  }
+},
+```
+
+<sub>`inMemoryCache.ts` — `maybeBroadcastWatch`'s `makeCacheKey`</sub>
+
+`c.callback` is part of the key on purpose, so `W` watchers on one query occupy `W` distinct
+`maybeBroadcastWatch` entries even though they share every `StoreReader` entry underneath.
+Budget for that against `cacheSizes["inMemoryCache.maybeBroadcastWatch"]` (§9). The
+difference between the two columns is the difference between `O(W)` cheap checks and `O(W)`
+full re-reads.
 
 ### 4.5 Memo fragmentation by document identity
 
-<!-- MEASURED:DOCIDENTITY -->
+Hold the watcher count fixed at 50 and vary only whether they share a document node:
+
+| 50 watchers, one write | time |
+| --- | --- |
+| all on the **same** document | 22.78 ms |
+| on 50 **structurally identical but separately parsed** documents | **3.37 s** |
+
+**148× slower for the same query text, the same variables, and the same data.**
 
 This is the sharpest performance cliff in the whole cache, and it is invisible in the data:
 the memo key includes the `SelectionSetNode` **object**, so two structurally identical
@@ -750,7 +990,13 @@ broadcast becomes a cold read.
 
 ### 4.6 Batching
 
-<!-- MEASURED:BATCH -->
+100 writes with 1 watcher on a 2 000-entity list:
+
+| | time |
+| --- | --- |
+| 100 separate writes (100 broadcasts) | 5.42 ms |
+| the same 100 writes inside one `cache.batch` | 1.54 ms |
+| | **3.5× faster** |
 
 `txCount` (§6.3) suppresses broadcasts inside a transaction. The saving is not the writes —
 those cost the same — it is the **avoided re-reads**: each broadcast recomputes every dirty
@@ -760,7 +1006,29 @@ watcher's diff, and a diff over a large list is the dominant term.
 
 ## Part 5 — Layers and optimistic updates
 
-<!-- MEASURED:LAYERS -->
+`k` stacked optimistic layers over a 2 000-entity store:
+
+| `k` | add + remove all | scale | warm read through | scale | remove the bottom one | scale | unwind **LIFO** | scale | unwind **FIFO** | scale |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 77.8 µs | — | 7.8 µs | — | 6.3 µs | — | 6.3 µs | — | 8.1 µs | — |
+| 4 | 198.1 µs | 0.64n | 6.3 µs | 0.20n | 46.0 µs | 1.82n | 10.4 µs | 0.41n | 92.9 µs | 2.86n |
+| 16 | 1.67 ms | 2.11n | 6.7 µs | 0.26n | 182.1 µs | 0.99n | 27.0 µs | 0.65n | 1.42 ms | 3.82n |
+| 64 | 25.48 ms | 3.81n | 7.4 µs | 0.28n | 734.8 µs | 1.01n | **81.9 µs** | 0.76n | **24.43 ms** | 4.30n |
+
+The last two columns are the same stack of 64 layers torn down in opposite orders:
+
+> **Unwinding LIFO costs 82 µs. Unwinding FIFO costs 24.4 ms — 298× more.**
+
+`Layer.removeLayer` recurses to its parent first, and if the parent chain changed it
+rebuilds itself with `parent.addLayer(this.id, this.replay)` — whose constructor calls
+`replay(this)`, re-running the layer's write. Popping from the top never changes anyone's
+parent chain, so it is `O(k)`. Removing from the bottom replays everything above it, so a
+full FIFO unwind is `O(k²)`. The `add+remove` column uses the FIFO order, which is why it
+inherits the same quadratic scale.
+
+The `read through` column is **flat**, which is not a contradiction: the read is warm, so it
+is a memo hit at the top of the chain and never walks the layers at all. The `O(k)` lookup
+chain is only paid on a memo miss.
 
 Three distinct costs:
 
@@ -792,7 +1060,8 @@ The practical rules that fall out:
 - **Keep optimistic layers short-lived and few.** `QueryInfo` does this by construction: one
   layer per in-flight mutation, removed in the same `batch` that writes the server result
   (§8.5).
-- **Remove layers in LIFO order.** Removing the bottom of a stack replays everything above.
+- **Remove layers in LIFO order.** Measured at 298× on a stack of 64 (82 µs against
+  24.4 ms). Removing the bottom of a stack replays everything above it.
 - **Every notification does two diffs.** `ObservableQuery.notify` compares the optimistic
   and non-optimistic reads (architecture §8.7). Contrary to what the stale comment in
   `init()` suggests, these never share memo entries (§4.2) — the second diff is a genuine
@@ -804,7 +1073,22 @@ The practical rules that fall out:
 
 ## Part 6 — Lifecycle operations
 
-<!-- MEASURED:LIFECYCLE -->
+Over a store of `n` entities:
+
+| `n` | evict entity | evict field | `gc()` collecting **nothing** | scale | `gc()` collecting `n` | scale | `extract()` | scale | `restore()` | scale |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 000 | 22.1 µs | 20.7 µs | 1.03 ms | — | 3.91 ms | — | 175 µs | — | 1.54 ms | — |
+| 5 000 | 21.1 µs | 21.7 µs | 5.16 ms | 1.00n | 19.93 ms | 1.02n | 1.20 ms | 1.38n | 8.89 ms | 1.15n |
+| 20 000 | 22.5 µs | 23.2 µs | 27.41 ms | 1.33n | 83.55 ms | 1.05n | 6.04 ms | 1.25n | 37.66 ms | 1.06n |
+
+Three results worth internalizing:
+
+- **Eviction is flat** — ~22 µs whatever the store size. It touches one entity.
+- **`gc()` costs the same whether or not it collects anything** — 27.41 ms over a
+  20 000-entity store that is entirely reachable. A no-op `gc()` is not free, it is a full
+  mark-and-sweep (§6.1).
+- **`restore()` is ~4.8× cheaper than writing the same data** (37.66 ms against the
+  182.46 ms cold write of §2.7) because the snapshot is already normalized (§6.3).
 
 ### 6.1 `gc()` is `O(store)` unconditionally
 
@@ -879,7 +1163,7 @@ arrays, what shapes hurt, and which hot path do they hurt?**
 | 10 | **Polymorphic fragments** | `fragmentMatches`, `flattenFields` re-visits | selection sets flattened per `(clientOnly, deferred)` flavor | write cost grows with fragment count |
 | 11 | **Many distinct documents** | memo key fragmentation | `W ×` memo entries, LRU thrash | broadcasts become cold reads |
 | 12 | **`merge` functions on lists** | `applyMerges` | `O(accumulated)` per page | pagination degrades quadratically |
-| 13 | **Deep optimistic layer stacks** | `lookup` chain, layer replay | `O(L)` per miss, `O(L²)` for out-of-order removal | janky optimistic UI |
+| 13 | **Deep optimistic layer stacks** | `lookup` chain, layer replay | `O(L)` per miss, `O(L²)` for out-of-order removal — measured 298× on 64 layers | janky optimistic UI |
 | 14 | **Cyclic / self-referential graphs** | `context.written`, `equal`'s cycle handling | bounded, but with `Set`/array overhead | memory, not time |
 
 Rows 4 and 5 are the two that produce *sudden* rather than gradual degradation, and they
@@ -896,9 +1180,9 @@ flowchart TB
 
     D --> W["<b>WRITE</b><br/>path = [...currentPath, name]<br/>allocated per field<br/><i>O(E·F·D) words</i>"]:::write
     D --> R["<b>READ (cold)</b><br/>D nested executeSelectionSet frames<br/><i>O(D) recursion, one memo entry per level</i>"]:::read
-    D --> I["<b>INVALIDATION</b><br/>dirty at depth D invalidates<br/>D ancestor memo entries<br/><i>a point change costs a full re-read</i>"]:::dirty
+    D --> I["<b>INVALIDATION</b><br/>dirty at depth D invalidates<br/>D ancestor memo entries<br/><i>a point change costs MORE than a cold read</i>"]:::dirty
 
-    W --> WORST["<b>Worst case:</b><br/>deep chain + frequent leaf updates<br/>= every update is a cold read"]:::dirty
+    W --> WORST["<b>Worst case:</b><br/>deep chain + frequent leaf updates<br/>= every update is worse than a cold read<br/><i>measured 2.5x at D=128</i>"]:::dirty
     R --> WORST
     I --> WORST
 
@@ -909,8 +1193,9 @@ flowchart TB
 ```
 
 Compare with breadth: a leaf update in a list of `N` invalidates 3 memo entries regardless
-of `N`. A leaf update at depth `D` invalidates `D + 1`. **Depth converts point mutations
-into full recomputations; breadth does not.**
+of `N`. A leaf update at depth `D` invalidates `D + 1`. **Depth converts a point mutation
+into something more expensive than recomputing the whole chain from scratch; breadth does
+not** (§3.3).
 
 The mitigation is not to flatten the schema — it is to make sure the deep path is *not* the
 one that changes often, or to read the deep entity directly (`cache.readFragment` /
@@ -964,7 +1249,26 @@ flowchart TB
     classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
 ```
 
-<!-- MEASURED:NORMALIZED -->
+The same `n` objects with 6 scalar fields each, once normalized and once embedded in a
+single field:
+
+| `n` | write normalized | write embedded | read warm normalized | read warm embedded |
+| --- | --- | --- | --- | --- |
+| 100 | 874 µs | 711 µs | 2.9 µs | 3.0 µs |
+| 1 000 | 8.14 ms | 5.86 ms | 2.5 µs | 2.5 µs |
+| 5 000 | 44.10 ms | 28.91 ms | 2.6 µs | 2.6 µs |
+
+Store entries at `n = 2 000`:
+
+```
+normalized: 2001 entries (1 root + n entities)
+embedded:      1 entry   (root only — the whole list lives in one field)
+```
+
+Embedding writes about **1.5× faster** (no `identify`, no reference indirection) and reads
+identically fast when warm. What it gives up is not speed, it is **granularity**: the whole
+list is one cache field, so changing one element dirties all of it, and nothing is shared
+with any other query. The 1.5× is the price of per-entity invalidation.
 
 The rule of thumb that follows:
 
@@ -1008,7 +1312,7 @@ Three ways out, in order of preference:
      Dashboard: {
        fields: {
          layout: {
-           merge(existing, incoming, { readField }) {
+           merge(existing, incoming) {
              return existing && existing.version === incoming.version ? existing : incoming;
            },
          },
@@ -1039,7 +1343,16 @@ freshly allocated outer array produces a new outer array *only if* `equal()` say
 changed; if any element differs, the whole outer array is replaced and **every inner array
 gets a new identity**, invalidating all of their memo entries at once.
 
-<!-- MEASURED:SCALARARRAYS -->
+Arrays of arrays of **plain scalars**, with no entities and no sub-selection, behave
+completely differently from the normalized matrix in §3.5:
+
+| shape | write | scale | read warm | scale |
+| --- | --- | --- | --- | --- |
+| 10 × 100 | 6.8 µs | — | 2.2 µs | — |
+| 100 × 100 | 7.0 µs | 0.10n | 2.1 µs | 0.10n |
+| 100 × 1 000 | 6.7 µs | 0.10n | 2.1 µs | 0.10n |
+
+Constant, at 100 000 elements. Not linear — **constant**.
 
 A list of scalars with **no sub-selection** is the degenerate — and cheapest — case.
 `processFieldValue` returns immediately:
@@ -1107,7 +1420,10 @@ watch from depending on it at all (§4.3 of the architecture document).
 
 ### 7.7 Argument-heavy fields
 
-<!-- MEASURED:ARGSCALING -->
+The measurements are in §2.4. The summary: **argument count is free, argument size is not.**
+Going from 0 to 24 arguments on a field is lost in the noise; going from a 1-level to a
+128-level nested argument object takes the write from 18.0 µs to 150.3 µs, and using a fresh
+`variables` object every call changes nothing.
 
 Costs, in order:
 
