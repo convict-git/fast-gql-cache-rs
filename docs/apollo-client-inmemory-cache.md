@@ -5584,11 +5584,12 @@ request in the middle of it. §7.2's `fromOptimisticTransaction` flag exists for
 comment says so: *"`fromOptimisticTransaction` is not available through the `cache.diff`
 code path, so we need to check it this way."*
 
-> **Performance note.** These two diffs are usually cheap — both hit `StoreReader`'s memo,
-> and the optimistic one hits the *same* memo entries when no layer exists, because
-> `optimisticData === data` in that case (§2.1). With a layer on the stack the optimistic
-> read uses a different `CacheGroup` and cannot share entries. The companion performance
-> document covers the cost profile.
+> **Performance note.** Both diffs hit `StoreReader`'s memo once warm, but they hit
+> *different* entries: `optimisticData` is the `Stump`, which owns its own `CacheGroup` and
+> therefore its own `keyMaker` `Trie`, **even when no optimistic layer exists** (§2.1). So
+> every watched query maintains two complete sets of memo entries, and the first optimistic
+> read after a write is a full cold read regardless of how warm the root read is. The
+> companion performance document measures this.
 
 ### 8.8 Local state and `@client` fields
 
@@ -5715,10 +5716,10 @@ Each invariant names the part that derives it and the failure mode of violating 
 | # | Invariant | Derived in | Violation shows up as |
 | --- | --- | --- | --- |
 | L1 | Layers form a singly-linked parent chain; lookup walks child→parent and stops at the first entry that has the `dataId`. | 2.1, 2.2 | optimistic data leaks into non-optimistic reads |
-| L2 | `optimisticData === data` when no layer exists. Reads with `optimistic: true` and `false` then share memo entries. | 2.1 | double the read cost on every notification (§8.7) |
-| L3 | The `Stump` is created on the first `batch`/`recordOptimisticTransaction` and **never removed**, so optimistic reads have a stable `CacheGroup`. | 2.1 | optimistic dependencies get dropped when the last layer pops |
+| L2 | `optimisticData` is **always** the `Stump`, never the `Root`, even with zero active layers. Optimistic and non-optimistic reads therefore never share memo entries. | 2.1 | optimistic dependencies pollute the root group |
+| L3 | The `Stump` is created in `init()` and is **never removable** (`Stump.removeLayer` returns `this`), so optimistic reads always have a stable `CacheGroup`. | 2.1 | optimistic dependencies get dropped when the last layer pops |
 | L4 | Removing a layer **replays** every surviving layer above it, in order, and dirties the union of fields that differ. | 2.10 | rollback leaves stale optimistic values visible |
-| L5 | A layer's `CacheGroup` has `caching = true` only when the group is the optimistic one; the root group's `keyMaker` is separate. | 2.4 | root reads observe optimistic invalidations |
+| L5 | The optimistic `CacheGroup` has the root group as its `parent`, so `depend`/`dirty` propagate root→optimistic but not the reverse. | 2.4 | root reads observe optimistic invalidations, or optimistic reads miss root writes |
 
 #### Dependency tracking and reactivity
 
