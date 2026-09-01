@@ -397,6 +397,12 @@ if (section("Read cost vs. list breadth: cold, warm, and after one dirty field")
     if (before.feed[i] === after.feed[i]) shared++;
   }
   note(
+    `  Note that "after 1 dirty" is still LINEAR in n, roughly 8x cheaper than a cold\n` +
+      `  read. Only three memo entries re-execute (the entity, the array, the root), but\n` +
+      `  re-executing the array entry means n canRead calls plus n memoized\n` +
+      `  executeSelectionSet lookups. Entries-recomputed and work-done are not the same.`
+  );
+  note(
     `  Structure sharing after modifying 1 of 500 entities:\n` +
       `    identical (===) array elements reused: ${shared}/500\n` +
       `    top-level result object reused:        ${before === after}\n` +
@@ -542,9 +548,12 @@ if (section("Depth: cost per level of nesting")) {
     rows
   );
   note(
-    `  "deep dirty" is the headline number: modifying the LEAF of a d-deep chain\n` +
-      `  invalidates every ancestor memo entry, so the re-read costs the same as a\n` +
-      `  cold read of the whole chain. Depth converts a point mutation into a\n` +
+    `  "deep dirty" is the headline number: modifying the LEAF of a d-deep chain marks\n` +
+      `  every ancestor memo entry DirtyChild, and re-executing the root walks back down\n` +
+      `  re-verifying each level. Note its scale column climbs to ~1.4 (superlinear) while\n` +
+      `  "read cold" stays ~0.9 (linear), and that from d=16 upward the re-read already\n` +
+      `  costs MORE than a cold read of the whole chain — the memo graph is a net cost\n` +
+      `  here, and the gap widens with depth. Depth turns a point mutation into a\n` +
       `  root-to-leaf recomputation. Breadth does not — see section 2.`
   );
 }
@@ -602,6 +611,13 @@ if (section("Nested arrays: outer x inner")) {
     "outer groups each holding inner normalized rows",
     ["write", "read cold", "read warm", "1 row dirty"],
     rows
+  );
+  note(
+    `  Watch the "read warm" column at 100x500. Every other row is ~2 us; that one\n` +
+      `  jumps by three orders of magnitude. 100*500 rows + 100 groups + ROOT_QUERY =\n` +
+      `  50101 entities, just over the 50 000 executeSelectionSet limit, so the read\n` +
+      `  evicts its own memo entries as it goes. This is the LRU cliff of section 9\n` +
+      `  reached by accident, from a shape that looks unremarkable.`
   );
 
   const scalarConfigs = QUICK ? [[10, 100]] : [

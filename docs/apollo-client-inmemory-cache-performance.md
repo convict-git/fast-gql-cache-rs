@@ -318,8 +318,31 @@ re-render. The comment says so explicitly. But it means:
 `getStoreFieldName` (§3.3) builds the storage key. Without arguments it is the field name;
 with arguments it goes through `getStoreKeyName` → `canonicalStringify`.
 
-`canonicalStringify` sorts keys recursively and is memoized in a bounded LRU (default
-1 000 entries) **keyed by the object identity of the value being stringified**:
+It is worth being precise about what `canonicalStringify` memoizes, because it is easy to
+assume more than it does:
+
+```ts
+// utilities/internal/canonicalStringify.ts
+const keys = Object.keys(value);
+if (keys.every(everyKeyInOrder)) return value;   // fast path: already sorted
+const unsortedKey = JSON.stringify(keys);
+let sortedKeys = sortingMap.get(unsortedKey);    // LRU of 1 000 KEY-SET PERMUTATIONS
+```
+
+The LRU maps a **key-set permutation** (`'["type","limit"]'`) to the sorted array of those
+same keys. It does **not** memoize the serialized output. So:
+
+- the full `JSON.stringify` walk runs on **every** call — `O(size of args)`, always;
+- what is saved is the recursive `keys.sort()`, and only for objects whose keys were not
+  already in order;
+- the LRU is bounded by the number of distinct object **shapes** in the app, not by the
+  number of distinct argument *values*, so it essentially never fills up. Fresh variable
+  objects on every render cost nothing extra here.
+
+There is no memoization one level up either: `Policies.getStoreFieldName` is called
+per field per entity on both the read and the write path and rebuilds the key every time.
+Argument cost is therefore paid per field occurrence, and it scales with the *size of the
+argument structure*, not with how many distinct values it takes:
 
 <!-- MEASURED:ARGS -->
 
@@ -468,20 +491,45 @@ flowchart TB
     classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
 ```
 
-**Invalidation always propagates upward to the root**, never sideways. So:
+**Invalidation always propagates upward to the root**, never sideways:
 
-| Change | Entries recomputed |
+| Change | Memo entries whose body re-executes |
 | --- | --- |
-| 1 field of 1 leaf entity in a flat list of `N` | `1 + 1 + 1` = the entity, the array, the root |
+| 1 field of 1 leaf entity in a flat list of `N` | `3` — the entity, the array, the root |
 | 1 field of 1 entity at depth `D` | `D + 1` — the entity and every ancestor |
-| 1 field of `k` entities in a flat list | `k + 1 + 1` |
+| 1 field of `k` entities in a flat list | `k + 2` |
 | a field of `ROOT_QUERY` | `1` — but that entry is the whole result |
 
-**Breadth is cheap; depth is expensive.** A point mutation in a flat list of 20 000 items
-recomputes three memo entries. The same mutation at the bottom of a 128-deep chain
-recomputes 129 — which is the entire query.
+**Entries recomputed is not the same as work done.** Only three entries re-execute after a
+point change in a list of `N`, but one of them is the array entry, and re-executing it
+means a `filter` pass with `N` `canRead` calls plus an `N`-element `map` whose per-element
+`executeSelectionSet` calls are memo *hits*. A memo hit is cheap — a three-level `Trie`
+lookup plus an `optimism` dirty check — but it is not free, so the re-read is still `O(N)`:
+
+<!-- MEASURED:READ -->
+
+Read the `after 1 dirty` column against `cold`: at every size the re-read is roughly **8×
+cheaper** than a cold read and scales the same way. That factor is the value of structure
+sharing; the linearity is the cost of the monolithic array entry.
+
+Depth behaves completely differently:
 
 <!-- MEASURED:DEPTH -->
+
+Two things stand out.
+
+- **`deep dirty` scales superlinearly in `D`** (the `scale` column sits at ~1.4, meaning
+  roughly `O(D^1.4)`) while `read cold` is linear. Invalidating a leaf marks every ancestor
+  as `DirtyChild`; re-executing the root then walks down re-verifying each level, and each
+  level re-checks its own children. The bookkeeping compounds.
+- **At `D = 128`, re-reading after a leaf change is more expensive than a cold read of the
+  entire chain.** The memo graph is not merely useless here — it is a net cost.
+
+So the rule is sharper than "depth is expensive":
+
+> **Breadth costs a linear factor with a small constant. Depth costs a superlinear factor
+> and, past a point, more than recomputing from scratch.** Point mutations at the bottom of
+> deep normalized chains are the single worst shape for the read path.
 
 ### 3.4 Structure sharing
 
@@ -572,7 +620,70 @@ Two costs hide here:
    in both the stump's group and the root's group, so an optimistic read costs twice the
    dependency bookkeeping of a root read.
 
-### 4.2 Broadcast fan-out
+### 4.2 Optimistic reads maintain a *second* set of memo entries
+
+This is the least obvious cost in the whole cache, and it applies to every application
+whether or not it uses optimistic updates.
+
+`InMemoryCache.init()` carries a comment that has not been true since the `Stump` was
+introduced:
+
+```ts
+// When no optimistic writes are currently active, cache.optimisticData ===
+// cache.data, so there are no additional layers on top of the actual data.
+// ...
+this.optimisticData = rootStore.stump;
+```
+
+`optimisticData` is **always** the `Stump`, never the `Root`. The `Stump` owns its own
+`CacheGroup`, hence its own `keyMaker` `Trie`, hence its own memo entries — with zero
+optimistic layers active:
+
+<!-- MEASURED:OPTIMISTIC -->
+
+The consequence is structural, not incidental:
+
+| Caller | `optimistic` | Memo set used |
+| --- | --- | --- |
+| `ObservableQuery`'s cache watch | `true` (hard-coded) | optimistic |
+| `QueryManager.fetchQueryByPolicy`'s `readCache` | `true` | optimistic |
+| `QueryInfo.markQueryResult`'s before/after diffs | `true` | optimistic |
+| `cache.readQuery` / `readFragment` | `false` (default) | root |
+| `QueryInfo.markMutationResult`'s `ROOT_MUTATION` diff | `false` | root |
+| `ObservableQuery.notify`'s comparison | both | **both** |
+
+So the memo budget for a watched query is **two entries per entity**, not one, and a
+`cache.readQuery` from application code does not warm anything the watch will use. The
+`executeSelectionSet` limit of 50 000 is therefore effectively 25 000 entities for watched
+queries — which matters given §4.3 below.
+
+### 4.3 The memo LRU cliff
+
+Every memo is a **bounded** LRU. Exceeding a bound is not a gentle degradation:
+
+<!-- MEASURED:LRUCLIFF -->
+
+A single query whose result contains more entities than `executeSelectionSet` can hold
+evicts its own entries *while it is reading*, so by the time it finishes the earliest
+entries are already gone. Every subsequent "warm" read is then a cold read. The transition
+is abrupt because the eviction is LRU and the read order is stable: the reader always
+re-requests the entries it evicted first.
+
+```mermaid
+flowchart LR
+    A["entities &lt; max<br/>every entry survives"]:::memo --> B["warm read: microseconds"]:::read
+    C["entities &gt; max<br/>read evicts its own entries"]:::dirty --> D["warm read: milliseconds<br/><i>every read is cold</i>"]:::dirty
+
+    classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
+    classDef memo fill:#e9d5ff,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+    classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
+```
+
+Two ways to hit it without noticing: one very large list, or (more commonly) many
+moderately-sized queries whose combined entity × selection-set product exceeds the bound —
+remembering to double the count for watched queries per §4.2.
+
+### 4.4 Broadcast fan-out
 
 <!-- MEASURED:BROADCAST -->
 
@@ -580,7 +691,11 @@ The equality gate (§6.2) is what makes an unrelated write cheap: `maybeBroadcas
 itself memoized on `(query, callback, varString)` in the watch's `CacheGroup`, so a watch
 whose dependencies were not dirtied returns its cached value without recomputing a diff.
 
-### 4.3 Memo fragmentation by document identity
+The striking result is that broadcast cost is **flat in the number of watchers** as long as
+they share a document, because they share `StoreReader` memo entries: the first watch to be
+processed recomputes the invalidated subtrees, and the remaining `W − 1` get memo hits.
+
+### 4.5 Memo fragmentation by document identity
 
 <!-- MEASURED:DOCIDENTITY -->
 
@@ -633,7 +748,7 @@ memoized) defeats all three, multiplies memo entries by the number of distinct d
 and blows the 50 000-entry LRU — at which point reads stop being memoized at all and every
 broadcast becomes a cold read.
 
-### 4.4 Batching
+### 4.6 Batching
 
 <!-- MEASURED:BATCH -->
 
@@ -658,8 +773,8 @@ flowchart TB
     end
 
     subgraph memoing["Memo entries"]
-        M1["optimisticData has its own CacheGroup<br/>→ its own keyMaker Trie<br/>→ a SECOND full set of memo entries"]:::memo
-        M2["When no layer exists, optimisticData === data<br/>and the Stump's group shares the root's<br/>→ optimistic and root reads share entries"]:::memo
+        M1["optimisticData (the Stump) has its own CacheGroup<br/>→ its own keyMaker Trie<br/>→ a SECOND full set of memo entries"]:::memo
+        M2["This holds with ZERO layers active —<br/>optimisticData is NEVER === data (§4.2)"]:::dirty
     end
 
     subgraph removing["Removing a layer"]
@@ -679,9 +794,11 @@ The practical rules that fall out:
   (§8.5).
 - **Remove layers in LIFO order.** Removing the bottom of a stack replays everything above.
 - **Every notification does two diffs.** `ObservableQuery.notify` compares the optimistic
-  and non-optimistic reads (§8.7). With no layers those share memo entries and the second
-  diff is free; with a layer present it is a second full read against a different
-  `CacheGroup`.
+  and non-optimistic reads (architecture §8.7). Contrary to what the stale comment in
+  `init()` suggests, these never share memo entries (§4.2) — the second diff is a genuine
+  second read, cheap only because it is separately memoized.
+- **Adding a layer invalidates the optimistic memo set, not the root one.** A root write
+  invalidates both, because `depend`/`dirty` propagate from the root group to its child.
 
 ---
 
@@ -719,10 +836,16 @@ memory reclamation tool, and it makes the **next** read of every query cold.
 
 ### 6.2 `evict` is cheap, its consequences are not
 
-Evicting one entity is `O(F)` — dirty each of its fields plus `__exists`. But every read
-that had a dependency on it is now invalidated, and every list containing a reference to it
-must be re-filtered by `canRead` on the next read (§3.5). The eviction is fast; the
-re-reads it triggers are the cost.
+Evicting one entity is `O(F)` — `delete` routes through `modify` with a `DELETE` modifier
+for every field, then dirties each removed field plus `__exists`. But every read that had a
+dependency on it is now invalidated, and every list containing a reference to it must be
+re-filtered by `canRead` on the next read (§3.5). The eviction is fast; the re-reads it
+triggers are the cost.
+
+One detail that matters with layers active: `InMemoryCache.evict` calls
+`this.optimisticData.evict(options, this.data)`, and `EntityStore.evict` recurses to its
+parent until it reaches the `limit` (the `Root`). So an evict walks the entire layer chain
+and is `O(L · F)`, not `O(F)`, when optimistic layers are stacked.
 
 ### 6.3 `restore` versus `write`
 
@@ -744,18 +867,24 @@ arrays, what shapes hurt, and which hot path do they hurt?**
 
 | # | Structural property | Primary hot path stressed | Cost | Symptom |
 | --- | --- | --- | --- | --- |
-| 1 | **Deep normalized chains** (`D` large) | read invalidation, write `path` allocation | point mutation → `O(D)` memo recomputes | one field changes, whole query recomputes |
-| 2 | **Wide lists of entities** (`N` large) | write traversal, cold read | `O(N · F)` both ways | slow first paint, slow writes |
-| 3 | **Large embedded (untyped) blobs** | `storeObjectReconciler` → `equal()` | `O(blob size)` per write | identical payload writes are slow |
-| 4 | **Arrays of arrays** | `executeSubSelectedArray` memo keying | array-instance-keyed memos churn | cold reads on every parent change |
-| 5 | **High entity fan-in** (many parents → same entity) | `context.written` de-dup, dirty fan-out | one write dirties many readers | one mutation re-renders everything |
-| 6 | **Many fields per entity** (`F` large) | per-field allocation, `mergeDeepArray` | `O(F)` objects per entity per read *and* write | GC pressure |
-| 7 | **Argument-heavy fields** | `canonicalStringify`, double `depend` | key building + 2× dependencies | slow writes with complex filters |
-| 8 | **Polymorphic fragments** | `fragmentMatches`, `flattenFields` re-visits | selection sets flattened per `(clientOnly, deferred)` flavor | write cost grows with fragment count |
-| 9 | **Many distinct documents** | memo key fragmentation | `W ×` memo entries, LRU thrash | broadcasts become cold reads |
-| 10 | **`merge` functions on lists** | `applyMerges` | `O(accumulated)` per page | pagination degrades quadratically |
-| 11 | **Deep optimistic layer stacks** | `lookup` chain, layer replay | `O(L)` per miss, `O(L²)` for out-of-order removal | janky optimistic UI |
-| 12 | **Cyclic / self-referential graphs** | `context.written`, `equal`'s cycle handling | bounded, but with `Set`/`Map` overhead | memory, not time |
+| 1 | **Deep normalized chains** (`D` large) | read invalidation, write `path` allocation | point mutation → `O(D^1.4)` re-verification | one field changes, whole query recomputes — eventually costing *more* than a cold read |
+| 2 | **Wide lists of entities** (`N` large) | write traversal, cold read, array memo entry | `O(N · F)` cold; `O(N)` with a small constant per point update | slow first paint, slow writes |
+| 3 | **Large embedded (untyped) blobs** | `storeObjectReconciler` → `equal()` | `O(blob size)` per write, even when unchanged | identical payload writes are slow |
+| 4 | **Total entities > memo capacity** | `executeSelectionSet` LRU | **cliff**: warm reads become cold reads | sudden, size-triggered collapse |
+| 5 | **Any watched query** | duplicate optimistic memo set | 2× memo entries per entity | memo capacity exhausted at half the expected size |
+| 6 | **Arrays of arrays** | `executeSubSelectedArray` memo keying | array-instance-keyed memos churn | cold reads on every parent change |
+| 7 | **High entity fan-in** (many parents → same entity) | `context.written` de-dup, dirty fan-out | shared entries make this cheaper than it looks | one mutation re-renders everything |
+| 8 | **Many fields per entity** (`F` large) | per-field allocation, `mergeDeepArray` | `O(F)` objects per entity per read *and* write | GC pressure |
+| 9 | **Argument-heavy fields** | `canonicalStringify`, double `depend` | key building + 2× dependencies | slow writes with complex filters |
+| 10 | **Polymorphic fragments** | `fragmentMatches`, `flattenFields` re-visits | selection sets flattened per `(clientOnly, deferred)` flavor | write cost grows with fragment count |
+| 11 | **Many distinct documents** | memo key fragmentation | `W ×` memo entries, LRU thrash | broadcasts become cold reads |
+| 12 | **`merge` functions on lists** | `applyMerges` | `O(accumulated)` per page | pagination degrades quadratically |
+| 13 | **Deep optimistic layer stacks** | `lookup` chain, layer replay | `O(L)` per miss, `O(L²)` for out-of-order removal | janky optimistic UI |
+| 14 | **Cyclic / self-referential graphs** | `context.written`, `equal`'s cycle handling | bounded, but with `Set`/array overhead | memory, not time |
+
+Rows 4 and 5 are the two that produce *sudden* rather than gradual degradation, and they
+interact: because every watched query keeps two memo sets, the effective entity budget for
+watched data is half the configured limit.
 
 ### 7.1 Depth (the worst offender)
 
@@ -912,9 +1041,32 @@ gets a new identity**, invalidating all of their memo entries at once.
 
 <!-- MEASURED:SCALARARRAYS -->
 
-A list of scalars with no sub-selection is the cheap case: it is stored and returned as one
-value, costs one `equal()` on write and nothing on read. It is also atomic — you cannot
-update one element without replacing the array.
+A list of scalars with **no sub-selection** is the degenerate — and cheapest — case.
+`processFieldValue` returns immediately:
+
+```ts
+if (!field.selectionSet || value === null) {
+  // In development, we need to clone scalar values so that they can be
+  // safely frozen with maybeDeepFreeze in readFromStore.ts. In production,
+  // it's cheaper to store the scalar values directly in the cache.
+  return __DEV__ ? cloneDeep(value) : value;
+}
+```
+
+In production the array from the network response is stored **by reference** — verified:
+`cache.extract().ROOT_QUERY.matrix === theOriginalArray` is `true`, and so is
+`stored[0] === matrix[0]`. Writing a 100 000-element nested scalar array into an empty
+cache is therefore `O(1)`, and reading it back is a property lookup.
+
+Three caveats follow directly:
+
+- **In development it is `O(size)`** — `cloneDeep` copies the entire structure so
+  `maybeDeepFreeze` cannot freeze the caller's object. Another reason not to profile the
+  development build.
+- **Overwriting is `O(size)`** even in production, because `storeObjectReconciler` runs
+  `equal()` against the stored array.
+- **It is atomic.** There is no sub-entry, no memo entry, and no way to update one element:
+  any change replaces the whole value and dirties the single field.
 
 ### 7.6 Fan-in: many parents referencing one entity
 
@@ -959,11 +1111,14 @@ watch from depending on it at all (§4.3 of the architecture document).
 
 Costs, in order:
 
-1. `canonicalStringify(args)` — recursive key sort, memoized in a 1 000-entry LRU keyed by
-   value identity. Fresh variable objects on every render miss the memo.
-2. The resulting `storeFieldName` string is long, and it is used as a `Map` key, a
+1. `canonicalStringify(args)` — a full `JSON.stringify` walk of the argument structure on
+   every call (§2.4). Only the *key sorting* is memoized, and only by shape, so the cost is
+   proportional to argument size and is paid per field occurrence, not per distinct value.
+2. `Policies.getStoreFieldName` is not memoized, so step 1 runs once per field per entity
+   on both the read and the write path.
+3. The resulting `storeFieldName` string is long, and it is used as a `Map` key, a
    dependency key (`makeDepKey`), and a property name — so long keys cost on every access.
-3. `group.depend` registers **two** dependencies for argument-bearing fields.
+4. `group.depend` registers **two** dependencies for argument-bearing fields.
 
 `keyArgs` is the mitigation: restricting the key to the arguments that actually partition
 the data both shortens the key and collapses variants that would otherwise be separate
@@ -1034,8 +1189,8 @@ flowchart TB
     end
 
     subgraph s3["Shape 3 — the ragged matrix"]
-        C1["groups: [ rows: [ cells: [...] ] ]<br/>three levels of arrays, entities at the leaves"]:::dirty
-        C2["<b>stresses:</b> array-instance memo keys,<br/>filter+map double allocation per level"]:::dirty
+        C1["groups: [ rows: [ cells: [...] ] ]<br/>three levels of arrays, entities at the leaves,<br/>total entities near the 50 000 memo limit"]:::dirty
+        C2["<b>stresses:</b> array-instance memo keys,<br/>filter+map double allocation per level,<br/>and the LRU cliff (§4.3)"]:::dirty
         C1 --> C2
     end
 
@@ -1065,6 +1220,8 @@ because each isolates one hot path:
 | layers | `L` = 1 → 64, LIFO vs. FIFO removal | store size | layer chain walk, replay |
 | store size | `S` = 1 000 → 100 000 | operation | `gc`, `extract` |
 | dirty fraction | 0% → 100% of entities changed | `E` | dirty propagation, re-read cost |
+| memo capacity | entities either side of the LRU limit | query shape | eviction policy, cliff behaviour |
+| optimistic vs. root reads | same query, both `optimistic` values | store size | memo-set separation (§4.2) |
 
 The probe implements every one of these. The two that most often reveal a broken
 re-implementation are **"read after 1 dirty"** (proves the memo graph is wired correctly)
@@ -1089,7 +1246,8 @@ flowchart TB
     START -->|"one update →<br/>whole tree recomputes"| DEEP["Depth (§7.1).<br/>→ subscribe to the leaf entity directly<br/>→ shorten the reactive path"]:::dirty
     START -->|"gets slower<br/>over time"| GROW{"Store or memo<br/>growth?"}:::store
     GROW -->|store| GC["→ evict + gc() after bulk changes<br/>→ check retain/release balance"]:::store
-    GROW -->|memo| DOC["Document identity (§4.3).<br/>→ hoist gql out of render<br/>→ verify DocumentTransform caching<br/>→ inspect client.getMemoryInternals()"]:::dirty
+    GROW -->|memo| DOC["Document identity (§4.5).<br/>→ hoist gql out of render<br/>→ verify DocumentTransform caching<br/>→ inspect client.getMemoryInternals()"]:::dirty
+    START -->|"fast until it<br/>suddenly isn't"| CLIFF["Memo LRU cliff (§4.3).<br/>→ compare memo size against its limit<br/>→ remember watched queries use 2x (§4.2)<br/>→ raise cacheSizes or read fewer entities"]:::dirty
 
     classDef api fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
@@ -1103,21 +1261,22 @@ flowchart TB
 
 | Question | How to answer it |
 | --- | --- |
-| Are my memo caches thrashing? | `client.getMemoryInternals()` (dev only) — compare `inMemoryCache.executeSelectionSet` size against its 50 000 limit |
+| Are my memo caches thrashing? | `client.getMemoryInternals()` (dev only) — compare `inMemoryCache.executeSelectionSet` size against its 50 000 limit. A size pinned exactly at the limit means you are over the cliff (§4.3) |
 | How many entities does my store hold? | `Object.keys(cache.extract()).length` |
 | Is a write actually changing anything? | write twice, compare `cache.extract()` — identical output means the second write was pure cost |
 | Which field is the fat one? | sort `JSON.stringify(value).length` over `cache.extract().ROOT_QUERY` and each entity |
 | Is a query re-reading when it should not? | wrap `watch.callback` and log; a callback per unrelated write means dependencies are too broad |
 | Am I profiling the right build? | `Object.isFrozen(cache.readQuery(...))` — `true` means you are on the development build |
+| Is my optimistic memo set doubling my footprint? | diff `cache["storeReader"]["executeSelectionSet"].size` around a `cache.diff({ optimistic: true })` — a non-zero delta after a warm root read confirms §4.2 |
 
 ### 9.3 Tuning knobs the cache actually exposes
 
 | Knob | Effect | When to change it |
 | --- | --- | --- |
-| `cacheSizes["inMemoryCache.executeSelectionSet"]` | read memo capacity (default 50 000) | large stores with many distinct queries |
+| `cacheSizes["inMemoryCache.executeSelectionSet"]` | read memo capacity (default 50 000) | large stores with many distinct queries — remember watched queries consume two entries per entity (§4.2) |
 | `cacheSizes["inMemoryCache.executeSubSelectedArray"]` | array memo capacity (default 10 000) | many long lists |
 | `cacheSizes["inMemoryCache.maybeBroadcastWatch"]` | broadcast memo capacity (default 5 000) | more than a few thousand simultaneous watches |
-| `cacheSizes["canonicalStringify"]` | argument-key memo (default 1 000) | many distinct argument sets |
+| `cacheSizes["canonicalStringify"]` | key-sort memo, one entry per argument **shape** (default 1 000) | rarely — it is bounded by distinct object shapes, not values (§2.4) |
 | `resultCaching: false` | disables the memo graph entirely | debugging only — see the measured cost below |
 | `typePolicies[T].keyFields` | identity extraction cost and normalization granularity | see §7.3 |
 | `typePolicies[T].fields[f].keyArgs` | shortens store field keys, collapses variants | argument-heavy fields |

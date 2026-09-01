@@ -2,8 +2,10 @@
 
 > **Source of truth.** Everything below is derived from the `apollo-client-sm` submodule,
 > pinned at `ba511be` (`@apollo/client@4.2.11`). Paths are relative to
-> `apollo-client-sm/src/`. Snippets are verbatim; where a snippet is abbreviated it is
-> marked with `// ...`.
+> `apollo-client-sm/src/`. Snippets preserve the source semantics exactly, but are
+> lightly condensed for reading: multi-line call signatures are re-wrapped, non-essential
+> type annotations and casts are dropped, and omitted bodies are marked with `// ...`.
+> Read the cited file when you need the exact text.
 >
 > **Companion documents.**
 > [`apollo-client-inmemory-cache-performance.md`](./apollo-client-inmemory-cache-performance.md)
@@ -3158,11 +3160,23 @@ deeply equal, the store keeps the *old* array object, so the array memo entry su
 
 ```ts
 // cache/inmemory/entityStore.ts
+export abstract class EntityStore implements NormalizedCache {
+  // ...
+  public get supportsResultCaching(): boolean {
+    return this.group.caching;
+  }
+}
+
 export function supportsResultCaching(store: any): store is EntityStore {
   // When result caching is disabled, store.depend will be null.
-  return !!(store instanceof EntityStore && store.group.caching);
+  return !!(store && store.supportsResultCaching);
 }
 ```
+
+The free function is a duck-typed guard, not an `instanceof` check: anything exposing a
+truthy `supportsResultCaching` passes. On a real `EntityStore` the getter forwards to
+`this.group.caching`, which is `false` for every group when the cache was constructed with
+`resultCaching: false`.
 
 When it returns `false`, `makeCacheKey` returns `undefined`, and `optimism`'s `wrap`
 bypasses the `Entry` machinery entirely (`if (key === void 0) return originalFunction.apply(...)`).
