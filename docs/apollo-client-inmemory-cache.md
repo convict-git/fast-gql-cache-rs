@@ -793,21 +793,21 @@ class Stump extends Layer {
 
 ```mermaid
 flowchart BT
-    subgraph optimisticGroup["CacheGroup #2 — optimistic (parent = root group)"]
+    subgraph optimisticGroup["CacheGroup 2 - optimistic (parent is root group)"]
         direction BT
-        L2["<b>Layer</b> id: 'mutation-7'<br/>data: partial overrides<br/>replay: fn"]:::store
-        L1["<b>Layer</b> id: 'mutation-6'<br/>data: partial overrides<br/>replay: fn"]:::store
-        ST["<b>Stump</b> id: 'EntityStore.Stump'<br/>data: always empty<br/>merge() forwards to Root"]:::store
+        L2["<b>Layer</b> id mutation-7<br/>data partial overrides<br/>replay fn"]:::store
+        L1["<b>Layer</b> id mutation-6<br/>data partial overrides<br/>replay fn"]:::store
+        ST["<b>Stump</b> id EntityStore.Stump<br/>data always empty<br/>merge forwards to Root"]:::store
     end
-    subgraph rootGroup["CacheGroup #1 — root (no parent)"]
-        RT["<b>Root</b><br/>data: the durable NormalizedCacheObject<br/>storageTrie · stump"]:::store
+    subgraph rootGroup["CacheGroup 1 - root (no parent)"]
+        RT["<b>Root</b><br/>data the durable NormalizedCacheObject<br/>storageTrie plus stump"]:::store
     end
 
     L2 -->|parent| L1 -->|parent| ST -->|parent| RT
 
-    RD1["cache.diff({ optimistic: true })<br/>reads from optimisticData"]:::read -.-> L2
-    RD2["cache.diff({ optimistic: false })<br/>reads from data"]:::read -.-> RT
-    WRT["cache.write(...)<br/>always writes to this.data"]:::write --> RT
+    RD1["cache.diff optimistic true<br/>reads from optimisticData"]:::read -.-> L2
+    RD2["cache.diff optimistic false<br/>reads from data"]:::read -.-> RT
+    WRT["cache.write<br/>always writes to this.data"]:::write --> RT
 
     classDef read fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#0f172a
     classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a
