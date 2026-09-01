@@ -3991,7 +3991,7 @@ sequenceDiagram
     Note over IMC: onWatchUpdated provided and txCount === 0
     rect rgb(254, 202, 202)
     Note over IMC,W1: Pre-pass — find watches that were ALREADY dirty
-    IMC->>IMC: broadcastWatches({ onWatchUpdated: w => { alreadyDirty.add(w); return false } })
+    IMC->>IMC: broadcastWatches({ onWatchUpdated: w => { alreadyDirty.add(w)#59; return false } })
     IMC->>W1: maybeBroadcastWatch → dirty → diff computed
     Note right of W1: returns false → no callback,<br/>but the memo entry is now CLEAN<br/>and alreadyDirty = { A }
     IMC->>W2: maybeBroadcastWatch → clean → skipped entirely
@@ -4093,7 +4093,7 @@ sequenceDiagram
     QI->>IMC: cache.batch({ update: writes server data, removeOptimistic: mutationId, onWatchUpdated })
     IMC->>RT: writes land in this.data (the Root)
     IMC->>OD: removeLayer(mutationId)
-    OD->>OD: dirty every field the layer shadowed;<br/>rebuild higher layers via replay
+    OD->>OD: dirty every field the layer shadowed,<br/>rebuild higher layers via replay
     IMC->>IMC: broadcastWatches(options)
     IMC->>OQ: single callback with the reconciled result
     end
@@ -4780,7 +4780,7 @@ stateDiagram-v2
     Emptied --> Silent : discardWatches: true<br/>forget every watch, clear the Set,<br/>forgetCache(this)
 
     Rebroadcast --> [*] : watches remain registered
-    Silent --> [*] : cache has no watches;<br/>callers must re-subscribe
+    Silent --> [*] : cache has no watches,<br/>callers must re-subscribe
 
     note right of Rebroadcast
         Probe section 14: after reset(),
@@ -5280,7 +5280,7 @@ sequenceDiagram
     else identical to lastWrite
         Note over QI: skip the write — feud breaker
         alt lastDiff.complete
-            Note over QI: result.data = lastDiff.result; return early
+            Note over QI: result.data = lastDiff.result#59; return early
         end
     end
     QI->>C: cache.diff(diffOptions) — read back
