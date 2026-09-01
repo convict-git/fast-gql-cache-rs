@@ -1,0 +1,349 @@
+
+======================================================================================
+1. Write cost vs. list breadth (normalized entities)
+======================================================================================
+
+  writeQuery into a list of n normalized entities
+         n          cold    scale     identical    scale     1 changed    scale
+  -----------------------------------------------------------------------------
+       100       1.50 ms        -      796.1 us        -      757.4 us        -
+      1000       8.79 ms    0.59n       7.75 ms    0.97n       7.62 ms    1.01n
+      5000      44.00 ms    1.00n      39.65 ms    1.02n      39.68 ms    1.04n
+     20000     182.46 ms    1.04n     164.33 ms    1.04n     166.83 ms    1.05n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  Reading: "identical" still pays the full traversal + normalization + deep
+  equality; it only avoids dirtying fields. There is no early-out for an
+  unchanged payload, because the writer cannot know it is unchanged until it
+  has normalized it.
+
+  Why the n=100 "cold" cell above is disproportionately high (it drags the
+  next row's scale well below 1.00n). Re-measuring the same three writes here,
+  after the process has warmed up:
+    write cold n=100, as measured first : 1.50 ms
+    brand-new cache, 100 new entities   : 874.5 us
+    primed EMPTY cache, 100 new         : 840.4 us
+    overwrite of 100 existing           : 717.6 us
+  Two separate effects, neither of them per-entity work:
+    1. JIT. The table's cold n=100 is the FIRST measurement in the process;
+       the identical operation re-measured here is cheaper.
+    2. One-time per-cache setup (document transform, type policies, fresh
+       StoreReader/StoreWriter): the gap between "brand-new" and "primed".
+  With both removed, CREATING n entities and OVERWRITING n identical ones cost
+  the same: the dirtying a creation does is worth about the same as the equal()
+  calls an overwrite does. Per-entity write cost does not depend on whether the
+  entity already existed.
+
+======================================================================================
+2. Read cost vs. list breadth: cold, warm, and after one dirty field
+======================================================================================
+
+  readQuery over a list of n normalized entities
+         n          cold    scale          warm    scale after 1 dirty    scale
+  -----------------------------------------------------------------------------
+       100       1.56 ms        -        2.9 us        -      186.9 us        -
+      1000      15.70 ms    1.01n        2.5 us    0.09n       1.66 ms    0.89n
+      5000      78.63 ms    1.00n        2.7 us    0.21n       8.87 ms    1.07n
+     20000     333.45 ms    1.06n        2.5 us    0.23n      45.08 ms    1.27n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  Note that "after 1 dirty" is still LINEAR in n, roughly 8x cheaper than a cold
+  read. Only three memo entries re-execute (the entity, the array, the root), but
+  re-executing the array entry means n canRead calls plus n memoized
+  executeSelectionSet lookups. Entries-recomputed and work-done are not the same.
+
+  Structure sharing after modifying 1 of 500 entities:
+    identical (===) array elements reused: 499/500
+    top-level result object reused:        false
+    feed array reused:                     false
+  The parent array is rebuilt (it is one memo entry) but every untouched
+  element object is reused by reference. That is what keeps React re-renders
+  proportional to what actually changed.
+
+  Memo entries retained by a single read (bounded by cacheSizes limits
+  50 000 / 10 000 respectively):
+    n=  100  executeSelectionSet=   101  executeSubSelectedArray=1
+    n= 1000  executeSelectionSet=  1001  executeSubSelectedArray=1
+    n= 5000  executeSelectionSet=  5001  executeSubSelectedArray=1
+
+======================================================================================
+3. Normalized vs. embedded (untyped) payloads of the same size
+======================================================================================
+
+  n entities, 6 scalar fields each
+         n    write norm    scale   write embed    scale     read norm    scale    read embed    scale
+  ----------------------------------------------------------------------------------------------------
+       100      873.8 us        -      711.0 us        -        2.9 us        -        3.0 us        -
+      1000       8.14 ms    0.93n       5.86 ms    0.82n        2.5 us    0.09n        2.5 us    0.08n
+      5000      44.10 ms    1.08n      28.91 ms    0.99n        2.6 us    0.21n        2.6 us    0.21n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  Store entry counts for n=2000:
+    normalized: 2001 entries (1 root + n entities)
+    embedded:   1 entries (root only — the whole list lives in one field)
+
+  Embedded payloads write faster (no identify, no reference indirection) and
+  read faster warm, but they are a single cache field: changing one element
+  dirties the entire list, and nothing is shared with any other query.
+
+======================================================================================
+4. Depth: cost per level of nesting
+======================================================================================
+
+  a single chain of d nested entities
+         n    write norm    scale   write embed    scale     read cold    scale     read warm    scale    deep dirty    scale
+  ---------------------------------------------------------------------------------------------------------------------------
+         4       68.2 us        -       48.1 us        -       74.4 us        -        2.8 us        -       71.7 us        -
+        16      170.5 us    0.63n      132.0 us    0.69n      206.4 us    0.69n        2.7 us    0.24n      220.6 us    0.77n
+        64      610.2 us    0.89n      448.5 us    0.85n      737.3 us    0.89n        2.4 us    0.22n       1.26 ms    1.43n
+       128       1.15 ms    0.94n      764.3 us    0.85n       1.37 ms    0.93n        2.4 us    0.50n       3.45 ms    1.37n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  "deep dirty" is the headline number: modifying the LEAF of a d-deep chain marks
+  every ancestor memo entry DirtyChild, and re-executing the root walks back down
+  re-verifying each level. Note its scale column climbs to ~1.4 (superlinear) while
+  "read cold" stays ~0.9 (linear), and that from d=16 upward the re-read already
+  costs MORE than a cold read of the whole chain — the memo graph is a net cost
+  here, and the gap widens with depth. Depth turns a point mutation into a
+  root-to-leaf recomputation. Breadth does not — see section 2.
+
+======================================================================================
+5. Nested arrays: outer x inner
+======================================================================================
+
+  outer groups each holding inner normalized rows
+         n         write    scale     read cold    scale     read warm    scale   1 row dirty    scale
+  ----------------------------------------------------------------------------------------------------
+     10x10      596.1 us        -      838.1 us        -        2.6 us        -       78.1 us        -
+    10x100       4.52 ms    0.76n       8.62 ms    1.03n        2.3 us    0.09n      305.5 us    0.39n
+   100x100      47.74 ms    1.06n      88.20 ms    1.02n        2.1 us    0.09n      569.5 us    0.19n
+   100x500     251.86 ms    1.06n     472.01 ms    1.07n       2.21 ms  207.39n       2.27 ms    0.80n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  Watch the "read warm" column at 100x500. Every other row is ~2 us; that one
+  jumps by three orders of magnitude. 100*500 rows + 100 groups + ROOT_QUERY =
+  50101 entities, just over the 50 000 executeSelectionSet limit, so the read
+  evicts its own memo entries as it goes. This is the LRU cliff of section 9
+  reached by accident, from a shape that looks unremarkable.
+
+  arrays of arrays of plain scalars (no entities, no selection set)
+         n         write    scale     read warm    scale
+  ------------------------------------------------------
+    10x100        6.8 us        -        2.2 us        -
+   100x100        7.0 us    0.10n        2.1 us    0.10n
+  100x1000        6.7 us    0.10n        2.1 us    0.10n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  A scalar array without a sub-selection is stored and returned as ONE field
+  value. It costs a deep-equality pass on write and nothing on read, but it is
+  also atomic: any change replaces the whole array.
+
+======================================================================================
+6. Broadcast cost vs. number of watchers
+======================================================================================
+
+  one write with w watchers registered on the same query
+         n      relevant    scale     unrelated    scale
+  ------------------------------------------------------
+         1      22.57 ms        -      101.4 us        -
+        10      22.18 ms    0.10n      136.4 us    0.13n
+        50      22.28 ms    0.20n      273.7 us    0.40n
+       200      23.20 ms    0.26n      695.9 us    0.64n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  "unrelated" is the equality-gate path: the watches are not dirty, so
+  maybeBroadcastWatch returns its memoized value and no diff is recomputed.
+  That is the difference between O(w) cheap checks and O(w) full re-reads.
+
+  50 watchers on the SAME document:      22.78 ms
+  50 watchers on 50 DISTINCT documents:  3.37 s
+  Ratio: 148.1x. Memo entries are keyed by selection-set
+  NODE identity, so structurally identical but separately-parsed documents
+  share nothing. This is why DocumentTransform's WeakCache matters.
+
+======================================================================================
+7. Transactions, optimistic layers, and layer depth
+======================================================================================
+
+  k stacked optimistic layers over a 2000-entity store
+         n    add+remove    scale  read through    scale remove bottom    scale   unwind LIFO    scale   unwind FIFO    scale
+  ---------------------------------------------------------------------------------------------------------------------------
+         1       77.8 us        -        7.8 us        -        6.3 us        -        6.3 us        -        8.1 us        -
+         4      198.1 us    0.64n        6.3 us    0.20n       46.0 us    1.82n       10.4 us    0.41n       92.9 us    2.86n
+        16       1.67 ms    2.11n        6.7 us    0.26n      182.1 us    0.99n       27.0 us    0.65n       1.42 ms    3.82n
+        64      25.48 ms    3.81n        7.4 us    0.28n      734.8 us    1.01n       81.9 us    0.76n      24.43 ms    4.30n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  "remove bottom" is the expensive one: removing a layer that is not on top
+  replays every layer above it (EntityStore.removeLayer -> Layer.newLayer +
+  replay), so the cost is proportional to the number of layers above it times
+  the size of each layer's write.
+
+  Compare the last two columns: unwinding the SAME stack costs O(k) popping from
+  the top and O(k^2) removing from the bottom, because every FIFO removal replays
+  the layers above it. "add+remove" uses the FIFO order, which is why it inherits
+  the same quadratic scale column.
+
+  "read through" is FLAT in k, and that is not a contradiction: the read is warm,
+  so it is a memo hit at the top of the chain and never walks the layers at all.
+  The O(k) lookup chain is only paid on a memo MISS.
+
+  100 writes, 1 watcher on a 2000-entity list:
+    unbatched: 5.42 ms
+    batched:   1.54 ms   (3.5x faster)
+  The saving is entirely the avoided re-reads: each broadcast recomputes the
+  watcher's diff, and a diff over the full list is the dominant term.
+
+======================================================================================
+8. Optimistic reads maintain a SECOND set of memo entries
+======================================================================================
+
+  InMemoryCache.init() sets this.optimisticData = rootStore.stump, NOT this.data:
+    optimisticData === data      : false
+    optimisticData constructor   : Stump
+    groups are the same object   : false
+    optimistic group's parent    : the root group
+
+  executeSelectionSet memo entries, 2000-entity list, ZERO optimistic layers:
+    after write                  : 0
+    after optimistic:false diff  : 2001
+    after optimistic:true  diff  : 4002   (+2001 new)
+    root result === optimistic result : false
+  Every watched query therefore costs TWO full sets of memo entries, because
+  ObservableQuery always watches with optimistic: true while readQuery and
+  readFragment default to optimistic: false. Budget memo capacity accordingly.
+
+  first optimistic diff after a warm root read: 52.77 ms
+  warm optimistic diff:                        1.7 us
+  A warm root read buys the optimistic read nothing.
+
+======================================================================================
+9. The memo LRU cliff (executeSelectionSet max = 50 000)
+======================================================================================
+
+  Warm read cost as the entity count crosses the memo limit
+   entities  memo entries     warm read  over limit?
+  ----------------------------------------------------
+      10101         10101        1.8 us           no
+      40101         40101        1.7 us           no
+      49101         49101        1.7 us           no
+      50101         50000       2.17 ms          YES
+      60101         50000     116.95 ms          YES
+
+  A single query whose result contains more entities than the memo can hold
+  evicts its own entries while it reads. Every subsequent "warm" read is then
+  a cold read, and the cliff is abrupt rather than gradual: below the limit the
+  read is microseconds, above it milliseconds. Raise it with
+  cacheSizes["inMemoryCache.executeSelectionSet"], or do not read that many
+  entities in one query.
+
+======================================================================================
+10. Field-key construction: arguments and canonicalStringify
+======================================================================================
+
+  one field with k arguments over a 50-item result
+         n         write    scale     read cold    scale
+  ------------------------------------------------------
+         0      304.5 us        -      417.1 us        -
+         2      274.6 us    0.45n      456.6 us    0.55n
+         8      259.1 us    0.24n      375.5 us    0.21n
+        24      305.0 us    0.39n      441.0 us    0.39n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  one field whose argument is an object nested d levels deep (1-item result)
+         n         write    scale    fresh vars    scale
+  ------------------------------------------------------
+         1       18.0 us        -       17.0 us        -
+         8       23.9 us    0.17n       24.9 us    0.18n
+        32       49.1 us    0.51n       53.5 us    0.54n
+       128      150.3 us    0.77n      154.3 us    0.72n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  Resulting store field key (note the sorted, fully-serialized args):
+    search({"filter":{"a":2,"nested":{"a":2,"nested":{"a":2,"m":3,"z":1},"z":1},"z":1}})
+
+======================================================================================
+11. keyFields: identity extraction cost
+======================================================================================
+
+  Book list write cost by keyFields configuration
+  config                                 write   vs default
+  ----------------------------------------------------------
+  default (__typename + id)           21.64 ms        1.00x
+  keyFields: ['isbn']                 27.94 ms        1.29x
+  keyFields: 3 flat fields            29.76 ms        1.37x
+  keyFields with nested path          30.88 ms        1.43x
+  keyFields: false (embedded)         21.69 ms        1.00x
+
+  Every normalizable object pays identify() on write. A nested keyFields path
+  is the most expensive configuration: extractKeyPath walks into the sub-object
+  and canonically stringifies it for every entity. Note that keyFields: false is
+  NOT free — it removes the identify cost but turns the whole list into one
+  embedded field value, which the writer must deep-compare on every write.
+
+======================================================================================
+12. Eviction, garbage collection and extract
+======================================================================================
+
+  lifecycle operations over a store of n entities
+         n  evict entity    scale   evict field    scale       gc noop    scale    gc collect    scale       extract    scale       restore    scale
+  --------------------------------------------------------------------------------------------------------------------------------------------------
+      1000       22.1 us        -       20.7 us        -       1.03 ms        -       3.91 ms        -      174.6 us        -       1.54 ms        -
+      5000       21.1 us    0.19n       21.7 us    0.21n       5.16 ms    1.00n      19.93 ms    1.02n       1.20 ms    1.38n       8.89 ms    1.15n
+     20000       22.5 us    0.27n       23.2 us    0.27n      27.41 ms    1.33n      83.55 ms    1.05n       6.04 ms    1.25n      37.66 ms    1.06n
+  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+
+  gc() is a full mark-and-sweep: it walks every root and every reachable field
+  of every entity, so it is O(store) EVEN WHEN IT COLLECTS NOTHING. restore()
+  is dramatically cheaper than a write of the same data because it skips
+  normalization entirely — the snapshot is already normalized.
+
+======================================================================================
+13. Result caching off: what memoization is worth
+======================================================================================
+
+  n=5000 entities:
+    read warm,  resultCaching: true   1.8 us
+    read warm,  resultCaching: false  28.33 ms   (16049x slower)
+    write,      resultCaching: true   45.07 ms
+    write,      resultCaching: false  39.54 ms   (0.88x)
+  Memoization is a read-path optimization paid for on the write path through
+  dependency bookkeeping. The read-side win is orders of magnitude; the
+  write-side cost is a modest constant factor.
+
+======================================================================================
+14. Development-build overhead (maybeDeepFreeze + warnAboutDataLoss)
+======================================================================================
+
+  n=5000 entities, production build vs. development build:
+    write     prod   45.01 ms   dev   45.50 ms   1.01x
+    read cold prod   79.76 ms   dev   88.21 ms   1.11x
+    results frozen: prod=false dev=true
+  The development build deep-freezes every object it returns and runs
+  warnAboutDataLoss on every write. The overhead is real but modest on this
+  shape, because maybeDeepFreeze short-circuits on already-frozen subtrees
+  and the reader reuses frozen memo entries. It grows with the proportion of
+  freshly-created result objects, so it is worst on cold reads.
+
+======================================================================================
+15. Summary: slowest measurements
+======================================================================================
+
+        3.37 s  broadcast 50 distinct-document watches
+     472.01 ms  read cold matrix 100x500
+     333.45 ms  read cold n=20000
+     251.86 ms  write matrix 100x500
+     182.46 ms  write cold n=20000
+     166.83 ms  write 1-changed n=20000
+     164.33 ms  write identical n=20000
+     116.95 ms  warm read, 60101 entities
+      88.20 ms  read cold matrix 100x100
+      83.55 ms  gc after unreachable 20000
+      79.76 ms  dev-overhead read cold n=5000
+      78.63 ms  read cold n=5000
+      52.77 ms  first optimistic diff (root read warm)
+      47.74 ms  write matrix 100x100
+      45.08 ms  read after 1 dirty n=20000
+
+  165 measurements. Node v22.14.0 on linux/x64.
+  Development build: false (true = results are deep-frozen)

@@ -3,6 +3,8 @@ dist/
 pkg/
 coverage/
 *.log
+# ...except the committed probe output the cache docs link to.
+!docs/probes/*.log
 .DS_Store
 patches/.patch-package-timestamp
 node_modules
