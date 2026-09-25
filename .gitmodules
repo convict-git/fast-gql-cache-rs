@@ -1,6 +1,6 @@
 [submodule "apollo-client-sm"]
 	path = apollo-client-sm
 	url = https://github.com/apollographql/apollo-client.git
-[submodule ".cursor/skills/rust-skills"]
-	path = .cursor/skills/rust-skills
+[submodule ".claude/skills/rust-skills"]
+	path = .claude/skills/rust-skills
 	url = https://github.com/leonardomso/rust-skills.git

@@ -79,8 +79,8 @@ Reuse `apollo-client-sm` config so ours cannot drift from Apollo's:
 
 ## Skills
 
-- **Rust/WASM work**: the `rust-skills` skill (`.claude/skills/rust-skills`, a link to the
-  `.cursor/skills/rust-skills` submodule). Open only the rule files relevant to the change.
+- **Rust/WASM work**: the `rust-skills` skill (`.claude/skills/rust-skills` submodule;
+  Cursor loads `.claude/skills/` too). Open only the rule files relevant to the change.
 - **Apollo Client usage from an application's side** (cache policies, reactive variables):
   `apollo-client-sm/.claude/skills/apollo-client/SKILL.md`.
 
@@ -100,9 +100,14 @@ Single-context: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Environment and toolchain
 
-Standard scripts live in `package.json`. The notes below are the non-obvious bits; the
-Cursor Cloud startup script (`.cursor/environment.json`) installs the submodules, npm
-dependencies and Rust toolchain.
+Standard scripts live in `package.json`. The notes below are the non-obvious bits. A fresh
+checkout is set up with:
+
+```sh
+git submodule update --init --recursive --depth 1
+npm ci
+rustup toolchain install
+```
 
 - **Node from `.nvmrc`** (`nvm use`). Node 24.6.x fails every Jest suite with "module is
   already linked" (nodejs/node#59480), and `jest.config.mjs` refuses to start on it; the

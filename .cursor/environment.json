@@ -1,4 +1,0 @@
-{
-  "name": "fast-gql-cache-rs",
-  "install": "set -euo pipefail\ngit submodule update --init --recursive --depth 1\nnpm ci\nRUSTUP_PERMIT_COPY_RENAME=true rustup toolchain install"
-}

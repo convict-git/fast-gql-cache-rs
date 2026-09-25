@@ -20,7 +20,7 @@ export default defineConfig(
       "pkg/**",
       "coverage/**",
       "apollo-client-sm/**",
-      ".cursor/skills/rust-skills/**",
+      ".claude/skills/rust-skills/**",
       "node_modules/**",
     ],
   },
