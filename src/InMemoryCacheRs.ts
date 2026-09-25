@@ -488,9 +488,10 @@ export class InMemoryCacheRs extends ApolloCache {
     }
   }
 
-  public declare getMemoryInternals?: typeof getInMemoryCacheMemoryInternals;
+  declare public getMemoryInternals?: typeof getInMemoryCacheMemoryInternals;
 }
 
 if (__DEV__) {
-  InMemoryCacheRs.prototype.getMemoryInternals = getInMemoryCacheMemoryInternals;
+  InMemoryCacheRs.prototype.getMemoryInternals =
+    getInMemoryCacheMemoryInternals;
 }

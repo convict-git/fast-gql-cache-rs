@@ -7,8 +7,7 @@
     // Downlevel `using` (explicit resource management) so ts-jest emits helper
     // calls; the base config targets ESNext, which Node's runtime parser rejects.
     "target": "es2022",
-    "types": ["jest", "node"]
-    ,
+    "types": ["jest", "node"],
     "paths": {
       "@apollo/client/testing/internal": [
         "./apollo-client-sm/src/testing/internal/index.ts"
