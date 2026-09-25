@@ -19,14 +19,18 @@
 >
 > 1. inside one run, an operation is repeated 25 times after 3 untimed warm-ups, and the
 >    run keeps the median of the 25 timings;
-> 2. the whole probe is run **5 times, in 5 separate Node processes**, and the guide
->    reports the median of the 5 per-run medians.
+> 2. every section of the probe runs in **its own fresh Node process**, and the whole
+>    probe is run **5 times**; the guide reports the median of the 5 per-run medians.
 >
 > Medians rather than means, because a single GC pause or JIT recompilation can
-> multiply one sample and would drag a mean with it. Separate processes, because JIT
-> state and heap layout differ between processes and one process can be slow as a whole.
-> The committed log ends with the **run-to-run spread** of every measurement, so you can
-> see how far each number moves between runs.
+> multiply one sample and would drag a mean with it. Fresh processes, for two reasons.
+> Across processes, JIT state and heap layout differ, and one process can be slow as a
+> whole. And within one long process the same operation gets slower in later sections
+> (the same 5 000-entity write measured 1.7× slower at the end of a single-process run
+> than at its start), so sections run in one process would not be comparable. Where the
+> guide states a ratio between two operations, both come from the same section. The committed log
+> ends with the **run-to-run spread** of every measurement, so you can see how far each
+> number moves between runs.
 >
 > The committed log was produced on Node v22.22.2, linux/x64, **production build**.
 > Treat the absolute values as indicative and the **growth rates and ratios** as the
@@ -40,8 +44,9 @@ From the repository root:
 node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
 ```
 
-`--runs=R` repeats the measurement in `R` separate processes and reports the median
-across them, as described above. Without it the probe makes a single run. Add `--quick`
+`--runs=R` measures every section in its own fresh process, `R` times, and reports the
+median across the runs, as described above. Without it the probe makes a single run in
+one process. `--sections=1,13` limits a run to some sections. Add `--quick`
 for a faster, coarser run, or `--json` for machine-readable output suitable for tracking
 regressions in CI (with `--runs`, the JSON holds each measurement's median, minimum,
 maximum and per-run values). The probe deliberately runs the production build; its

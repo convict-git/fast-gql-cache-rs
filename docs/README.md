@@ -219,9 +219,10 @@ It produces every table in the performance guide. The committed output is
 node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
 ```
 
-It runs the production build on purpose. `--runs=5` repeats the measurement in five
-separate processes and reports, for every timing, the median across them of each run's
-median; the committed log was made this way and ends with the run-to-run spread. `--quick`
+It runs the production build on purpose. `--runs=5` measures every section in its own
+fresh process, five times, and reports, for every timing, the median across the five
+runs of each run's median; the committed log was made this way and ends with the
+run-to-run spread. `--quick`
 gives a coarser run, and `--json` gives machine-readable output.
 
 ## Conventions

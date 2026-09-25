@@ -8,28 +8,36 @@
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --quick
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --json > results.json
+ *   node --expose-gc docs/probes/cache-performance-probe.mjs --sections=1,13
  *
  * Deliberately NOT run with `--conditions=development`: the development build
  * deep-freezes every read result (`maybeDeepFreeze`) and runs
  * `warnAboutDataLoss` on every write, neither of which ships to production. The
- * last measured section quantifies that overhead by re-invoking this file in a
- * child process with the development condition.
+ * last measured section quantifies that overhead by re-invoking this file in
+ * two fresh child processes, one with the development condition and one
+ * without, so both builds are measured from the same (fresh) process state.
  *
  * Method
  * ------
  * Each measurement runs `setup` (untimed) then `run` (timed), first `warmup`
  * times untimed and then `reps` times timed, and keeps the MEDIAN of the timed
  * repetitions, which is far more robust than the mean against GC pauses and JIT
- * tiering.
+ * tiering. One full garbage collection runs between the warm-ups and the timed
+ * repetitions. (Not one per repetition: a forced full GC right before a
+ * microsecond operation makes it one to two orders of magnitude slower, which
+ * would measure the GC's side effects instead of the cache.)
  *
- * With `--runs=R` (R > 1) the whole measurement is repeated in R independent
- * Node processes, and every reported timing is the MEDIAN ACROSS THE R RUNS of
- * the per-run medians. Separate processes matter: JIT state, heap layout and GC
- * timing differ from process to process, and a single process can be unlucky
- * as a whole. The summary then reports the run-to-run spread of every
- * measurement, so a reader can see how much a number moves between runs.
- * Deterministic observations (memo sizes, counts, identities) do not vary and
- * are computed once, in the reporting process.
+ * With `--runs=R`, every section is measured in its OWN fresh Node process,
+ * and that is repeated R times; every reported timing is the MEDIAN ACROSS THE
+ * R RUNS of the per-run medians. Fresh processes matter twice over. Within one
+ * long process, the same operation gets measurably slower in later sections
+ * (JIT feedback and heap state accumulated by earlier sections), so sections
+ * would not be comparable. And across processes, JIT state, heap layout and GC
+ * timing differ, so a single process can be unlucky as a whole. The summary
+ * reports the run-to-run spread of every measurement, so a reader can see how
+ * much a number moves between runs. Deterministic observations (memo sizes,
+ * counts, identities) do not vary and are computed once, in the reporting
+ * process.
  *
  * Scaling columns divide adjacent (aggregated) values so the growth rate is
  * visible without a curve fit.
@@ -43,15 +51,18 @@ import { gql } from "graphql-tag";
 
 const QUICK = process.argv.includes("--quick");
 const JSON_OUT = process.argv.includes("--json");
-const IS_CHILD = process.argv.includes("--child-dev");
-const RUNS = Math.max(
-  1,
-  Number(
-    (process.argv.find((a) => a.startsWith("--runs=")) || "--runs=1").slice(
-      "--runs=".length
-    )
-  ) || 1
-);
+const IS_CHILD = process.argv.includes("--child-build");
+/** `--sections=1,13` runs only those sections (for investigating one area). */
+const SECTIONS = (() => {
+  const arg = process.argv.find((a) => a.startsWith("--sections="));
+  return arg ?
+      new Set(arg.slice("--sections=".length).split(",").map(Number))
+    : null;
+})();
+const RUNS_ARG = process.argv.find((a) => a.startsWith("--runs="));
+const RUNS = Math.max(1, Number((RUNS_ARG || "--runs=1").slice(7)) || 1);
+/** Number of measured sections (the summary that follows is not one). */
+const SECTION_COUNT = 14;
 const REPS = QUICK ? 7 : 25;
 const WARMUP = 3;
 const results = [];
@@ -140,10 +151,12 @@ function fmt(ns) {
  */
 let sectionNo = 0;
 function section(title) {
+  ++sectionNo;
   if (IS_CHILD) return false;
+  if (SECTIONS && !SECTIONS.has(sectionNo)) return false;
   if (!JSON_OUT) {
     console.log(
-      `\n${"=".repeat(86)}\n${++sectionNo}. ${title}\n${"=".repeat(86)}`
+      `\n${"=".repeat(86)}\n${sectionNo}. ${title}\n${"=".repeat(86)}`
     );
   }
   return true;
@@ -232,37 +245,46 @@ function withCacheSize(key, value, fn) {
 // ---------------------------------------------------------------------------
 
 /**
- * Runs the measuring part of this probe in `RUNS` independent child processes
- * (each one a plain `--json` run) and returns, per label, the median, minimum
- * and maximum of the per-run medians.
+ * Measures every selected section `RUNS` times, each time in a fresh child
+ * process that runs only that section (a plain `--json --sections=k` run), and
+ * returns, per label, the median, minimum and maximum of the per-run medians.
  */
 function aggregateRuns() {
   const perLabel = new Map();
   let devFrozen;
+  const sections =
+    SECTIONS ?
+      [...SECTIONS].sort((a, b) => a - b)
+    : Array.from({ length: SECTION_COUNT }, (_, i) => i + 1);
   for (let r = 0; r < RUNS; r++) {
-    if (!JSON_OUT) {
-      process.stderr.write(`  measuring: run ${r + 1} of ${RUNS}...\n`);
-    }
-    const child = spawnSync(
-      process.execPath,
-      [
-        "--expose-gc",
-        fileURLToPath(import.meta.url),
-        "--json",
-        ...(QUICK ? ["--quick"] : []),
-      ],
-      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 3_600_000 }
-    );
-    if (child.status !== 0) {
-      throw new Error(
-        `Measuring run ${r + 1} failed (exit ${child.status}):\n${child.stderr}`
+    for (const k of sections) {
+      if (!JSON_OUT) {
+        process.stderr.write(
+          `  measuring: run ${r + 1} of ${RUNS}, section ${k}...\n`
+        );
+      }
+      const child = spawnSync(
+        process.execPath,
+        [
+          "--expose-gc",
+          fileURLToPath(import.meta.url),
+          "--json",
+          `--sections=${k}`,
+          ...(QUICK ? ["--quick"] : []),
+        ],
+        { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 3_600_000 }
       );
-    }
-    const parsed = JSON.parse(child.stdout);
-    devFrozen = parsed.devFrozen;
-    for (const { label, ns } of parsed.results) {
-      if (!perLabel.has(label)) perLabel.set(label, []);
-      perLabel.get(label).push(ns);
+      if (child.status !== 0) {
+        throw new Error(
+          `Measuring run ${r + 1}, section ${k} failed (exit ${child.status}):\n${child.stderr}`
+        );
+      }
+      const parsed = JSON.parse(child.stdout);
+      if (parsed.devFrozen !== undefined) devFrozen = parsed.devFrozen;
+      for (const { label, ns } of parsed.results) {
+        if (!perLabel.has(label)) perLabel.set(label, []);
+        perLabel.get(label).push(ns);
+      }
     }
   }
   const aggregate = new Map();
@@ -278,7 +300,7 @@ function aggregateRuns() {
   return aggregate;
 }
 
-if (RUNS > 1 && !IS_CHILD) {
+if (RUNS_ARG && !IS_CHILD) {
   AGGREGATE = aggregateRuns();
 }
 
@@ -1024,9 +1046,12 @@ if (section("Broadcast cost vs. number of watchers")) {
   // first broadcast computes (and warms) the optimistic read and records
   // `lastDiff`, so later broadcasts go through the real equality gate,
   // `equal(lastDiff.result, diff.result)`, before calling the callback.
-  const watchAll = (cache, queries, callback = () => {}) => {
+  // Each watch gets its OWN callback, as each ObservableQuery does: the
+  // maybeBroadcastWatch memo key includes the callback, so watches sharing
+  // query, variables AND callback would collapse into a single broadcast.
+  const watchAll = (cache, queries) => {
     for (const query of queries) {
-      cache.watch({ query, optimistic: true, immediate: true, callback });
+      cache.watch({ query, optimistic: true, immediate: true, callback() {} });
     }
     return cache;
   };
@@ -1049,7 +1074,7 @@ if (section("Broadcast cost vs. number of watchers")) {
     rows.push([w, w, { relevant: relevant, unrelated: irrelevant }]);
   }
   table(
-    "one write with W watchers registered on the same query (N = 2 000 items)",
+    `one write with W watchers registered on the same query (N = ${shape.data.feed.length} items)`,
     ["relevant", "unrelated"],
     rows,
     "W"
@@ -1691,6 +1716,13 @@ if (section("Eviction, garbage collection and extract")) {
       });
     })();
 
+    // The same data written with writeQuery, measured here so that restore
+    // and write are compared in the same process state.
+    const write = bench(`write for restore comparison ${n}`, {
+      setup: () => freshCache(),
+      run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
+    });
+
     rows.push([
       n,
       n,
@@ -1702,6 +1734,7 @@ if (section("Eviction, garbage collection and extract")) {
         "gc collect": gcCollect,
         extract,
         restore,
+        "write same": write,
       },
     ]);
   }
@@ -1715,6 +1748,7 @@ if (section("Eviction, garbage collection and extract")) {
       "gc collect",
       "extract",
       "restore",
+      "write same",
     ],
     rows,
     "N"
@@ -1772,85 +1806,111 @@ if (section("Result caching off: what memoization is worth")) {
 }
 
 // ===========================================================================
-section("Development-build overhead (maybeDeepFreeze + warnAboutDataLoss)");
-// ===========================================================================
-{
+if (
+  section("Development-build overhead (maybeDeepFreeze + warnAboutDataLoss)") ||
+  IS_CHILD
+) {
+  // Both builds are measured in FRESH child processes that run only this
+  // section. Measuring the production side here, at the end of a long process,
+  // would compare a process that has run every other section against a fresh
+  // one, and the difference in process state (JIT feedback, heap) can be
+  // larger than the difference between the builds.
   const n = QUICK ? 500 : 5000;
   const shape = wideNormalized(n);
 
-  const write = bench(`dev-overhead write N=${n}`, {
-    setup: () => freshCache(),
-    run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
-  });
-  const readCold = bench(`dev-overhead read cold N=${n}`, {
-    setup: () => {
-      const c = written(shape);
-      c.gc({ resetResultCache: true });
-      return c;
-    },
-    run: (c) => c.readQuery({ query: shape.query }),
-  });
-
   if (IS_CHILD) {
-    // Running under --conditions=development: report and let the parent read it.
+    const write = bench(`build write N=${n}`, {
+      setup: () => freshCache(),
+      run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
+    });
+    const readCold = bench(`build read cold N=${n}`, {
+      setup: () => {
+        const c = written(shape);
+        c.gc({ resetResultCache: true });
+        return c;
+      },
+      run: (c) => c.readQuery({ query: shape.query }),
+    });
     console.log(
-      `__DEV_RESULT__ ${JSON.stringify({ n, write, readCold, frozen: isDevBuild() })}`
+      `__BUILD_RESULT__ ${JSON.stringify({ write, readCold, frozen: isDevBuild() })}`
     );
   } else {
-    let dev = null;
-    if (AGGREGATE) {
-      const w = AGGREGATE.get(`dev-build write N=${n}`);
-      const r = AGGREGATE.get(`dev-build read cold N=${n}`);
-      if (w && r) {
-        dev = { write: w.median, readCold: r.median, frozen: AGGREGATE.devFrozen };
-      }
-    } else {
+    const measureBuild = (dev) => {
       const child = spawnSync(
         process.execPath,
         [
           "--expose-gc",
-          "--conditions=development",
+          ...(dev ? ["--conditions=development"] : []),
           fileURLToPath(import.meta.url),
           ...(QUICK ? ["--quick"] : []),
-          "--child-dev",
+          "--child-build",
         ],
         { encoding: "utf8", timeout: 600_000 }
       );
       const line = (child.stdout || "")
         .split("\n")
-        .find((l) => l.startsWith("__DEV_RESULT__"));
-      if (line) {
-        dev = JSON.parse(line.slice("__DEV_RESULT__".length));
-        results.push({ label: `dev-build write N=${n}`, ns: dev.write });
-        results.push({ label: `dev-build read cold N=${n}`, ns: dev.readCold });
-        devFrozen = dev.frozen;
-      } else {
-        note(
-          `  Could not measure development-build overhead (child exited ${child.status}).`
+        .find((l) => l.startsWith("__BUILD_RESULT__"));
+      if (!line) {
+        throw new Error(
+          `Could not measure the ${dev ? "development" : "production"} build (child exited ${child.status}):\n${child.stderr}`
         );
       }
+      return JSON.parse(line.slice("__BUILD_RESULT__".length));
+    };
+    let prod;
+    let dev;
+    if (AGGREGATE) {
+      const get = (label) => AGGREGATE.get(label).median;
+      prod = {
+        write: get(`prod-build write N=${n}`),
+        readCold: get(`prod-build read cold N=${n}`),
+        frozen: false,
+      };
+      dev = {
+        write: get(`dev-build write N=${n}`),
+        readCold: get(`dev-build read cold N=${n}`),
+        frozen: AGGREGATE.devFrozen,
+      };
+    } else {
+      prod = measureBuild(false);
+      dev = measureBuild(true);
+      results.push({ label: `prod-build write N=${n}`, ns: prod.write });
+      results.push({ label: `prod-build read cold N=${n}`, ns: prod.readCold });
+      results.push({ label: `dev-build write N=${n}`, ns: dev.write });
+      results.push({ label: `dev-build read cold N=${n}`, ns: dev.readCold });
+      devFrozen = dev.frozen;
     }
-    if (dev) {
-      note(
-        `  N=${n} entities, production build vs. development build:\n` +
-          `    write     prod ${fmt(write).padStart(10)}   dev ${fmt(dev.write).padStart(10)}   ${(dev.write / write).toFixed(2)}x\n` +
-          `    read cold prod ${fmt(readCold).padStart(10)}   dev ${fmt(dev.readCold).padStart(10)}   ${(dev.readCold / readCold).toFixed(2)}x\n` +
-          `    results frozen: prod=${isDevBuild()} dev=${dev.frozen}\n` +
-          `  The development build clones every scalar field value on write, runs\n` +
-          `  warnAboutDataLoss on every write, and deep-freezes every value it reads\n` +
-          `  and every result it computes. deepFreeze does NOT stop at objects that\n` +
-          `  are already frozen: it skips re-freezing them but still walks all their\n` +
-          `  children, so each recomputed memo entry walks its whole result subtree.`
-      );
-    }
+    note(
+      `  N=${n} entities, production build vs. development build (each measured\n` +
+        `  in a fresh process that runs only this section):\n` +
+        `    write     prod ${fmt(prod.write).padStart(10)}   dev ${fmt(dev.write).padStart(10)}   ${(dev.write / prod.write).toFixed(2)}x\n` +
+        `    read cold prod ${fmt(prod.readCold).padStart(10)}   dev ${fmt(dev.readCold).padStart(10)}   ${(dev.readCold / prod.readCold).toFixed(2)}x\n` +
+        `    results frozen: prod=${isDevBuild()} dev=${dev.frozen}\n` +
+        `  The development build clones every scalar field value on write, runs\n` +
+        `  warnAboutDataLoss on every write, and deep-freezes every value it reads\n` +
+        `  and every result it computes. deepFreeze does NOT stop at objects that\n` +
+        `  are already frozen: it skips re-freezing them but still walks all their\n` +
+        `  children, so each recomputed memo entry walks its whole result subtree.`
+    );
   }
 }
 
 if (IS_CHILD) process.exit(0);
 
 // ===========================================================================
-section("Summary: slowest measurements");
+// Summary (always printed, even when --sections selects a subset)
 // ===========================================================================
+++sectionNo;
+if (sectionNo - 1 !== SECTION_COUNT) {
+  throw new Error(
+    `SECTION_COUNT is ${SECTION_COUNT} but the probe has ${sectionNo - 1} sections`
+  );
+}
+if (!JSON_OUT) {
+  console.log(
+    `\n${"=".repeat(86)}\n${sectionNo}. Summary: slowest measurements\n${"=".repeat(86)}`
+  );
+}
 const meta = {
   node: process.version,
   platform: `${process.platform}/${process.arch}`,
@@ -1882,8 +1942,8 @@ if (JSON_OUT) {
   console.log(
     `  Each measurement: median of ${REPS} timed repetitions after ${WARMUP} untimed warm-ups` +
       (AGGREGATE ?
-        `,\n  then the median of those medians across ${RUNS} independent processes.`
-      : `\n  (single run; pass --runs=R to aggregate R independent processes).`)
+        `,\n  then the median of those medians across ${RUNS} runs; every run measures each\n  section in its own fresh process.`
+      : `\n  (single process; pass --runs=R to measure every section in fresh processes, R times).`)
   );
   if (AGGREGATE) {
     // Run-to-run spread: (max - min) / median of the per-run medians.
