@@ -91,7 +91,7 @@ Field-by-field, `WriteContext` is the whole design:
 | Field | Purpose | Lifetime |
 | --- | --- | --- |
 | `store` | Destination `NormalizedCache`. Read during phase 1 (for `__typename` inference and `readField`), written only in phase 2. | write |
-| `written` | `{ [dataId]: SelectionSetNode[] }` — the cycle breaker. | write |
+| `written` | `{ [dataId]: SelectionSetNode[] }` — the duplicate guard: an entity already processed with the same selection set is skipped ([§4.7](#47-the-duplicate-guard-and-the-isfresh-short-circuit)). | write |
 | `merge` | One shared `DeepMerger`. Its `pastCopies` set means an object copied once during this write is mutated in place afterwards. | write |
 | `variables` / `varString` | Operation variables with defaults applied, plus their canonical serialisation (used by `isFresh`). | write |
 | `fragmentMap` / `lookupFragment` | Fragments defined in the document, plus the `FragmentRegistry` fallback. | write |
