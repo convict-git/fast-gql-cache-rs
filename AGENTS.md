@@ -110,7 +110,7 @@ Cursor Cloud startup script (`.cursor/environment.json`) handles the first three
   Prettier config, and the `@apollo/client/testing/internal` mapping. Its `.gitmodules`
   URL is SSH, which fails in cloud; override it to HTTPS before
   `git submodule update` (as the README setup does). `rust-skills` is optional.
-- **Rust nightly + `wasm32-unknown-unknown`** (`wasm/rust-toolchain.toml`).
+- **Rust stable + `wasm32-unknown-unknown`** (`wasm/rust-toolchain.toml`).
 - `npm install` runs `patch-package` (`postinstall`) to patch `@apollo/client`; keep it.
 
 ### Building the WASM `pkg/`

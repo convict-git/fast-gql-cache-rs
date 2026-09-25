@@ -2,10 +2,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RUSTUP_BIN="${HOME}/.rustup/toolchains/nightly-aarch64-apple-darwin/bin"
+# Put rustup's proxies first so `wasm/rust-toolchain.toml` picks the toolchain, even
+# when a specific toolchain's bin/ is also on PATH.
+CARGO_BIN="${CARGO_HOME:-${HOME}/.cargo}/bin"
 
-if [[ -d "${RUSTUP_BIN}" ]]; then
-  export PATH="${RUSTUP_BIN}:${PATH}"
+if [[ -d "${CARGO_BIN}" ]]; then
+  export PATH="${CARGO_BIN}:${PATH}"
 fi
 
 cd "${ROOT}"
