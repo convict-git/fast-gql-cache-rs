@@ -1,9 +1,9 @@
 /**
  * Executable behaviour probe for Apollo Client's `InMemoryCache` (v4.2.11).
  *
- * Every claim made in `docs/apollo-client-inmemory-cache.md` that is
- * observable from the public API is exercised here, so the documentation can
- * be re-validated against a new Apollo version by re-running this file:
+ * Observable behaviour documented in the architecture guide
+ * (`docs/architecture/`) is pinned here, so the documentation can be
+ * re-validated against a new Apollo version by re-running this file:
  *
  *   node --conditions=development docs/probes/cache-behavior-probe.mjs
  *
@@ -189,7 +189,7 @@ section("Identity: keyFields specifiers, including the blog's nested form");
   check("a Reference identifies as its own __ref", () => {
     assert.equal(ids.reference, "Todo:1");
   });
-  check("keyFields order is canonicalised, not source order", () => {
+  check("the input object's property order does not affect the id", () => {
     const a = cache.identify({ __typename: "Point", x: 1, y: 2 });
     const b = cache.identify({ __typename: "Point", y: 2, x: 1 });
     assert.equal(a, b);
@@ -588,8 +588,9 @@ section("Broadcast: memoized watch recomputation and the equality gate");
   });
   const afterUnrelated = deliveries.length;
 
-  // (b) a no-op write of identical data: dirtied, recomputed, but suppressed
-  //     by the `equal(lastDiff.result, diff.result)` gate in broadcastWatch.
+  // (b) a no-op write of identical data: storeObjectReconciler keeps every
+  //     existing value, so nothing is dirtied. The watch's memo entry stays
+  //     clean and broadcastWatches skips it without even recomputing a diff.
   cache.writeQuery({
     query: WATCHED,
     data: { watched: { __typename: "Watched", id: 1, name: "n1" } },
@@ -617,7 +618,7 @@ section("Broadcast: memoized watch recomputation and the equality gate");
   check("an unrelated write does not notify the watcher", () => {
     assert.equal(afterUnrelated, 1);
   });
-  check("a value-preserving write is suppressed by the equality gate", () => {
+  check("a value-preserving write dirties nothing, so the watcher is not notified", () => {
     assert.equal(afterNoop, 1);
   });
   check("a value-changing write is delivered exactly once", () => {
@@ -1198,7 +1199,11 @@ section("evict(): whole entity, single field, and field-with-args");
     assert.equal(afterEvict.complete, true);
     assert.equal(afterEvict.missing, undefined);
   });
-  check("the stale Reference is still present in the raw store until gc", () => {
+  check("the stale Reference stays in the raw store, and gc() does not remove it", () => {
+    assert.equal(cache.extract().ROOT_QUERY.todos.length, 3);
+    // gc() deletes unreachable entities; it never rewrites the fields that
+    // still hold a dangling { __ref }.
+    cache.gc();
     assert.equal(cache.extract().ROOT_QUERY.todos.length, 3);
   });
 
@@ -1325,6 +1330,10 @@ section("Immutability: results are deeply frozen in development builds");
   check("the caller's input object is not aliased into the store", () => {
     const input = { me: { __typename: "User", id: 2, tags: ["x"] } };
     cache.writeQuery({ query: QUERY, data: input });
+    // Freezing happens on read, so read the written data back first: if the
+    // store had aliased `input.me.tags`, this read would freeze it.
+    const readBack = cache.readQuery({ query: QUERY });
+    assert.ok(Object.isFrozen(readBack.me.tags));
     assert.ok(!Object.isFrozen(input.me.tags));
   });
 }

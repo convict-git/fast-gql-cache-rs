@@ -10,7 +10,7 @@
       1000       8.79 ms    0.59n       7.75 ms    0.97n       7.62 ms    1.01n
       5000      44.00 ms    1.00n      39.65 ms    1.02n      39.68 ms    1.04n
      20000     182.46 ms    1.04n     164.33 ms    1.04n     166.83 ms    1.05n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   Reading: "identical" still pays the full traversal + normalization + deep
   equality; it only avoids dirtying fields. There is no early-out for an
@@ -45,7 +45,7 @@
       1000      15.70 ms    1.01n        2.5 us    0.09n       1.66 ms    0.89n
       5000      78.63 ms    1.00n        2.7 us    0.21n       8.87 ms    1.07n
      20000     333.45 ms    1.06n        2.5 us    0.23n      45.08 ms    1.27n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   Note that "after 1 dirty" is still LINEAR in n, roughly 8x cheaper than a cold
   read. Only three memo entries re-execute (the entity, the array, the root), but
@@ -76,7 +76,7 @@
        100      873.8 us        -      711.0 us        -        2.9 us        -        3.0 us        -
       1000       8.14 ms    0.93n       5.86 ms    0.82n        2.5 us    0.09n        2.5 us    0.08n
       5000      44.10 ms    1.08n      28.91 ms    0.99n        2.6 us    0.21n        2.6 us    0.21n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   Store entry counts for n=2000:
     normalized: 2001 entries (1 root + n entities)
@@ -97,7 +97,7 @@
         16      170.5 us    0.63n      132.0 us    0.69n      206.4 us    0.69n        2.7 us    0.24n      220.6 us    0.77n
         64      610.2 us    0.89n      448.5 us    0.85n      737.3 us    0.89n        2.4 us    0.22n       1.26 ms    1.43n
        128       1.15 ms    0.94n      764.3 us    0.85n       1.37 ms    0.93n        2.4 us    0.50n       3.45 ms    1.37n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   "deep dirty" is the headline number: modifying the LEAF of a d-deep chain marks
   every ancestor memo entry DirtyChild, and re-executing the root walks back down
@@ -118,7 +118,7 @@
     10x100       4.52 ms    0.76n       8.62 ms    1.03n        2.3 us    0.09n      305.5 us    0.39n
    100x100      47.74 ms    1.06n      88.20 ms    1.02n        2.1 us    0.09n      569.5 us    0.19n
    100x500     251.86 ms    1.06n     472.01 ms    1.07n       2.21 ms  207.39n       2.27 ms    0.80n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   Watch the "read warm" column at 100x500. Every other row is ~2 us; that one
   jumps by three orders of magnitude. 100*500 rows + 100 groups + ROOT_QUERY =
@@ -132,7 +132,7 @@
     10x100        6.8 us        -        2.2 us        -
    100x100        7.0 us    0.10n        2.1 us    0.10n
   100x1000        6.7 us    0.10n        2.1 us    0.10n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   A scalar array without a sub-selection is stored and returned as ONE field
   value. It costs a deep-equality pass on write and nothing on read, but it is
@@ -149,7 +149,7 @@
         10      22.18 ms    0.10n      136.4 us    0.13n
         50      22.28 ms    0.20n      273.7 us    0.40n
        200      23.20 ms    0.26n      695.9 us    0.64n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   "unrelated" is the equality-gate path: the watches are not dirty, so
   maybeBroadcastWatch returns its memoized value and no diff is recomputed.
@@ -172,7 +172,7 @@
          4      198.1 us    0.64n        6.3 us    0.20n       46.0 us    1.82n       10.4 us    0.41n       92.9 us    2.86n
         16       1.67 ms    2.11n        6.7 us    0.26n      182.1 us    0.99n       27.0 us    0.65n       1.42 ms    3.82n
         64      25.48 ms    3.81n        7.4 us    0.28n      734.8 us    1.01n       81.9 us    0.76n      24.43 ms    4.30n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   "remove bottom" is the expensive one: removing a layer that is not on top
   replays every layer above it (EntityStore.removeLayer -> Layer.newLayer +
@@ -248,7 +248,7 @@
          2      274.6 us    0.45n      456.6 us    0.55n
          8      259.1 us    0.24n      375.5 us    0.21n
         24      305.0 us    0.39n      441.0 us    0.39n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   one field whose argument is an object nested d levels deep (1-item result)
          n         write    scale    fresh vars    scale
@@ -257,7 +257,7 @@
          8       23.9 us    0.17n       24.9 us    0.18n
         32       49.1 us    0.51n       53.5 us    0.54n
        128      150.3 us    0.77n      154.3 us    0.72n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   Resulting store field key (note the sorted, fully-serialized args):
     search({"filter":{"a":2,"nested":{"a":2,"nested":{"a":2,"m":3,"z":1},"z":1},"z":1}})
@@ -291,7 +291,7 @@
       1000       22.1 us        -       20.7 us        -       1.03 ms        -       3.91 ms        -      174.6 us        -       1.54 ms        -
       5000       21.1 us    0.19n       21.7 us    0.21n       5.16 ms    1.00n      19.93 ms    1.02n       1.20 ms    1.38n       8.89 ms    1.15n
      20000       22.5 us    0.27n       23.2 us    0.27n      27.41 ms    1.33n      83.55 ms    1.05n       6.04 ms    1.25n      37.66 ms    1.06n
-  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)
+  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)
 
   gc() is a full mark-and-sweep: it walks every root and every reachable field
   of every entity, so it is O(store) EVEN WHEN IT COLLECTS NOTHING. restore()
