@@ -16,8 +16,10 @@
  */
 import assert from "node:assert/strict";
 
-import { InMemoryCache, makeVar } from "@apollo/client/cache";
+import { makeVar } from "@apollo/client/cache";
 import { gql } from "graphql-tag";
+
+import { InMemoryCache } from "./select-cache.mjs";
 
 let sectionNo = 0;
 const failures = [];

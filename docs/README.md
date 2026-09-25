@@ -225,6 +225,20 @@ runs of each run's median; the committed log was made this way and ends with the
 run-to-run spread. `--quick`
 gives a coarser run, and `--json` gives machine-readable output.
 
+**Against `InMemoryCacheRs`.** Both probes take `--cache=apollo` (the default) or
+`--cache=rs`, which runs them against this repository's cache, loaded from the built
+`dist/` (see [`probes/select-cache.mjs`](probes/select-cache.mjs)). Two scripts build
+`dist/` and compare the caches:
+
+```bash
+npm run probe:parity             # behaviour probe output must match Apollo's byte for byte
+npm run probe:compare -- --runs=5  # every performance measurement side by side, with ratios
+```
+
+Use `--runs=5` for comparisons you act on: a single `--quick` run swings microsecond
+measurements by tens of percent even when both caches run the same code.
+`npm run probe:test` tests this tooling itself.
+
 ## Conventions
 
 - **Source paths** are relative to `apollo-client-sm/src/`. Code snippets keep the source
