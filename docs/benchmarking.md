@@ -41,8 +41,12 @@ about 2.6× slower than a recent laptop.
 The label stays on: every push re-runs the benchmark (a new push cancels the running
 one), and **merging waits for it**. The `Benchmark gate` check, required on `main`,
 passes on a PR without the label, and on a labelled PR only once a benchmark of its
-current commit has succeeded. Removing the label opts out and releases the gate.
-Changing other labels neither cancels a running benchmark nor passes the gate.
+current commit has succeeded: it starts with the benchmark and stays pending until the
+report is in ([`gate.mjs`](../scripts/bench/gate.mjs)). Removing the label opts out and
+releases the gate. Changing other labels neither cancels a running benchmark nor passes
+the gate. `Lint and typecheck` and `Tests and behaviour parity` are required too, and
+every required check must have run against the latest `main` (the branch must be up to
+date), for every PR, with no bypass.
 
 You can also run the workflow by hand from the Actions tab (“Benchmark”, *Run workflow*)
 for any branch, against any base, optionally posting to a PR.
@@ -93,6 +97,7 @@ probe:compare` is the lighter tool for this checkout alone: both caches, no base
 | [`scripts/bench/stats.mjs`](../scripts/bench/stats.mjs) | Noise band and significance |
 | [`scripts/bench/report.mjs`](../scripts/bench/report.mjs) | The PR comment and the history summary |
 | [`scripts/bench/comment.mjs`](../scripts/bench/comment.mjs) | Keeps the one PR comment up to date |
+| [`scripts/bench/gate.mjs`](../scripts/bench/gate.mjs) | The `Benchmark gate` merge check |
 | [`scripts/bench/history.mjs`](../scripts/bench/history.mjs), [`trend.html`](../scripts/bench/trend.html) | The `benchmarks` branch |
 
 `npm run test:tooling` tests them.

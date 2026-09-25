@@ -110,42 +110,35 @@ jobs:
           name: benchmark-comment
           path: comment/
 
+  # Starts with every run (no `needs`), so the check is pending from the moment
+  # a benchmark starts rather than when it ends; scripts/bench/gate.mjs decides.
   gate:
     name: Benchmark gate
-    if: always() && github.event_name == 'pull_request'
-    needs: [measure, report]
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 300
     permissions:
       actions: read
+      contents: read
+      issues: read
       pull-requests: read
     steps:
-      - name: Require a finished benchmark while the PR is labelled
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/bench/gate.mjs
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
-          REPORT: ${{ needs.report.result }}
-        run: |
-          # The PR's labels now, not at the event: removing the label while a
-          # benchmark runs is an explicit opt-out.
-          if ! gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name' | grep -qx benchmark; then
-            echo "No benchmark requested (no \`benchmark\` label)."
-            exit 0
-          fi
-          if [ "$REPORT" = success ]; then
-            echo "Benchmarked ${SHA::7} in this run."
-            exit 0
-          fi
-          # This run did not measure (e.g. another label changed): accept an
-          # earlier successful benchmark of the same commit.
-          for run in $(gh api "repos/$REPO/actions/workflows/benchmark.yml/runs?head_sha=$SHA&per_page=100" \
-                         --jq '.workflow_runs[] | select(.conclusion == "success") | .id'); do
-            if gh api "repos/$REPO/actions/runs/$run/jobs" \
-                 --jq '.jobs[] | select(.name == "report" and .conclusion == "success") | .id' | grep -q .; then
-              echo "Benchmarked ${SHA::7} in run $run."
-              exit 0
-            fi
-          done
-          echo "::error::This PR has the \`benchmark\` label, and no benchmark of ${SHA::7} has succeeded yet. Merging waits for it; remove the label to opt out."
-          exit 1
+          RUN_ID: ${{ github.run_id }}
+          # The `measure` job's condition (keep the two in sync).
+          MEASURES: >-
+            ${{ github.event_name == 'workflow_dispatch'
+              || (contains(github.event.pull_request.labels.*.name, 'benchmark')
+                  && (contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
+                      || (github.event.action == 'labeled' && github.event.label.name == 'benchmark'))) }}
