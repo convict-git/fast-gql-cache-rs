@@ -45,6 +45,8 @@ table of contents.
 - [Performance probe](docs/probes/cache-performance-probe.mjs): produces every table in the
   performance guide; its output is committed as
   [`cache-performance-probe.log`](docs/probes/cache-performance-probe.log)
+- [Benchmarking](docs/benchmarking.md): how each PR's performance effect is measured
+  (the `benchmark` label) and tracked nightly on the `benchmarks` branch
 
 <!-- toc:end -->
 

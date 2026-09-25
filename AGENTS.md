@@ -74,7 +74,8 @@ Reuse `apollo-client-sm` config so ours cannot drift from Apollo's:
   Rust-WASM, dropping each patched symbol once nothing imports it.
 - `npm test` (the `InMemoryCache` parity suite) and `npm run probe:parity` (the behaviour
   probe's output, byte for byte against Apollo's) pass before advancing a phase.
-  `npm run probe:compare -- --runs=5` measures whether a change made the cache faster.
+  Performance per PR and over time: `docs/benchmarking.md` (the `benchmark` PR label,
+  the nightly history, `npm run bench:pr -- --base main` locally).
 
 ## Skills
 

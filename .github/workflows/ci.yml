@@ -42,5 +42,5 @@ jobs:
 
       # Release wasm build, then the InMemoryCache parity suite.
       - run: npm run test:ci
-      - run: npm run probe:test
+      - run: npm run test:tooling
       - run: npm run probe:parity

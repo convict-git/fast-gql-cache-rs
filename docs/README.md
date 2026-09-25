@@ -237,7 +237,8 @@ npm run probe:compare -- --runs=5  # every performance measurement side by side,
 
 Use `--runs=5` for comparisons you act on: a single `--quick` run swings microsecond
 measurements by tens of percent even when both caches run the same code.
-`npm run probe:test` tests this tooling itself.
+`npm run test:tooling` tests this tooling and the benchmark scripts. To compare a branch's
+performance with another, see [benchmarking.md](benchmarking.md).
 
 ## Conventions
 

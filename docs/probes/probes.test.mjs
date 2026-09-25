@@ -61,6 +61,31 @@ test("--cache=rs without a built dist/ says how to build it", (t) => {
   );
 });
 
+test("FAST_GQL_CACHE_RS_ROOT loads InMemoryCacheRs from another checkout", (t) => {
+  // Another "checkout" holding this repository's build, so the probe can only
+  // pass by loading InMemoryCacheRs from there.
+  const root = mkdtempSync(join(tmpdir(), "probe-other-root-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const repo = fileURLToPath(new URL("../../", import.meta.url));
+  for (const dir of ["node_modules", "pkg", "dist"]) {
+    symlinkSync(join(repo, dir), join(root, dir));
+  }
+
+  const child = runNode(
+    [
+      "--conditions=development",
+      probe("cache-behavior-probe.mjs"),
+      "--cache=rs",
+    ],
+    { FAST_GQL_CACHE_RS_ROOT: root }
+  );
+  assert.equal(child.status, 0, child.stderr);
+  assert.ok(
+    child.stderr.includes(`cache under test: InMemoryCacheRs from ${root}`),
+    child.stderr
+  );
+});
+
 test("the A/B report times every measurement against both caches", () => {
   const section = ["--quick", "--sections=1"];
   // The probe's own label list for the section is the oracle for the report.

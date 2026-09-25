@@ -40,7 +40,8 @@
     "test:ci": "npm run wasm:build && node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs --ci",
     "probe:parity": "npm run build:ts && node docs/probes/parity.mjs",
     "probe:compare": "npm run build:ts && node docs/probes/compare-caches.mjs",
-    "probe:test": "npm run build:ts && node --test docs/probes/probes.test.mjs"
+    "test:tooling": "npm run build:ts && node --test docs/probes/probes.test.mjs scripts/bench/*.test.mjs",
+    "bench:pr": "node scripts/bench/pr.mjs"
   },
   "repository": {
     "type": "git",
