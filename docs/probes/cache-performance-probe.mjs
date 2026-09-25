@@ -10,9 +10,15 @@
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --json > results.json
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --sections=1,13
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --cache=rs
+ *   node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5 --save=agg.json
+ *   node --expose-gc docs/probes/cache-performance-probe.mjs --load=agg.json
  *
  * `--cache=rs` measures this repository's `InMemoryCacheRs` instead (see
  * `select-cache.mjs`); `compare-caches.mjs` reports both side by side.
+ *
+ * `--save` writes the aggregated per-run medians of a `--runs` measurement to a
+ * JSON file; `--load` re-renders the report from such a file without measuring
+ * (the deterministic observations are recomputed).
  *
  * Deliberately NOT run with `--conditions=development`: the development build
  * deep-freezes every read result (`maybeDeepFreeze`) and runs
@@ -47,6 +53,7 @@
  * visible without a curve fit.
  */
 import { spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { cacheSizes } from "@apollo/client/utilities";
@@ -65,6 +72,12 @@ const SECTIONS = (() => {
     : null;
 })();
 const RUNS_ARG = process.argv.find((a) => a.startsWith("--runs="));
+const argValue = (name) => {
+  const arg = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return arg ? arg.slice(name.length + 3) : null;
+};
+const SAVE_PATH = argValue("save");
+const LOAD_PATH = argValue("load");
 const RUNS = Math.max(1, Number((RUNS_ARG || "--runs=1").slice(7)) || 1);
 /** Number of measured sections (the summary that follows is not one). */
 const SECTION_COUNT = 14;
@@ -140,6 +153,12 @@ function bench(label, { setup, run, reps = REPS, warmup = WARMUP }) {
   const ns = median(samples);
   results.push({ label, ns });
   return ns;
+}
+
+/** Signed percentage change of `value` relative to `base`, e.g. "-12%". */
+function pctChange(value, base) {
+  const pct = (value / base - 1) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`;
 }
 
 function fmt(ns) {
@@ -303,11 +322,45 @@ function aggregateRuns() {
     });
   }
   aggregate.devFrozen = devFrozen;
+  aggregate.runCount = RUNS;
   return aggregate;
 }
 
-if (RUNS_ARG && !IS_CHILD) {
+/** Serializes an aggregate (see `aggregateRuns`) for `--save`. */
+function aggregateToJson(aggregate) {
+  return {
+    meta: {
+      node: process.version,
+      platform: `${process.platform}/${process.arch}`,
+      quick: QUICK,
+      repsPerMeasurement: REPS,
+      warmupsPerMeasurement: WARMUP,
+      runs: aggregate.runCount,
+    },
+    devFrozen: aggregate.devFrozen,
+    results: [...aggregate].map(([label, a]) => ({ label, ...a })),
+  };
+}
+
+if (LOAD_PATH && !IS_CHILD) {
+  const saved = JSON.parse(readFileSync(LOAD_PATH, "utf8"));
+  if (saved.meta.quick !== QUICK) {
+    throw new Error(
+      `${LOAD_PATH} was measured ${saved.meta.quick ? "with" : "without"} --quick; pass the same flag to render it`
+    );
+  }
+  AGGREGATE = new Map(saved.results.map(({ label, ...a }) => [label, a]));
+  AGGREGATE.devFrozen = saved.devFrozen;
+  AGGREGATE.runCount = saved.meta.runs;
+  AGGREGATE.meta = saved.meta;
+} else if (RUNS_ARG && !IS_CHILD) {
   AGGREGATE = aggregateRuns();
+  if (SAVE_PATH) {
+    writeFileSync(
+      SAVE_PATH,
+      `${JSON.stringify(aggregateToJson(AGGREGATE), null, 2)}\n`
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -536,19 +589,26 @@ if (section("Write cost vs. list breadth (normalized entities)")) {
       overwrite <= coldPrimed ?
         `overwriting is ${((1 - overwrite / coldPrimed) * 100).toFixed(0)}% cheaper here`
       : `creating is ${((1 - coldPrimed / overwrite) * 100).toFixed(0)}% cheaper here`;
+    const firstScale =
+      rows.length > 1 ?
+        rows[1][2].cold / rows[0][2].cold / (rows[1][1] / rows[0][1])
+      : NaN;
     note(
-      `  Why the N=100 "cold" cell above is disproportionately high (it drags the\n` +
-        `  next row's scale well below 1.00). Re-measuring the same three writes here,\n` +
-        `  after the process has warmed up:\n` +
+      `  The N=100 "cold" cell carries costs that are not per-entity work (the next\n` +
+        `  row's scale is ${firstScale.toFixed(2)}). Re-measuring the same kind of write later in the\n` +
+        `  same process:\n` +
         `    write cold N=100, as measured first : ${fmt(rows[0][2].cold)}\n` +
-        `    brand-new cache, 100 new entities   : ${fmt(coldFresh)}\n` +
-        `    primed EMPTY cache, 100 new         : ${fmt(coldPrimed)}\n` +
+        `    brand-new cache, 100 new entities   : ${fmt(coldFresh)} (${pctChange(coldFresh, rows[0][2].cold)} vs. first)\n` +
+        `    primed EMPTY cache, 100 new         : ${fmt(coldPrimed)} (${pctChange(coldPrimed, coldFresh)} vs. brand-new)\n` +
         `    overwrite of 100 existing           : ${fmt(overwrite)}\n` +
-        `  Two separate effects, neither of them per-entity work:\n` +
+        `  Two effects can inflate it:\n` +
         `    1. JIT. The table's cold N=100 is the FIRST measurement in the process;\n` +
-        `       the identical operation re-measured here is cheaper.\n` +
+        `       the difference to "brand-new" is what warming up the process buys.\n` +
         `    2. One-time per-cache setup (document transform, type policies, fresh\n` +
-        `       StoreReader/StoreWriter): the gap between "brand-new" and "primed".\n` +
+        `       StoreReader/StoreWriter): the gap between "brand-new" and "primed"` +
+        (coldPrimed < coldFresh ?
+          `.\n`
+        : `,\n       which is not visible in this run (the primed write is not faster).\n`) +
         `  With both removed, CREATING n entities and OVERWRITING n identical ones cost\n` +
         `  about the same (${cheaper}): a creation dirties every\n` +
         `  field, an overwrite compares every incoming field with the stored one instead.`
@@ -1275,7 +1335,8 @@ if (section("Transactions, optimistic layers, and layer depth")) {
       `  "cold read" is the first optimistic read after stacking: every field read\n` +
       `  walks down the layer chain until a store holds the field, O(L) per field.\n` +
       `  "warm read" is FLAT in L: it is a memo hit at the top of the chain and never\n` +
-      `  walks the layers at all.`
+      `  walks the layers at all. (Each rep is the first hit after a fresh setup,\n` +
+      `  which costs more than the repeated hits measured in section 2.)`
   );
 
   // Batching: one broadcast vs. N broadcasts. Each write changes one field of a
@@ -1929,8 +1990,7 @@ const meta = {
 };
 if (JSON_OUT) {
   if (AGGREGATE) {
-    const aggregated = [...AGGREGATE].map(([label, a]) => ({ label, ...a }));
-    console.log(JSON.stringify({ meta, results: aggregated }, null, 2));
+    console.log(JSON.stringify(aggregateToJson(AGGREGATE), null, 2));
   } else {
     console.log(JSON.stringify({ meta, devFrozen, results }, null, 2));
   }
@@ -1944,13 +2004,14 @@ if (JSON_OUT) {
   for (const { label, ns } of top) {
     console.log(`  ${fmt(ns).padStart(12)}  ${label}`);
   }
+  const measuredOn = AGGREGATE?.meta ?? meta;
   console.log(
-    `\n  ${all.length} measurements. Node ${process.version} on ${process.platform}/${process.arch}.`
+    `\n  ${all.length} measurements. Node ${measuredOn.node} on ${measuredOn.platform}.`
   );
   console.log(
     `  Each measurement: median of ${REPS} timed repetitions after ${WARMUP} untimed warm-ups` +
       (AGGREGATE ?
-        `,\n  then the median of those medians across ${RUNS} runs; every run measures each\n  section in its own fresh process.`
+        `,\n  then the median of those medians across ${AGGREGATE.runCount} runs; every run measures each\n  section in its own fresh process.`
       : `\n  (single process; pass --runs=R to measure every section in fresh processes, R times).`)
   );
   if (AGGREGATE) {
@@ -1964,7 +2025,7 @@ if (JSON_OUT) {
       .sort((x, y) => x.spread - y.spread);
     const pct = (q) => spreads[Math.min(spreads.length - 1, Math.floor(q * spreads.length))].spread;
     console.log(
-      `\n  Run-to-run spread, (max - min) / median across the ${RUNS} runs:\n` +
+      `\n  Run-to-run spread, (max - min) / median across the ${AGGREGATE.runCount} runs:\n` +
         `    median measurement: ${(pct(0.5) * 100).toFixed(0)}%   90th percentile: ${(pct(0.9) * 100).toFixed(0)}%\n` +
         `    noisiest measurements:`
     );

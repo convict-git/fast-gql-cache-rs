@@ -222,7 +222,8 @@ node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
 It runs the production build on purpose. `--runs=5` measures every section in its own
 fresh process, five times, and reports, for every timing, the median across the five
 runs of each run's median; the committed log was made this way and ends with the
-run-to-run spread. `--quick`
+run-to-run spread. The raw aggregated data is committed next to it as
+[`probes/cache-performance-probe.json`](probes/cache-performance-probe.json). `--quick`
 gives a coarser run, and `--json` gives machine-readable output.
 
 **Against `InMemoryCacheRs`.** Both probes take `--cache=apollo` (the default) or

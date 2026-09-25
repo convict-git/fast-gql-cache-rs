@@ -32,13 +32,13 @@ The single most important structural fact:
 
 > **Reads are memoized per subtree; writes are not memoized.**
 >
-> A warm read of a 5 000-entity list costs microseconds. A write of the same
-> data — even a byte-for-byte identical one — costs tens of milliseconds. For a fresh
-> payload, such as a network response, there is no "nothing changed" fast path, because the
-> writer cannot know nothing changed until it has normalized the payload and compared every
-> field. (The one shortcut, `isFresh`, applies only to entity objects that are the very
-> objects the reader handed out — the `readQuery` → edit → `writeQuery` pattern — and
-> even then it skips the merge into the store, not the traversal:
+> A warm read of a 5 000-entity list costs microseconds (3.8 µs). A write of the same data
+> — even a byte-for-byte identical one — costs tens of milliseconds (75.95 ms). For a
+> fresh payload, such as a network response, there is no "nothing changed" fast path,
+> because the writer cannot know nothing changed until it has normalized the payload and
+> compared every field. (The one shortcut, `isFresh`, applies only to entity objects that
+> are the very objects the reader handed out — the `readQuery` → edit → `writeQuery`
+> pattern — and even then it skips the merge into the store, not the traversal:
 > [architecture §4.7](../architecture/04-store-writer.md#47-the-duplicate-guard-and-the-isfresh-short-circuit).)
 
 ## 1.2 Headline complexity table
@@ -46,8 +46,7 @@ The single most important structural fact:
 Symbols are defined in the [notation table](README.md#conventions): `E` objects, `F`
 fields per object, `D` depth, `N` list length, `S` store entries, `W` watches, `L`
 optimistic layers, `B` value size, `A` argument size, `V` variables size, `K` key-field
-reads.
-A few rows need a symbol of their own; those are defined under the table.
+reads. A few rows need a symbol of their own; those are defined under the table.
 
 | Operation | Complexity | Memoized? | Dominant term |
 | --- | --- | --- | --- |
@@ -87,34 +86,40 @@ and modifier functions add whatever they themselves cost.
 
 ## 1.3 Measured: the shape of the curves
 
-One list of `n` normalized entities, six scalar fields each, measured end to end:
+One list of `N` normalized entities (`F = 8`: `__typename`, `id` and six scalar fields),
+measured end to end. Write columns come from the probe's section 1, read columns from
+section 2:
 
-| `n` | write cold | write identical payload | read cold | read warm | read after 1 dirty field |
+| `N` | write cold | write identical payload | read cold | read warm | read after 1 dirty field |
 | --- | --- | --- | --- | --- | --- |
-| 100 | 1.50 ms | 796 µs | 1.56 ms | **2.9 µs** | 187 µs |
-| 1 000 | 8.79 ms | 7.75 ms | 15.70 ms | **2.5 µs** | 1.66 ms |
-| 5 000 | 44.00 ms | 39.65 ms | 78.63 ms | **2.7 µs** | 8.87 ms |
-| 20 000 | 182.46 ms | 164.33 ms | 333.45 ms | **2.5 µs** | 45.08 ms |
+| 100 | 1.95 ms | 1.42 ms | 2.88 ms | **4.5 µs** | 362.8 µs |
+| 1 000 | 15.99 ms | 13.86 ms | 28.95 ms | **3.8 µs** | 2.99 ms |
+| 5 000 | 83.41 ms | 75.95 ms | 155.23 ms | **3.8 µs** | 19.53 ms |
+| 20 000 | 349.28 ms | 322.07 ms | 701.99 ms | **3.6 µs** | 93.03 ms |
 
 Three readings, in descending order of importance:
 
-1. **The warm-read column is flat.** 2.5–2.9 µs whether the list holds 100 entities or
-   20 000. That is the memo graph doing its job, and it is why the read path rarely shows
-   up in a profile of a healthy application.
-2. **Writing a byte-identical payload costs 90 % of a cold write** — 164 ms against 182 ms
-   at `n = 20 000`. Polling an unchanged response is almost as expensive as receiving a new
-   one.
-3. **One dirty field costs 7–9.5× less than a cold read but still scales linearly.** 45 ms
-   to re-read a 20 000-entity list after a single field changed. Memoization improves the
-   constant here, not the exponent ([§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
+1. **The warm-read column is flat.** A few microseconds whether the list holds 100
+   entities or 20 000. That is the memo graph doing its job, and it is why the read path
+   rarely shows up in a profile of a healthy application.
+2. **Writing a byte-identical payload costs about as much as a cold write** — 322.07 ms
+   against 349.28 ms at `N = 20 000` (0.92×). Polling an unchanged response is almost as
+   expensive as receiving a new one.
+3. **One dirty field costs several times less than a cold read but still scales
+   linearly.** The cold read is 7.9×, 9.7×, 7.9× and 7.5× the re-read at the four sizes,
+   and re-reading a 20 000-entity list after a single field changed still takes 93.03 ms.
+   Memoization improves the constant here, not the exponent
+   ([§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
 
 > **Reading the `scale` column** in the tables that follow: it is the growth factor
-> between two adjacent rows divided by their size ratio. `1.00n` is linear at any step. A
-> constant cost shows up as `1/ratio` (`0.10n` for a 10× step, `0.25n` for 4×, `0.50n` for
-> 2×), and a quadratic cost as the ratio itself (`10n` for a 10× step, `4n` for 4×, `2n`
-> for 2×), so always read it together with the step size. It is the number to trust:
-> absolute timings vary by machine, growth rates do not. (The steps used by the probe
-> are 10×, 5× and 4× for most tables, and 2× for the last depth row.)
+> between two adjacent rows divided by their size ratio. `1.00` is linear at any step. A
+> constant cost shows up as `1/ratio` (`0.10` for a 10× step, `0.25` for 4×, `0.50` for
+> 2×), and a quadratic cost as the ratio itself (`10` for a 10× step, `4` for 4×, `2` for
+> 2×), so always read it together with the step size. Growth rates are the result to
+> trust: absolute timings vary by machine, growth rates do not. The steps used by the
+> probe are 10×, 5× and 4× for most tables, and 2× for the last depth row. Small values
+> (a few microseconds) are the noisiest; the log's summary lists the run-to-run spread of
+> every measurement.
 
 ## 1.4 The one diagram to remember
 

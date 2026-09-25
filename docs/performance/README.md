@@ -9,10 +9,14 @@
 > **Source of truth.** `apollo-client-sm` at `ba511be` (`@apollo/client@4.2.11`).
 >
 > **Measurements.** Every table and timing in this guide comes from
-> [`probes/cache-performance-probe.mjs`](../probes/cache-performance-probe.mjs), whose full
-> output is committed at [`probes/cache-performance-probe.log`](../probes/cache-performance-probe.log).
-> The few checks made outside the probe are labelled "verified" in the text; they are
-> counts, not timings, so they do not vary from run to run.
+> [`probes/cache-performance-probe.mjs`](../probes/cache-performance-probe.mjs), whose
+> full output is committed at
+> [`probes/cache-performance-probe.log`](../probes/cache-performance-probe.log), together
+> with the raw data behind it,
+> [`probes/cache-performance-probe.json`](../probes/cache-performance-probe.json): every
+> measurement's median, minimum, maximum and per-run values. The few checks made outside
+> the probe are labelled "verified" in the text; they are counts, not timings, so they do
+> not vary from run to run.
 >
 > **How the numbers are aggregated.** Timings vary from run to run, so no number in this
 > guide is a single measurement. Each one is a **median of medians**:
@@ -46,7 +50,9 @@ node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
 
 `--runs=R` measures every section in its own fresh process, `R` times, and reports the
 median across the runs, as described above. Without it the probe makes a single run in
-one process. `--sections=1,13` limits a run to some sections. Add `--quick`
+one process. `--sections=1,13` limits a run to some sections. `--save=FILE` writes the
+aggregated data to JSON, and `--load=FILE` re-renders the report from such a file without
+measuring; the committed log is `--load=docs/probes/cache-performance-probe.json`. Add `--quick`
 for a faster, coarser run, or `--json` for machine-readable output suitable for tracking
 regressions in CI (with `--runs`, the JSON holds each measurement's median, minimum,
 maximum and per-run values). The probe deliberately runs the production build; its

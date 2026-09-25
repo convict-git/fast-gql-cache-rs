@@ -61,11 +61,10 @@ this.optimisticData = rootStore.stump;
 
 `optimisticData` is **never** the `Root` outside a `batch` update (while the update of a
 `batch` whose `optimistic` option is `false` or a layer id runs, `data` and
-`optimisticData` both point at the same store): with zero optimistic
-layers it is the `Stump`, and with layers it is the top layer, which shares the `Stump`'s
-group. The `Stump` owns its own
-`CacheGroup`, hence its own `keyMaker` `Trie`, hence its own memo entries, even with zero
-optimistic layers active:
+`optimisticData` both point at the same store): with zero optimistic layers it is the
+`Stump`, and with layers it is the top layer, which shares the `Stump`'s group. The
+`Stump` owns its own `CacheGroup`, hence its own `keyMaker` `Trie`, hence its own memo
+entries, even with zero optimistic layers active:
 
 ```
 optimisticData === data      : false
@@ -80,12 +79,13 @@ executeSelectionSet memo entries, 2 000-entity list, ZERO optimistic layers:
   root result === optimistic result : false
 ```
 
-And the second read gets no benefit from the first:
+And the second read gets no benefit from the first (2 000-entity list, the probe's
+section 8):
 
 | | time |
 | --- | --- |
-| first `optimistic: true` diff, *after* a warm root read | 52.77 ms |
-| the same diff once warm | 1.7 µs |
+| first `optimistic: true` diff, *after* a warm root read | 106.88 ms |
+| the same diff once warm | 4.0 µs |
 
 A warm root read buys the first optimistic read nothing at all — it is a full cold read.
 (After that, both sets stay warm independently; a write invalidates only the affected
@@ -112,20 +112,22 @@ will use. For such queries, the `executeSelectionSet` limit of 50 000 is effecti
 Every memo is a **bounded** LRU. Exceeding a bound is not a gentle degradation:
 
 Warm read cost as one query's entity count crosses the `executeSelectionSet` limit of
-50 000:
+50 000 (the query is the `G × R` shape of [§3.5](03-read-path.md#35-arrays) with
+`G = 100`; the probe's section 9):
 
 | entities in the result | memo entries held | warm read | over the limit? |
 | --- | --- | --- | --- |
-| 10 101 | 10 101 | 1.8 µs | no |
-| 40 101 | 40 101 | 1.7 µs | no |
-| 49 101 | 49 101 | 1.7 µs | no |
-| 50 101 | 50 000 | **2.17 ms** | **yes** |
-| 60 101 | 50 000 | **116.95 ms** | **yes** |
+| 10 101 | 10 101 | 5.6 µs | no |
+| 40 101 | 40 101 | 4.1 µs | no |
+| 49 101 | 49 101 | 3.8 µs | no |
+| 50 101 | 50 000 | **4.82 ms** | **yes** |
+| 60 101 | 50 000 | **246.08 ms** | **yes** |
 
-1.7 µs at 49 101 entities; 2.17 ms — 1 300× more — at 50 101. Nothing about the data
+3.8 µs at 49 101 entities; 4.82 ms — 1259× more — at 50 101. Nothing about the data
 changed; one thousand extra entities crossed a threshold.
 
-Past the bound it keeps getting worse: 2.17 ms at 1 % over, 117 ms at 20 % over.
+Past the bound it keeps getting worse: 4.82 ms at 0.2 % over (101
+entries), 246.08 ms at 20 % over (10 101 entries).
 
 The mechanism is precise. `optimism` trims its LRUs only when the outermost memoized call
 returns ([architecture §1.3](../architecture/01-foundations.md#13-wrycaches--the-lru-behind-every-memo)),
@@ -157,35 +159,41 @@ remembering to double the count for watched queries per [§4.2](#42-optimistic-r
 
 ## 4.4 Broadcast fan-out
 
-One write with `w` watchers registered on the same query, over a 2 000-entity list:
+One write with `W` watchers registered on the same query, over a 2 000-entity list. Each
+watch has its own callback, as each `ObservableQuery` does, and has already been broadcast
+once, so it holds a `lastDiff` (the probe's section 6):
 
-| `w` | write that **dirties** what they watch | scale | write that touches **nothing** they watch | scale |
+| `W` | write that **dirties** what they watch | scale | write that touches **nothing** they watch | scale |
 | --- | --- | --- | --- | --- |
-| 1 | 22.57 ms | — | 101.4 µs | — |
-| 10 | 22.18 ms | 0.10n | 136.4 µs | 0.13n |
-| 50 | 22.28 ms | 0.20n | 273.7 µs | 0.40n |
-| 200 | 23.20 ms | 0.26n | 695.9 µs | 0.64n |
+| 1 | 44.56 ms | — | 182.9 µs | — |
+| 10 | 47.72 ms | 0.11 | 133.3 µs | 0.07 |
+| 50 | 60.30 ms | 0.25 | 227.2 µs | 0.34 |
+| 200 | 95.99 ms | 0.40 | 577.8 µs | 0.64 |
 
 The two columns behave differently, and both results are useful.
 
-The **relevant** column is flat: 200 watchers cost 3 % more than one. Note what the
-absolute number is made of — most of those 22 ms is the write of the 2 000-entity list
-itself, and the *marginal* cost is about 3 µs per additional watcher. The watches share
-`StoreReader` memo entries, so the first one processed recomputes the invalidated subtrees
-and the remaining `W − 1` get memo hits. Broadcast cost is therefore governed by *how much
-was invalidated*, not by how many watchers there are — as long as they share a document
-([§4.5](#45-memo-fragmentation-by-document-identity)). The final `equal(lastDiff.result, diff.result)` in `broadcastWatch` stays cheap for
-the same reason structure sharing keeps React fast: untouched subtrees come back `===` and
-`equal` short-circuits on them ([§3.4](03-read-path.md#34-structure-sharing)).
+The **relevant** column grows linearly in `W` on top of a large fixed cost (which is why
+its `scale` column stays below `1.00`): from 44.56 ms with one watcher to 95.99 ms with
+200, about 258.4 µs per additional watcher. The single-watcher number is mostly the write
+of the 2 000-entity list and one re-read. The watches share every `StoreReader` memo
+entry, so the first one processed recomputes the invalidated entries and the remaining
+`W − 1` get memo hits. What each additional watch still pays is the **equality gate**:
+`broadcastWatch` compares the new result with the watch's `lastDiff.result` using
+`equal()`. The re-read rebuilt the `feed` array
+([§3.4](03-read-path.md#34-structure-sharing)), so `equal` enumerates and compares all `N`
+of its elements. Each element is `===` its predecessor, so the walk stops there, but it is
+still `O(N)` per watch. Broadcast cost is therefore one shared re-read plus `O(W · N)`
+comparisons — as long as the watchers share a document
+([§4.5](#45-memo-fragmentation-by-document-identity)).
 
-The **unrelated** column grows, but at roughly 3 µs per watcher — it is a per-watch
-constant, not a per-watch re-read. That is the memo gate (gate 1 in
-[architecture Part 6](../architecture/06-reactivity.md)):
-`maybeBroadcastWatch` is itself memoized, so a watch whose dependencies were not dirtied
-returns its cached value without computing a diff at all. The per-watch constant is the
-memo-key construction (`canonicalStringify` of `{ optimistic, id, variables }` plus a
-`Trie` lookup). Its key is built from the *store's* `CacheGroup` — the
-`Stump`'s group for `optimistic: true` watches, the root's otherwise:
+The **unrelated** column grows too, by about 2.0 µs per watcher — a per-watch constant,
+not a per-watch re-read. That is the memo gate (gate 1 in
+[architecture Part 6](../architecture/06-reactivity.md)): `maybeBroadcastWatch` is itself
+memoized, so a watch whose dependencies were not dirtied returns its cached value without
+computing a diff at all. The per-watch constant is the memo-key construction
+(`canonicalStringify` of `{ optimistic, id, variables }` plus a `Trie` lookup). Its key is
+built from the *store's* `CacheGroup` — the `Stump`'s group for `optimistic: true`
+watches, the root's otherwise:
 
 ```ts
 makeCacheKey: (c: Cache.WatchOptions) => {
@@ -205,29 +213,42 @@ makeCacheKey: (c: Cache.WatchOptions) => {
 
 <sub>`inMemoryCache.ts` — `maybeBroadcastWatch`'s `makeCacheKey`</sub>
 
-`c.callback` is part of the key on purpose, so `W` watchers on one query occupy `W` distinct
-`maybeBroadcastWatch` entries even though they share every `StoreReader` entry underneath.
-Budget for that against `cacheSizes["inMemoryCache.maybeBroadcastWatch"]`
-([§9.3](09-optimization-playbook.md#93-tuning-knobs-the-cache-actually-exposes)). Both
-columns grow by the same ~3 µs per watcher; the gap between them is the cost of the write
-itself (a 2 000-entity list against a single small entity), not per-watcher work. That is
-the practical meaning of the shared memo: `W` watchers of one document cost one re-read
-plus `W` cheap checks.
+`c.callback` is part of the key on purpose, so `W` watchers on one query occupy `W`
+distinct `maybeBroadcastWatch` entries even though they share every `StoreReader` entry
+underneath. (Conversely, watches that share the query, the variables *and* the callback
+function share one entry and are broadcast once.) Budget for that against
+`cacheSizes["inMemoryCache.maybeBroadcastWatch"]`
+([§9.3](09-optimization-playbook.md#93-tuning-knobs-the-cache-actually-exposes)).
+
+That is the practical meaning of the shared memo: `W` watchers of one document cost one
+re-read plus `W` key builds and `W` walks of the rebuilt part of the result — `O(W · V)`
+when nothing they read changed, `O(W · (V + P))` when it did, with `P` the rebuilt part
+(`O(N)` for a list; [§1.2](01-cost-model.md#12-headline-complexity-table)).
 
 ## 4.5 Memo fragmentation by document identity
 
-Hold the watcher count fixed at 50 and vary only whether they share a document node:
+Hold the watcher count fixed at 50 and vary only whether they share a document node. The
+50 distinct documents select exactly the same fields and differ only in their operation
+name (`Distinct0` … `Distinct49`), so each is parsed into its own AST:
 
-| 50 watchers, one write | time |
-| --- | --- |
-| all on the **same** document | 22.78 ms |
-| on 50 **structurally identical but separately parsed** documents | **3.37 s** |
+| 50 watchers, one write over a 2 000-entity list | time | vs. same document |
+| --- | --- | --- |
+| all on the **same** document | 58.12 ms | 1× |
+| on 50 **separately parsed** documents, `executeSelectionSet` limit raised to 200 000 | 807.22 ms | 13.9× |
+| on 50 **separately parsed** documents, default limit (50 000) | **7.42 s** | **128×** |
 
-**148× slower for the same query text, the same variables, and the same data.**
+**128× slower for the same selections, the same variables, and the same data.** Two
+effects stack:
 
-This is the sharpest performance cliff in the whole cache, and it is invisible in the data:
-the memo key includes the `SelectionSetNode` **object**, so two structurally identical
-queries parsed separately share **nothing**.
+1. **No sharing.** The memo key includes the `SelectionSetNode` **object**, so two
+   structurally identical queries parsed separately share **nothing**: each of the 50
+   watches re-reads the list on its own. That alone is the raised-limit row.
+2. **The LRU cliff.** 50 documents × 2 001 entities need 100 050 `executeSelectionSet`
+   entries, twice the default limit of 50 000, so every broadcast also pays the cliff of
+   [§4.3](#43-the-memo-lru-cliff): each watch's read recomputes what the previous watch's
+   trim evicted. That is the rest of the gap.
+
+This is the sharpest performance cliff in the whole cache, and it is invisible in the data.
 
 ```mermaid
 flowchart TB
@@ -270,23 +291,27 @@ Three mechanisms normally prevent this, and all three must be working:
 
 Building documents dynamically (string interpolation into `gql`, per-render document
 construction, or a custom `DocumentTransform` with `cache: false` that is not itself
-memoized) defeats all three, multiplies memo entries by the number of distinct documents,
-and pushes the entry count past the 50 000-entry LRU, at which point every broadcast
+memoized) defeats all three and multiplies memo entries by the number of distinct documents,
+which can push the entry count past the 50 000-entry LRU, at which point every broadcast
 recomputes a large share of every read ([§4.3](#43-the-memo-lru-cliff)).
 
 ## 4.6 Batching
 
-100 writes with 1 watcher on a 2 000-entity list:
+100 writes, each changing one field of a different item (`writeFragment` on `Item:i<k>`),
+with 1 watcher on the 2 000-entity list (the probe's section 7):
 
 | | time |
 | --- | --- |
-| 100 separate writes (100 broadcasts) | 5.42 ms |
-| the same 100 writes inside one `cache.batch` | 1.54 ms |
-| | **3.5× faster** |
+| 100 separate writes (100 broadcasts) | 1.74 s |
+| the same 100 writes inside one `cache.batch` | 32.50 ms |
+| | **53× faster** |
 
-`txCount` ([architecture §6.3](../architecture/06-reactivity.md#63-txcount--broadcast-batching)) suppresses broadcasts inside a transaction. The saving is not the writes —
-those cost the same — it is the **avoided re-reads**: each broadcast recomputes every dirty
-watcher's diff, and a diff over a large list is the dominant term.
+`txCount` ([architecture §6.3](../architecture/06-reactivity.md#63-txcount--broadcast-batching))
+suppresses broadcasts inside a transaction. The saving is not the writes — those cost the
+same — it is the **avoided broadcasts**. Unbatched, every write dirties the watch, and its
+broadcast re-reads the list (`O(N)`, [§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept))
+and compares the result with the previous one (`O(N)`, [§4.4](#44-broadcast-fan-out)):
+`k` separate writes cost `k` of those, a batch costs one.
 
 <!-- nav:bottom -->
 

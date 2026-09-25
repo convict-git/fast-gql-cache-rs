@@ -2,24 +2,36 @@
 
 [Documentation](../README.md) › [Performance guide](README.md) · [← Part 5](05-layers-and-optimistic-updates.md) · [Part 7 →](07-structural-stress.md)
 
-Over a store of `n` entities:
+Over a list of `N` entities, so a store of `S = N + 1` entries (the probe's section 12):
 
-| `n` | evict entity | evict field | `gc()` collecting **nothing** | scale | `gc()` collecting `n` | scale | `extract()` | scale | `restore()` | scale |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 000 | 22.1 µs | 20.7 µs | 1.03 ms | — | 3.91 ms | — | 175 µs | — | 1.54 ms | — |
-| 5 000 | 21.1 µs | 21.7 µs | 5.16 ms | 1.00n | 19.93 ms | 1.02n | 1.20 ms | 1.38n | 8.89 ms | 1.15n |
-| 20 000 | 22.5 µs | 23.2 µs | 27.41 ms | 1.33n | 83.55 ms | 1.05n | 6.04 ms | 1.25n | 37.66 ms | 1.06n |
+| `N` | evict entity | evict field | `gc()` collecting **nothing**, right after a write | scale | `gc()` collecting nothing, again | scale | `gc()` collecting `N` | scale | `extract()` | scale | `restore()` | scale | `writeQuery` of the same list |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 000 | 58.5 µs | 45.3 µs | 1.38 ms | — | 263.6 µs | — | 6.66 ms | — | 456.2 µs | — | 3.21 ms | — | 17.83 ms |
+| 5 000 | 43.2 µs | 39.1 µs | 10.98 ms | 1.59 | 5.54 ms | 4.20 | 38.47 ms | 1.15 | 2.03 ms | 0.89 | 15.71 ms | 0.98 | 86.69 ms |
+| 20 000 | 55.1 µs | 55.9 µs | 55.80 ms | 1.27 | 29.68 ms | 1.34 | 169.58 ms | 1.10 | 10.62 ms | 1.30 | 66.55 ms | 1.06 | 365.65 ms |
 
 Three results worth internalizing:
 
-- **Eviction is flat** — ~22 µs whatever the store size. It touches one entity.
-- **`gc()` costs `O(store)` even when it collects nothing** — 27.41 ms over a 20 000-entity
-  store that is entirely reachable. A no-op `gc()` is not free; it is a full mark-and-sweep
-  ([§6.1](#61-gc-is-ostore-unconditionally)). Collecting adds the per-entity deletion cost
-  on top (83.55 ms when all 20 000 entities go).
-- **`restore()` is ~4.8× cheaper than writing the same data** (37.66 ms against the
-  182.46 ms cold write of [§2.7](02-write-path.md#27-measured-write-scaling), same list
-  shape) because the snapshot is already normalized ([§6.3](#63-restore-versus-write)).
+- **Eviction is flat** — 58.5 µs, 43.2 µs and 55.1 µs for the three store sizes. It
+  touches one entity, `O(F)`.
+- **`gc()` costs `O(S)` even when it collects nothing** — 55.80 ms
+  over a 20 000-entity store that is entirely reachable, measured right after the write that
+  created it, so every entity's child-reference memo is cold and every field is walked. A
+  second `gc()` reuses those memos and still costs 29.68 ms:
+  the store copy and the sweep remain. A no-op `gc()` is not free; it is a full
+  mark-and-sweep ([§6.1](#61-gc-is-ostore-unconditionally)). Collecting adds the per-entity
+  deletion cost on top (169.58 ms when all 20 000 entities go).
+- **`restore()` is 5.5× cheaper than writing the same data** (66.55 ms against 365.65 ms
+  at `N = 20 000`, both measured in the same process) because the snapshot is already
+  normalized ([§6.3](#63-restore-versus-write)).
+
+`extract()` is `O(S)` — one shallow copy of the entity map, plus sorting the extra
+retained root ids for `__META` — and `restore()` is `O(S · F)`.
+
+Several `scale` values in the table sit above `1.00` although every operation in it is
+linear in `S` by the code: most of all the two no-op `gc()` columns (1.59 and 4.20 for the
+1 000 → 5 000 step). The probe does not isolate why. Read them as linear work whose
+per-entity cost rises as the store grows, not as a superlinear algorithm.
 
 ## 6.1 `gc()` is `O(store)` unconditionally
 
@@ -67,10 +79,10 @@ memory reclamation tool, and it makes the **next** read of every query cold.
 Evicting one entity is `O(F)` — `delete` routes through `modify` with a `DELETE` modifier
 for every field, then dirties each removed field plus `__exists`. Evicting one field is
 also `O(F)`, not `O(1)`: `modify` visits every field of the entity to find the ones whose
-name matches. But every read that had a
-dependency on it is now invalidated, and every list containing a reference to it must be
-re-filtered by `canRead` on the next read ([§3.5](03-read-path.md#35-arrays)). The eviction is fast; the re-reads it
-triggers are the cost.
+name matches. But every read that had a dependency on it is now invalidated, and every
+list containing a reference to it must be re-filtered by `canRead` on the next read
+([§3.5](03-read-path.md#35-arrays)). The eviction is fast; the re-reads it triggers are
+the cost.
 
 One detail that matters with layers active: `InMemoryCache.evict` calls
 `this.optimisticData.evict(options, this.data)`, and `EntityStore.evict` recurses to its
