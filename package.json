@@ -19,6 +19,9 @@
     "dist",
     "pkg"
   ],
+  "engines": {
+    "node": ">=22.21.0 <23 || >=24.7.0"
+  },
   "scripts": {
     "clean": "rimraf dist coverage",
     "wasm:dev": "bash scripts/wasm-pack.sh --dev",
@@ -28,12 +31,17 @@
     "dev": "npm run wasm:dev && npm run build:ts -- --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json",
     "lint": "eslint --max-warnings 0 .",
-    "format": "prettier --config apollo-client-sm/.prettierrc --write \"src/**/*.ts\" \"config/**/*.ts\" \"*.json\" \"wasm/**/*.rs\"",
-    "check:format": "prettier --config apollo-client-sm/.prettierrc --check \"src/**/*.ts\" \"config/**/*.ts\" \"*.json\"",
+    "lint:rust": "cargo clippy --manifest-path wasm/Cargo.toml --target wasm32-unknown-unknown -- -D warnings",
+    "format": "prettier --config apollo-client-sm/.prettierrc --write \"src/**/*.ts\" \"config/**/*.ts\" \"*.json\" && cargo fmt --manifest-path wasm/Cargo.toml",
+    "check:format": "prettier --config apollo-client-sm/.prettierrc --check \"src/**/*.ts\" \"config/**/*.ts\" \"*.json\" && cargo fmt --manifest-path wasm/Cargo.toml --check",
     "postinstall": "patch-package",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs --watch",
-    "test:ci": "npm run wasm:build && node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs --ci"
+    "test:ci": "npm run wasm:build && node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./jest.config.mjs --ci",
+    "probe:parity": "npm run build:ts && node docs/probes/parity.mjs",
+    "probe:compare": "npm run build:ts && node docs/probes/compare-caches.mjs",
+    "test:tooling": "npm run build:ts && node --test docs/probes/probes.test.mjs scripts/bench/*.test.mjs",
+    "bench:pr": "node scripts/bench/pr.mjs"
   },
   "repository": {
     "type": "git",

@@ -7,7 +7,9 @@ type ConsoleSpy<M extends ConsoleMethod> = Record<
   [Symbol.dispose](): void;
 };
 
-export function spyOnConsole<M extends ConsoleMethod>(method: M): ConsoleSpy<M> {
+export function spyOnConsole<M extends ConsoleMethod>(
+  method: M
+): ConsoleSpy<M> {
   const spy = jest.spyOn(console, method).mockImplementation(() => {});
 
   return {
@@ -17,4 +19,3 @@ export function spyOnConsole<M extends ConsoleMethod>(method: M): ConsoleSpy<M> 
     },
   } as ConsoleSpy<M>;
 }
-

@@ -1,0 +1,8 @@
+# Pinned so every machine and CI builds the WASM with the same compiler. The repo root
+# (not wasm/) is where rustup looks: it resolves this file from the working directory,
+# and the npm scripts run cargo/wasm-pack from here.
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]

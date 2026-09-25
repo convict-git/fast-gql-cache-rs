@@ -1,0 +1,77 @@
+# Nightly: measures `main` (InMemoryCacheRs and Apollo's InMemoryCache, same
+# runner) when it has changed since the last recorded run, and appends the
+# result to the `benchmarks` branch (history.jsonl, README.md, index.html).
+name: Benchmark history
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: benchmark-history
+  cancel-in-progress: false
+
+jobs:
+  history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          submodules: true
+      - uses: ./.github/actions/setup
+
+      - name: Check out the history branch
+        run: |
+          if git fetch --depth 1 origin benchmarks:refs/remotes/origin/benchmarks; then
+            git worktree add -B benchmarks history origin/benchmarks
+          else
+            git worktree add --orphan -b benchmarks history
+          fi
+
+      - name: Skip if main has not changed
+        id: check
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          last=$(node scripts/bench/history.mjs last-sha history)
+          if [ "$EVENT" = schedule ] && [ "$last" = "$(git rev-parse HEAD)" ]; then
+            echo "main is still at $last; nothing to measure."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.skip != 'true'
+        name: Measure
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm run wasm:build
+          npm run build:ts
+          node scripts/bench/run.mjs --out result.json --runs=3
+          node scripts/bench/report.mjs result.json --out report.md --summary summary.json --run-url "$RUN_URL"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - if: steps.check.outputs.skip != 'true'
+        name: Record
+        run: |
+          sha=$(git rev-parse HEAD)
+          node scripts/bench/history.mjs append history summary.json
+          mkdir -p history/runs
+          cp result.json "history/runs/$(date -u +%F)-${sha::7}.json"
+          cd history
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Benchmark main at ${sha::7}"
+          git push origin HEAD:benchmarks
+
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-history-result
+          path: result.json

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Lint and typecheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      - run: npm run check:format
+      - run: npm run lint
+      - run: npm run lint:rust
+      # typecheck resolves ../pkg/fast_gql_cache_rs.js, so the wasm package must exist.
+      - run: npm run wasm:dev
+      - run: npm run typecheck
+
+  test:
+    name: Tests and behaviour parity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+
+      # Release wasm build, then the InMemoryCache parity suite.
+      - run: npm run test:ci
+      - run: npm run test:tooling
+      - run: npm run probe:parity

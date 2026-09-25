@@ -9,8 +9,12 @@
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --quick
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --json > results.json
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --sections=1,13
+ *   node --expose-gc docs/probes/cache-performance-probe.mjs --cache=rs
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5 --save=agg.json
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --load=agg.json
+ *
+ * `--cache=rs` measures this repository's `InMemoryCacheRs` instead (see
+ * `select-cache.mjs`); `compare-caches.mjs` reports both side by side.
  *
  * `--save` writes the aggregated per-run medians of a `--runs` measurement to a
  * JSON file; `--load` re-renders the report from such a file without measuring
@@ -52,9 +56,10 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { InMemoryCache } from "@apollo/client/cache";
 import { cacheSizes } from "@apollo/client/utilities";
 import { gql } from "graphql-tag";
+
+import { cacheName, InMemoryCache } from "./select-cache.mjs";
 
 const QUICK = process.argv.includes("--quick");
 const JSON_OUT = process.argv.includes("--json");
@@ -289,6 +294,7 @@ function aggregateRuns() {
           fileURLToPath(import.meta.url),
           "--json",
           `--sections=${k}`,
+          `--cache=${cacheName}`,
           ...(QUICK ? ["--quick"] : []),
         ],
         { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 3_600_000 }
@@ -324,6 +330,7 @@ function aggregateRuns() {
 function aggregateToJson(aggregate) {
   return {
     meta: {
+      cache: cacheName,
       node: process.version,
       platform: `${process.platform}/${process.arch}`,
       quick: QUICK,
@@ -341,6 +348,13 @@ if (LOAD_PATH && !IS_CHILD) {
   if (saved.meta.quick !== QUICK) {
     throw new Error(
       `${LOAD_PATH} was measured ${saved.meta.quick ? "with" : "without"} --quick; pass the same flag to render it`
+    );
+  }
+  // Files saved before --cache existed measured Apollo's cache.
+  const savedCache = saved.meta.cache ?? "apollo";
+  if (savedCache !== cacheName) {
+    throw new Error(
+      `${LOAD_PATH} was measured with --cache=${savedCache}; pass the same flag to render it`
     );
   }
   AGGREGATE = new Map(saved.results.map(({ label, ...a }) => [label, a]));
@@ -1905,6 +1919,7 @@ if (
           fileURLToPath(import.meta.url),
           ...(QUICK ? ["--quick"] : []),
           "--child-build",
+          `--cache=${cacheName}`,
         ],
         { encoding: "utf8", timeout: 600_000 }
       );
@@ -1973,6 +1988,7 @@ if (!JSON_OUT) {
   );
 }
 const meta = {
+  cache: InMemoryCache.name,
   node: process.version,
   platform: `${process.platform}/${process.arch}`,
   quick: QUICK,

@@ -8,5 +8,11 @@
     "paths": {}
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "pkg", "apollo-client-sm", "src/**/__tests__/**"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "pkg",
+    "apollo-client-sm",
+    "src/**/__tests__/**"
+  ]
 }

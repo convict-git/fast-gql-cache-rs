@@ -45,22 +45,27 @@ table of contents.
 - [Performance probe](docs/probes/cache-performance-probe.mjs): produces every table in the
   performance guide; its output is committed as
   [`cache-performance-probe.log`](docs/probes/cache-performance-probe.log)
+- [Benchmarking](docs/benchmarking.md): how each PR's performance effect is measured
+  (the `benchmark` label) and tracked nightly on the `benchmarks` branch
 
 <!-- toc:end -->
 
 ## Setup dev environment
 
-```bash
-git config submodule.apollo-client-sm.url https://github.com/apollographql/apollo-client.git
-git submodule update --init --recursive --depth 1
-npm install
+Versions are pinned: Node in `.nvmrc`, Rust (with the `wasm32-unknown-unknown` target,
+`rustfmt` and `clippy`) in `rust-toolchain.toml`, dependencies in `package-lock.json` and
+`wasm/Cargo.lock`. You need `git`, [`nvm`](https://github.com/nvm-sh/nvm) and
+[`rustup`](https://rustup.rs).
 
-# Skip the toolchain update if the nightly wasm32 target is already installed.
-# On overlayfs-backed containers (common in cloud CI/agents), rustup's default
-# atomic rename can fail with EXDEV during an update; RUSTUP_PERMIT_COPY_RENAME
-# tells it to use a copy fallback instead.
-if ! rustup target list --toolchain nightly --installed 2>/dev/null | grep -q '^wasm32-unknown-unknown'; then
-  export RUSTUP_PERMIT_COPY_RENAME=true
-  rustup toolchain install nightly --profile minimal --target wasm32-unknown-unknown
-fi
+```bash
+git submodule update --init --recursive --depth 1
+nvm install        # the Node version in .nvmrc
+npm ci
+# Installs the Rust toolchain rust-toolchain.toml pins. RUSTUP_PERMIT_COPY_RENAME
+# avoids an EXDEV rename failure on overlayfs-backed containers (cloud CI/agents).
+RUSTUP_PERMIT_COPY_RENAME=true rustup toolchain install
+npm run wasm:dev   # builds pkg/, which typecheck and tests import
+npm test
 ```
+
+CI (`.github/workflows/ci.yml`) runs the same steps.
