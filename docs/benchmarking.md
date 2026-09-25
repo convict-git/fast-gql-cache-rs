@@ -2,7 +2,7 @@
 
 How this repository measures whether a change makes `InMemoryCacheRs` faster or slower,
 per PR and over time. The measurements come from the
-[performance probe](probes/cache-performance-probe.mjs) (116 measurements in 14 sections);
+[performance probe](probes/cache-performance-probe.mjs) (200 measurements in 14 sections);
 everything below is about running it so the numbers can be trusted.
 
 ## What makes a number trustworthy
@@ -10,17 +10,23 @@ everything below is about running it so the numbers can be trusted.
 Shared CI runners are noisy: a single run swings microsecond measurements by tens of
 percent even when nothing changed. So every comparison follows four rules.
 
-1. **Same machine, same job, interleaved.** Base and head are measured by one runner, in
-   alternating order, never compared with numbers from another machine.
+1. **Same machine, same job, interleaved, symmetric.** Base and head are measured by one
+   runner, in alternating order, never compared with numbers from another machine. Each
+   side runs the same probe (head's, copied into the base checkout) inside its own
+   checkout, against its own build and `node_modules`, so no process mixes two copies of
+   Apollo Client or `graphql`. (Mixing them skewed the first benchmarks by up to 10×.)
 2. **Apollo's `InMemoryCache` is the noise control.** It is identical code on both sides,
    so however far its timings move between the base and head runs is that job's noise.
    The *noise band* is the 90th percentile of that movement across all measurements.
 3. **Significant means both:** the median moved by more than the noise band, **and** the
-   base and head runs do not overlap at all. Anything else is reported as within noise.
+   base and head runs do not overlap at all. With 7 runs per side, two sets of runs of
+   identical code fail to overlap by chance only 0.06% of the time (2 in C(14, 7)), so
+   across 200 measurements a phantom change shows up about once in eight benchmarks.
+   Anything else is reported as within noise.
 4. **Ratios, not absolute times.** Head ÷ base shows what a PR did; `InMemoryCacheRs` ÷
    `InMemoryCache` shows how far the port has come. Neither depends on the runner.
 
-Every section runs in a fresh Node process, 5 times per configuration (a configuration
+Every section runs in a fresh Node process, 7 times per configuration (a configuration
 is one cache on one side), with 25 timed repetitions per measurement.
 
 ## On a PR
@@ -28,11 +34,15 @@ is one cache on one side), with 25 timed repetitions per measurement.
 Add the **`benchmark`** label. [`benchmark.yml`](../.github/workflows/benchmark.yml)
 compares the PR head with its merge base, splits the sections across four parallel jobs
 (each measures all four configurations of its sections on one runner), and posts one
-comment on the PR, updated in place. It takes about 75 minutes: the slowest group of
-sections (and section 7 on its own) runs for over an hour on GitHub's runners, which
-measured about 2.6× slower than a recent laptop. The label is removed
-when the comment is posted; add it again to re-run after new pushes. Until then, the
-comment says the results are for an older commit.
+comment on the PR, updated in place. It takes about 1 h 45 min: the slowest group of
+sections (and section 7 on its own) is that long on GitHub's runners, which measured
+about 2.6× slower than a recent laptop.
+
+The label stays on: every push re-runs the benchmark (a new push cancels the running
+one), and **merging waits for it**. The `Benchmark gate` check, required on `main`,
+passes on a PR without the label, and on a labelled PR only once a benchmark of its
+current commit has succeeded. Removing the label opts out and releases the gate.
+Changing other labels neither cancels a running benchmark nor passes the gate.
 
 You can also run the workflow by hand from the Actions tab (“Benchmark”, *Run workflow*)
 for any branch, against any base, optionally posting to a PR.
@@ -68,7 +78,8 @@ npm run bench:pr -- --base main --quick --sections=1,2   # a quick look
 ```
 
 `bench:pr` builds this checkout, builds the base in a temporary git worktree with its
-own lockfile and pinned toolchain, measures both, and prints the comment. Useful
+own lockfile and pinned toolchain, copies head's probe into it, measures both, and
+prints the comment. Useful
 options: `--runs=N`, `--sections=1,2,3`, `--quick` (7 repetitions instead of 25),
 `--out result.json` (keep the raw samples instead of printing). `npm run
 probe:compare` is the lighter tool for this checkout alone: both caches, no base.
