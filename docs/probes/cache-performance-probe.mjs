@@ -1,8 +1,8 @@
 /**
  * Executable performance probe for Apollo Client's `InMemoryCache` (v4.2.11).
  *
- * Companion to `docs/apollo-client-inmemory-cache-performance.md`: every cost
- * claim in that document is produced by this file. Re-run it to re-derive the
+ * Companion to the performance guide (`docs/performance/`): every measured cost
+ * claim in that guide is produced by this file. Re-run it to re-derive the
  * numbers on a new machine or a new Apollo version.
  *
  *   node --expose-gc docs/probes/cache-performance-probe.mjs
@@ -113,8 +113,9 @@ function note(text) {
 
 /**
  * Prints a scaling table. `rows` is [[sizeLabel, size, {col: ns}], ...].
- * Adds a "x" column per measurement showing growth against the previous row,
- * and a "x/n" column showing growth normalised by the size ratio (1.00 = linear).
+ * Adds a "scale" column per measurement: the growth against the previous row
+ * divided by the size ratio (1.00n = linear; a quadratic step reads as the
+ * size ratio itself, e.g. 10.00n for a 10x step).
  */
 function table(title, columns, rows) {
   if (JSON_OUT) return;
@@ -143,7 +144,7 @@ function table(title, columns, rows) {
     prevSize = size;
   }
   console.log(
-    `  (scale = growth factor divided by the size ratio: 1.00n = linear, 2.00n = quadratic)`
+    `  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)`
   );
 }
 
