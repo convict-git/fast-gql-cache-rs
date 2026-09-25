@@ -11,6 +11,9 @@
  * to both probe runs. Requires the built `dist/` (`npm run build:ts`).
  */
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PROBE = fileURLToPath(
@@ -23,9 +26,18 @@ const passThrough = process.argv
 
 function measure(cache) {
   if (!JSON_OUT) process.stderr.write(`measuring --cache=${cache}...\n`);
+  // Results come through a file: stdout also carries what the cache prints.
+  const dir = mkdtempSync(join(tmpdir(), "compare-caches-"));
+  const jsonFile = join(dir, "result.json");
   const child = spawnSync(
     process.execPath,
-    ["--expose-gc", PROBE, "--json", `--cache=${cache}`, ...passThrough],
+    [
+      "--expose-gc",
+      PROBE,
+      `--json-out=${jsonFile}`,
+      `--cache=${cache}`,
+      ...passThrough,
+    ],
     {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
@@ -38,7 +50,8 @@ function measure(cache) {
     );
     process.exit(1);
   }
-  const { meta, results } = JSON.parse(child.stdout);
+  const { meta, results } = JSON.parse(readFileSync(jsonFile, "utf8"));
+  rmSync(dir, { recursive: true, force: true });
   // Aggregated runs (--runs=R) report the median as `median`, single runs as `ns`.
   return { meta, ns: new Map(results.map((r) => [r.label, r.median ?? r.ns])) };
 }

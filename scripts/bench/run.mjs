@@ -17,8 +17,16 @@
  * drift over the job's lifetime hits base and head alike.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
@@ -81,6 +89,9 @@ const configs = Object.keys(sides).flatMap((side) =>
 
 /** label -> config key -> per-run medians (ns) */
 const samples = {};
+// The probe writes its results to a file (--json-out): stdout also carries
+// whatever the cache under test prints, and a base build may be noisy.
+const resultDir = mkdtempSync(join(tmpdir(), "bench-run-"));
 
 for (let r = 0; r < runs; r++) {
   for (const section of sections) {
@@ -90,12 +101,13 @@ for (let r = 0; r < runs; r++) {
       process.stderr.write(
         `  run ${r + 1}/${runs}, section ${section}, ${key}\n`
       );
+      const childJson = join(resultDir, `${r}-${section}-${key}.json`);
       const child = spawnSync(
         process.execPath,
         [
           "--expose-gc",
           PROBE,
-          "--json",
+          `--json-out=${childJson}`,
           `--sections=${section}`,
           `--cache=${cache}`,
           ...(quick ? ["--quick"] : []),
@@ -112,12 +124,15 @@ for (let r = 0; r < runs; r++) {
         );
         process.exit(1);
       }
-      for (const { label, ns } of JSON.parse(child.stdout).results) {
+      for (const { label, ns } of JSON.parse(readFileSync(childJson, "utf8"))
+        .results) {
         ((samples[label] ??= {})[key] ??= []).push(ns);
       }
     }
   }
 }
+
+rmSync(resultDir, { recursive: true, force: true });
 
 const meta = {
   schema: 1,
