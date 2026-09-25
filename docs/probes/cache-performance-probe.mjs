@@ -5,7 +5,7 @@
  * claim in that guide is produced by this file. Re-run it to re-derive the
  * numbers on a new machine or a new Apollo version.
  *
- *   node --expose-gc docs/probes/cache-performance-probe.mjs
+ *   node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --quick
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --json > results.json
  *
@@ -17,21 +17,54 @@
  *
  * Method
  * ------
- * Each measurement runs `setup` (untimed) then `run` (timed) `reps` times and
- * reports the MEDIAN, which is far more robust than the mean against GC pauses
- * and JIT tiering. Scaling columns divide adjacent medians so the growth rate
- * is visible without a curve fit.
+ * Each measurement runs `setup` (untimed) then `run` (timed), first `warmup`
+ * times untimed and then `reps` times timed, and keeps the MEDIAN of the timed
+ * repetitions, which is far more robust than the mean against GC pauses and JIT
+ * tiering.
+ *
+ * With `--runs=R` (R > 1) the whole measurement is repeated in R independent
+ * Node processes, and every reported timing is the MEDIAN ACROSS THE R RUNS of
+ * the per-run medians. Separate processes matter: JIT state, heap layout and GC
+ * timing differ from process to process, and a single process can be unlucky
+ * as a whole. The summary then reports the run-to-run spread of every
+ * measurement, so a reader can see how much a number moves between runs.
+ * Deterministic observations (memo sizes, counts, identities) do not vary and
+ * are computed once, in the reporting process.
+ *
+ * Scaling columns divide adjacent (aggregated) values so the growth rate is
+ * visible without a curve fit.
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { InMemoryCache } from "@apollo/client/cache";
+import { cacheSizes } from "@apollo/client/utilities";
 import { gql } from "graphql-tag";
 
 const QUICK = process.argv.includes("--quick");
 const JSON_OUT = process.argv.includes("--json");
 const IS_CHILD = process.argv.includes("--child-dev");
+const RUNS = Math.max(
+  1,
+  Number(
+    (process.argv.find((a) => a.startsWith("--runs=")) || "--runs=1").slice(
+      "--runs=".length
+    )
+  ) || 1
+);
+const REPS = QUICK ? 7 : 25;
+const WARMUP = 3;
 const results = [];
+const seenLabels = new Set();
+
+/**
+ * Aggregated timings, keyed by label, when this process only REPORTS the
+ * medians of `RUNS` independent measuring processes (see `aggregateRuns`).
+ * While it is set, `bench` looks timings up instead of measuring them.
+ */
+let AGGREGATE = null;
+/** Whether the development-build child reported frozen results. */
+let devFrozen;
 
 const PROBE_QUERY = gql`
   query DevBuildProbe {
@@ -65,7 +98,16 @@ function median(values) {
 }
 
 /** Timed measurement. `setup` is re-run before every rep and is never timed. */
-function bench(label, { setup, run, reps = QUICK ? 7 : 25, warmup = 3 }) {
+function bench(label, { setup, run, reps = REPS, warmup = WARMUP }) {
+  if (seenLabels.has(label)) {
+    throw new Error(`Duplicate measurement label: ${label}`);
+  }
+  seenLabels.add(label);
+  if (AGGREGATE) {
+    const agg = AGGREGATE.get(label);
+    if (!agg) throw new Error(`No aggregated value for: ${label}`);
+    return agg.median;
+  }
   for (let i = 0; i < warmup; i++) {
     const state = setup ? setup() : undefined;
     run(state);
@@ -112,15 +154,18 @@ function note(text) {
 }
 
 /**
- * Prints a scaling table. `rows` is [[sizeLabel, size, {col: ns}], ...].
+ * Prints a scaling table. `rows` is [[sizeLabel, size, {col: ns}], ...], and
+ * `sizeName` names the variable in the first column (the symbol the
+ * performance guide uses for it, e.g. "N" for list length).
  * Adds a "scale" column per measurement: the growth against the previous row
- * divided by the size ratio (1.00n = linear; a quadratic step reads as the
- * size ratio itself, e.g. 10.00n for a 10x step).
+ * divided by the size ratio (1.00 = linear; a constant cost reads as
+ * 1/ratio; a quadratic step reads as the size ratio itself, e.g. 4.00 for a
+ * 4x step).
  */
-function table(title, columns, rows) {
+function table(title, columns, rows, sizeName) {
   if (JSON_OUT) return;
   console.log(`\n  ${title}`);
-  const head = ["n".padStart(8)];
+  const head = [sizeName.padStart(8)];
   for (const c of columns) head.push(c.padStart(13), "scale".padStart(8));
   console.log(`  ${head.join(" ")}`);
   console.log(`  ${"-".repeat(head.join(" ").length)}`);
@@ -134,7 +179,7 @@ function table(title, columns, rows) {
       if (prev && prevSize) {
         const growth = values[c] / prev[c];
         const sizeRatio = size / prevSize;
-        cells.push(`${(growth / sizeRatio).toFixed(2)}n`.padStart(8));
+        cells.push(`${(growth / sizeRatio).toFixed(2)}`.padStart(8));
       } else {
         cells.push("-".padStart(8));
       }
@@ -144,8 +189,97 @@ function table(title, columns, rows) {
     prevSize = size;
   }
   console.log(
-    `  (scale = growth factor divided by the size ratio: 1.00n = linear; quadratic = the size ratio itself)`
+    `  (scale = growth factor / size ratio of adjacent rows: 1.00 = linear, 1/ratio = constant, ratio = quadratic)`
   );
+}
+
+/** Counts `execSelectionSetImpl` / `execSubSelectedArrayImpl` calls (memo misses). */
+function countRecomputes(cache) {
+  const reader = cache["storeReader"];
+  const counts = { selectionSets: 0, arrays: 0 };
+  const sel = reader["execSelectionSetImpl"].bind(reader);
+  const arr = reader["execSubSelectedArrayImpl"].bind(reader);
+  reader["execSelectionSetImpl"] = (options) => {
+    counts.selectionSets++;
+    return sel(options);
+  };
+  reader["execSubSelectedArrayImpl"] = (options) => {
+    counts.arrays++;
+    return arr(options);
+  };
+  counts.reset = () => {
+    counts.selectionSets = 0;
+    counts.arrays = 0;
+  };
+  return counts;
+}
+
+/** Runs `fn` with a temporary `cacheSizes` override, restoring it afterwards. */
+function withCacheSize(key, value, fn) {
+  const had = Object.prototype.hasOwnProperty.call(cacheSizes, key);
+  const saved = cacheSizes[key];
+  cacheSizes[key] = value;
+  try {
+    return fn();
+  } finally {
+    if (had) cacheSizes[key] = saved;
+    else delete cacheSizes[key];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-run aggregation
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs the measuring part of this probe in `RUNS` independent child processes
+ * (each one a plain `--json` run) and returns, per label, the median, minimum
+ * and maximum of the per-run medians.
+ */
+function aggregateRuns() {
+  const perLabel = new Map();
+  let devFrozen;
+  for (let r = 0; r < RUNS; r++) {
+    if (!JSON_OUT) {
+      process.stderr.write(`  measuring: run ${r + 1} of ${RUNS}...\n`);
+    }
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--expose-gc",
+        fileURLToPath(import.meta.url),
+        "--json",
+        ...(QUICK ? ["--quick"] : []),
+      ],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 3_600_000 }
+    );
+    if (child.status !== 0) {
+      throw new Error(
+        `Measuring run ${r + 1} failed (exit ${child.status}):\n${child.stderr}`
+      );
+    }
+    const parsed = JSON.parse(child.stdout);
+    devFrozen = parsed.devFrozen;
+    for (const { label, ns } of parsed.results) {
+      if (!perLabel.has(label)) perLabel.set(label, []);
+      perLabel.get(label).push(ns);
+    }
+  }
+  const aggregate = new Map();
+  for (const [label, values] of perLabel) {
+    aggregate.set(label, {
+      median: median(values),
+      min: Math.min(...values),
+      max: Math.max(...values),
+      runs: values,
+    });
+  }
+  aggregate.devFrozen = devFrozen;
+  return aggregate;
+}
+
+if (RUNS > 1 && !IS_CHILD) {
+  AGGREGATE = aggregateRuns();
 }
 
 // ---------------------------------------------------------------------------
@@ -195,11 +329,14 @@ function wideUntyped(count, fields = 6) {
   return { query, data };
 }
 
-/** A single chain of `depth` normalizable entities: node -> child -> child ... */
+/**
+ * A single chain of `depth` normalizable entities: root -> child -> child ...
+ * (Node:n0 is ROOT_QUERY.root, Node:n<depth-1> is the leaf.)
+ */
 function deepNormalized(depth, fields = 3) {
   const scalarFields = Array.from({ length: fields }, (_, i) => `f${i}`);
   let selection = `__typename\n        id\n        ${scalarFields.join("\n        ")}`;
-  for (let d = 0; d < depth; d++) {
+  for (let d = 1; d < depth; d++) {
     selection = `__typename\n        id\n        ${scalarFields.join("\n        ")}\n        child {\n        ${selection}\n        }`;
   }
   const query = gql`
@@ -212,7 +349,7 @@ function deepNormalized(depth, fields = 3) {
   const build = (d) => {
     const node = { __typename: "Node", id: `n${d}` };
     for (const f of scalarFields) node[f] = `${f}-${d}`;
-    if (d < depth) node.child = build(d + 1);
+    if (d < depth - 1) node.child = build(d + 1);
     return node;
   };
   return { query, data: { root: build(0) } };
@@ -222,7 +359,7 @@ function deepNormalized(depth, fields = 3) {
 function deepUntyped(depth, fields = 3) {
   const scalarFields = Array.from({ length: fields }, (_, i) => `f${i}`);
   let selection = `__typename\n        ${scalarFields.join("\n        ")}`;
-  for (let d = 0; d < depth; d++) {
+  for (let d = 1; d < depth; d++) {
     selection = `__typename\n        ${scalarFields.join("\n        ")}\n        child {\n        ${selection}\n        }`;
   }
   const query = gql`
@@ -235,7 +372,7 @@ function deepUntyped(depth, fields = 3) {
   const build = (d) => {
     const node = { __typename: "Blob" };
     for (const f of scalarFields) node[f] = `${f}-${d}`;
-    if (d < depth) node.child = build(d + 1);
+    if (d < depth - 1) node.child = build(d + 1);
     return node;
   };
   return { query, data: { root: build(0) } };
@@ -310,11 +447,11 @@ if (section("Write cost vs. list breadth (normalized entities)")) {
   const rows = [];
   for (const n of sizes) {
     const shape = wideNormalized(n);
-    const cold = bench(`write cold n=${n}`, {
+    const cold = bench(`write cold N=${n}`, {
       setup: () => freshCache(),
       run: (cache) => cache.writeQuery({ query: shape.query, data: shape.data }),
     });
-    const identical = bench(`write identical n=${n}`, {
+    const identical = bench(`write identical N=${n}`, {
       setup: () => written(shape),
       run: (cache) => cache.writeQuery({ query: shape.query, data: shape.data }),
     });
@@ -324,7 +461,7 @@ if (section("Write cost vs. list breadth (normalized entities)")) {
           i === 0 ? { ...item, f0: "CHANGED" } : item
         ),
       };
-      return bench(`write 1-changed n=${n}`, {
+      return bench(`write 1-changed N=${n}`, {
         setup: () => written(shape),
         run: (cache) => cache.writeQuery({ query: shape.query, data: changed }),
       });
@@ -332,9 +469,10 @@ if (section("Write cost vs. list breadth (normalized entities)")) {
     rows.push([n, n, { cold, identical, "1 changed": oneChanged }]);
   }
   table(
-    "writeQuery into a list of n normalized entities",
+    "writeQuery into a list of N normalized entities (F = 8 fields each)",
     ["cold", "identical", "1 changed"],
-    rows
+    rows,
+    "N"
   );
   note(
     `  Reading: "identical" still pays the full traversal + normalization + deep\n` +
@@ -366,23 +504,67 @@ if (section("Write cost vs. list breadth (normalized entities)")) {
       setup: () => written(shape),
       run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
     });
+    const cheaper =
+      overwrite <= coldPrimed ?
+        `overwriting is ${((1 - overwrite / coldPrimed) * 100).toFixed(0)}% cheaper here`
+      : `creating is ${((1 - coldPrimed / overwrite) * 100).toFixed(0)}% cheaper here`;
     note(
-      `  Why the n=100 "cold" cell above is disproportionately high (it drags the\n` +
-        `  next row's scale well below 1.00n). Re-measuring the same three writes here,\n` +
+      `  Why the N=100 "cold" cell above is disproportionately high (it drags the\n` +
+        `  next row's scale well below 1.00). Re-measuring the same three writes here,\n` +
         `  after the process has warmed up:\n` +
-        `    write cold n=100, as measured first : ${fmt(rows[0][2].cold)}\n` +
+        `    write cold N=100, as measured first : ${fmt(rows[0][2].cold)}\n` +
         `    brand-new cache, 100 new entities   : ${fmt(coldFresh)}\n` +
         `    primed EMPTY cache, 100 new         : ${fmt(coldPrimed)}\n` +
         `    overwrite of 100 existing           : ${fmt(overwrite)}\n` +
         `  Two separate effects, neither of them per-entity work:\n` +
-        `    1. JIT. The table's cold n=100 is the FIRST measurement in the process;\n` +
+        `    1. JIT. The table's cold N=100 is the FIRST measurement in the process;\n` +
         `       the identical operation re-measured here is cheaper.\n` +
         `    2. One-time per-cache setup (document transform, type policies, fresh\n` +
         `       StoreReader/StoreWriter): the gap between "brand-new" and "primed".\n` +
         `  With both removed, CREATING n entities and OVERWRITING n identical ones cost\n` +
-        `  the same: the dirtying a creation does is worth about the same as the equal()\n` +
-        `  calls an overwrite does. Per-entity write cost does not depend on whether the\n` +
-        `  entity already existed.`
+        `  about the same (${cheaper}): a creation dirties every\n` +
+        `  field, an overwrite compares every incoming field with the stored one instead.`
+    );
+  }
+
+  // The duplicate guard (context.written) runs only AFTER an object's fields
+  // have been processed, so a repeated occurrence of the same entity is still
+  // traversed and identified; only its staging into the store is skipped.
+  {
+    let identifyCalls = 0;
+    const cache = freshCache({
+      dataIdFromObject(object) {
+        identifyCalls++;
+        return `${object.__typename}:${object.id}`;
+      },
+    });
+    const query = gql`
+      query Repeated {
+        list {
+          __typename
+          id
+          text
+          child {
+            __typename
+            id
+          }
+        }
+      }
+    `;
+    const item = {
+      __typename: "T",
+      id: 1,
+      text: "first",
+      child: { __typename: "C", id: 9 },
+    };
+    cache.writeQuery({
+      query,
+      data: { list: [item, { ...item, text: "second" }, item] },
+    });
+    note(
+      `  The same entity T:1 (with a child C:9) three times in one list:\n` +
+        `    identify calls        : ${identifyCalls} (3 x T:1 + 3 x C:9; every occurrence is traversed)\n` +
+        `    stored T:1.text       : ${JSON.stringify(cache.extract()["T:1"].text)} (only the first occurrence is staged)`
     );
   }
 }
@@ -394,7 +576,7 @@ if (section("Read cost vs. list breadth: cold, warm, and after one dirty field")
   for (const n of sizes) {
     const shape = wideNormalized(n);
 
-    const cold = bench(`read cold n=${n}`, {
+    const cold = bench(`read cold N=${n}`, {
       setup: () => {
         const cache = written(shape);
         cache.gc({ resetResultCache: true });
@@ -405,11 +587,11 @@ if (section("Read cost vs. list breadth: cold, warm, and after one dirty field")
 
     const warmCache = written(shape);
     warmCache.readQuery({ query: shape.query });
-    const warm = bench(`read warm n=${n}`, {
+    const warm = bench(`read warm N=${n}`, {
       run: () => warmCache.readQuery({ query: shape.query }),
     });
 
-    const afterDirty = bench(`read after 1 dirty n=${n}`, {
+    const afterDirty = bench(`read after 1 dirty N=${n}`, {
       setup: () => {
         const cache = written(shape);
         cache.readQuery({ query: shape.query });
@@ -425,9 +607,10 @@ if (section("Read cost vs. list breadth: cold, warm, and after one dirty field")
     rows.push([n, n, { cold, warm, "after 1 dirty": afterDirty }]);
   }
   table(
-    "readQuery over a list of n normalized entities",
+    "readQuery over a list of N normalized entities (F = 8 fields each)",
     ["cold", "warm", "after 1 dirty"],
-    rows
+    rows,
+    "N"
   );
 
   // Structure-sharing evidence.
@@ -440,11 +623,22 @@ if (section("Read cost vs. list breadth: cold, warm, and after one dirty field")
   for (let i = 0; i < before.feed.length; i++) {
     if (before.feed[i] === after.feed[i]) shared++;
   }
+  const ratios = rows.map(([, , v]) => v.cold / v["after 1 dirty"]);
+  const recomputed = (() => {
+    const c = written(shape);
+    const counts = countRecomputes(c);
+    c.readQuery({ query: shape.query });
+    c.modify({ id: "Item:i0", fields: { f0: (v) => `${v}!` } });
+    counts.reset();
+    c.readQuery({ query: shape.query });
+    return counts;
+  })();
   note(
-    `  Note that "after 1 dirty" is still LINEAR in n, roughly 8x cheaper than a cold\n` +
-      `  read. Only three memo entries re-execute (the entity, the array, the root), but\n` +
-      `  re-executing the array entry means n canRead calls plus n memoized\n` +
-      `  executeSelectionSet lookups. Entries-recomputed and work-done are not the same.`
+    `  Note that "after 1 dirty" is still LINEAR in N, ${Math.min(...ratios).toFixed(1)}-${Math.max(...ratios).toFixed(1)}x cheaper than a\n` +
+      `  cold read. Only three memo entries re-execute (N=500: ${recomputed.selectionSets} executeSelectionSet +\n` +
+      `  ${recomputed.arrays} executeSubSelectedArray: the entity, the root, the array), but re-executing\n` +
+      `  the array entry means N canRead calls plus N memoized executeSelectionSet\n` +
+      `  lookups. Entries-recomputed and work-done are not the same.`
   );
   note(
     `  Structure sharing after modifying 1 of 500 entities:\n` +
@@ -462,12 +656,53 @@ if (section("Read cost vs. list breadth: cold, warm, and after one dirty field")
     const c = written(s);
     c.readQuery({ query: s.query });
     const m = memoSizes(c);
-    return `    n=${String(n).padStart(5)}  executeSelectionSet=${String(m.selectionSets).padStart(6)}  executeSubSelectedArray=${m.arrays}`;
+    return `    N=${String(n).padStart(5)}  executeSelectionSet=${String(m.selectionSets).padStart(6)}  executeSubSelectedArray=${m.arrays}`;
   });
   note(
     `  Memo entries retained by a single read (bounded by cacheSizes limits\n` +
       `  50 000 / 10 000 respectively):\n${memoRows.join("\n")}`
   );
+
+  // Fan-in: many parents referencing one entity. The shared author entry
+  // recomputes once, but every comment entry is its parent and reruns too.
+  {
+    const query = gql`
+      query FanIn {
+        comments {
+          __typename
+          id
+          body
+          author {
+            __typename
+            id
+            name
+          }
+        }
+      }
+    `;
+    const c = freshCache();
+    const counts = countRecomputes(c);
+    c.writeQuery({
+      query,
+      data: {
+        comments: Array.from({ length: 500 }, (_, i) => ({
+          __typename: "Comment",
+          id: i,
+          body: `b${i}`,
+          author: { __typename: "User", id: 1, name: "Ann" },
+        })),
+      },
+    });
+    c.readQuery({ query });
+    counts.reset();
+    c.modify({ id: "User:1", fields: { name: () => "Bob" } });
+    c.readQuery({ query });
+    note(
+      `  Fan-in: 500 comments whose author is the same User:1. After changing\n` +
+        `  User:1.name, one re-read re-executes ${counts.selectionSets} executeSelectionSet entries (the\n` +
+        `  author, all 500 comments, the root) and ${counts.arrays} executeSubSelectedArray entry.`
+    );
+  }
 }
 
 // ===========================================================================
@@ -478,24 +713,36 @@ if (section("Normalized vs. embedded (untyped) payloads of the same size")) {
     const norm = wideNormalized(n);
     const untyped = wideUntyped(n);
 
-    const wNorm = bench(`write normalized n=${n}`, {
+    const wNorm = bench(`write normalized N=${n}`, {
       setup: () => freshCache(),
       run: (c) => c.writeQuery({ query: norm.query, data: norm.data }),
     });
-    const wUntyped = bench(`write untyped n=${n}`, {
+    const wUntyped = bench(`write untyped N=${n}`, {
       setup: () => freshCache(),
+      run: (c) => c.writeQuery({ query: untyped.query, data: untyped.data }),
+    });
+
+    // Rewriting the identical payload over existing data: the normalized form
+    // re-traverses and re-stages every entity; the embedded form compares the
+    // whole list with equal() in one field.
+    const rwNorm = bench(`rewrite identical normalized N=${n}`, {
+      setup: () => written(norm),
+      run: (c) => c.writeQuery({ query: norm.query, data: norm.data }),
+    });
+    const rwUntyped = bench(`rewrite identical untyped N=${n}`, {
+      setup: () => written(untyped),
       run: (c) => c.writeQuery({ query: untyped.query, data: untyped.data }),
     });
 
     const normWarm = written(norm);
     normWarm.readQuery({ query: norm.query });
-    const rNorm = bench(`read warm normalized n=${n}`, {
+    const rNorm = bench(`read warm normalized N=${n}`, {
       run: () => normWarm.readQuery({ query: norm.query }),
     });
 
     const untypedWarm = written(untyped);
     untypedWarm.readQuery({ query: untyped.query });
-    const rUntyped = bench(`read warm untyped n=${n}`, {
+    const rUntyped = bench(`read warm untyped N=${n}`, {
       run: () => untypedWarm.readQuery({ query: untyped.query }),
     });
 
@@ -505,35 +752,46 @@ if (section("Normalized vs. embedded (untyped) payloads of the same size")) {
       {
         "write norm": wNorm,
         "write embed": wUntyped,
+        "rewrite norm": rwNorm,
+        "rewrite embed": rwUntyped,
         "read norm": rNorm,
         "read embed": rUntyped,
       },
     ]);
   }
   table(
-    "n entities, 6 scalar fields each",
-    ["write norm", "write embed", "read norm", "read embed"],
-    rows
+    "N objects with 6 scalar fields each, normalized (+ id) or embedded (no id)",
+    [
+      "write norm",
+      "write embed",
+      "rewrite norm",
+      "rewrite embed",
+      "read norm",
+      "read embed",
+    ],
+    rows,
+    "N"
   );
 
   const n = QUICK ? 200 : 2000;
   const norm = written(wideNormalized(n));
   const untyped = written(wideUntyped(n));
   note(
-    `  Store entry counts for n=${n}:\n` +
-      `    normalized: ${Object.keys(norm.extract()).length} entries (1 root + n entities)\n` +
+    `  Store entry counts for N=${n}:\n` +
+      `    normalized: ${Object.keys(norm.extract()).length} entries (1 root + N entities)\n` +
       `    embedded:   ${Object.keys(untyped.extract()).length} entries (root only — the whole list lives in one field)`
   );
   note(
-    `  Embedded payloads write faster (no identify, no reference indirection) and\n` +
-      `  read faster warm, but they are a single cache field: changing one element\n` +
-      `  dirties the entire list, and nothing is shared with any other query.`
+    `  Embedded payloads write faster (identify() finds no id, so there is no\n` +
+      `  per-entity staging, store.merge or reference) and read equally fast warm,\n` +
+      `  but they are a single cache field: changing one element dirties the entire\n` +
+      `  list, and nothing is shared with any other query.`
   );
 }
 
 // ===========================================================================
 if (section("Depth: cost per level of nesting")) {
-  const depths = QUICK ? [4, 16] : [4, 16, 64, 128];
+  const depths = QUICK ? [4, 16] : [4, 16, 64, 256, 512];
   const rows = [];
   for (const d of depths) {
     const norm = deepNormalized(d);
@@ -568,7 +826,7 @@ if (section("Depth: cost per level of nesting")) {
       setup: () => {
         const c = written(norm);
         c.readQuery({ query: norm.query });
-        c.modify({ id: `Node:n${d}`, fields: { f0: (v) => `${v}!` } });
+        c.modify({ id: `Node:n${d - 1}`, fields: { f0: (v) => `${v}!` } });
         return c;
       },
       run: (c) => c.readQuery({ query: norm.query }),
@@ -587,18 +845,34 @@ if (section("Depth: cost per level of nesting")) {
     ]);
   }
   table(
-    "a single chain of d nested entities",
+    "a single chain of D nested entities (3 scalar fields each), leaf = entity D",
     ["write norm", "write embed", "read cold", "read warm", "deep dirty"],
-    rows
+    rows,
+    "D"
   );
+  const counts = depths.map((d) => {
+    const norm = deepNormalized(d);
+    const c = written(norm);
+    const recomputes = countRecomputes(c);
+    c.readQuery({ query: norm.query });
+    c.modify({ id: `Node:n${d - 1}`, fields: { f0: (v) => `${v}!` } });
+    recomputes.reset();
+    c.readQuery({ query: norm.query });
+    return `D=${d}: ${recomputes.selectionSets}`;
+  });
   note(
-    `  "deep dirty" is the headline number: modifying the LEAF of a d-deep chain marks\n` +
-      `  every ancestor memo entry DirtyChild, and re-executing the root walks back down\n` +
-      `  re-verifying each level. Note its scale column climbs to ~1.4 (superlinear) while\n` +
-      `  "read cold" stays ~0.9 (linear), and that from d=16 upward the re-read already\n` +
-      `  costs MORE than a cold read of the whole chain — the memo graph is a net cost\n` +
-      `  here, and the gap widens with depth. Depth turns a point mutation into a\n` +
-      `  root-to-leaf recomputation. Breadth does not — see section 2.`
+    `  "deep dirty" is the headline number: modifying the LEAF marks every ancestor\n` +
+      `  memo entry as having a dirty child, and the next read re-executes all of them\n` +
+      `  (entries re-executed: ${counts.join(", ")}; that is D + 1 with ROOT_QUERY).\n` +
+      `  Each ancestor that finishes recomputing reports "clean" to its parent, and in\n` +
+      `  optimism 0.18.1 that report climbs all the way to the root, because every\n` +
+      `  ancestor above is only dirty-by-child, not dirty itself. Level l therefore\n` +
+      `  costs O(l) on top of its own work, and the re-read is O(D^2) in total. A cold\n` +
+      `  read does not pay this: new entries are dirty themselves, so the report stops\n` +
+      `  at the first parent. Watch the scale column of "deep dirty" climb towards the\n` +
+      `  step ratio (quadratic) while "read cold" stays near 1.00 (linear), and the\n` +
+      `  re-read overtake the cold read of the whole chain. Breadth does not do this —\n` +
+      `  see section 2.`
   );
 }
 
@@ -652,15 +926,17 @@ if (section("Nested arrays: outer x inner")) {
     ]);
   }
   table(
-    "outer groups each holding inner normalized rows",
+    "G groups each holding R normalized rows (size = G x R rows)",
     ["write", "read cold", "read warm", "1 row dirty"],
-    rows
+    rows,
+    "GxR"
   );
   note(
-    `  Watch the "read warm" column at 100x500. Every other row is ~2 us; that one\n` +
-      `  jumps by three orders of magnitude. 100*500 rows + 100 groups + ROOT_QUERY =\n` +
-      `  50101 entities, just over the 50 000 executeSelectionSet limit, so the read\n` +
-      `  evicts its own memo entries as it goes. This is the LRU cliff of section 9\n` +
+    `  Watch the "read warm" column at 100x500. Every other row is a few us; that\n` +
+      `  one jumps by three orders of magnitude. 100*500 rows + 100 groups +\n` +
+      `  ROOT_QUERY = 50101 entities, just over the 50 000 executeSelectionSet limit,\n` +
+      `  so the LRU trim that runs after every read evicts entries this query needs,\n` +
+      `  and the next "warm" read recomputes them. This is the LRU cliff of section 9\n` +
       `  reached by accident, from a shape that looks unremarkable.`
   );
 
@@ -672,9 +948,22 @@ if (section("Nested arrays: outer x inner")) {
   const scalarRows = [];
   for (const [outer, inner] of scalarConfigs) {
     const shape = scalarMatrix(outer, inner);
+    const equalCopy = scalarMatrix(outer, inner);
     const w = bench(`write scalar matrix ${outer}x${inner}`, {
       setup: () => freshCache(),
       run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
+    });
+    const rewrite = bench(`rewrite equal scalar matrix ${outer}x${inner}`, {
+      setup: () => written(shape),
+      run: (c) => c.writeQuery({ query: shape.query, data: equalCopy.data }),
+    });
+    const cold = bench(`read cold scalar matrix ${outer}x${inner}`, {
+      setup: () => {
+        const c = written(shape);
+        c.gc({ resetResultCache: true });
+        return c;
+      },
+      run: (c) => c.readQuery({ query: shape.query }),
     });
     const warm = written(shape);
     warm.readQuery({ query: shape.query });
@@ -684,18 +973,30 @@ if (section("Nested arrays: outer x inner")) {
     scalarRows.push([
       `${outer}x${inner}`,
       outer * inner,
-      { write: w, "read warm": rw },
+      { write: w, "rewrite equal": rewrite, "read cold": cold, "read warm": rw },
     ]);
   }
   table(
     "arrays of arrays of plain scalars (no entities, no selection set)",
-    ["write", "read warm"],
-    scalarRows
+    ["write", "rewrite equal", "read cold", "read warm"],
+    scalarRows,
+    "GxR"
   );
+  const [outer, inner] = scalarConfigs[scalarConfigs.length - 1];
+  const shape = scalarMatrix(outer, inner);
+  const c = written(shape);
+  const readBack = c.readQuery({ query: shape.query });
+  const m = memoSizes(c);
   note(
-    `  A scalar array without a sub-selection is stored and returned as ONE field\n` +
-      `  value. It costs a deep-equality pass on write and nothing on read, but it is\n` +
-      `  also atomic: any change replaces the whole array.`
+    `  A scalar array without a sub-selection is stored as ONE field value, by\n` +
+      `  reference in production (${outer}x${inner}: stored === written: ${c.extract().ROOT_QUERY.matrix === shape.data.matrix}).\n` +
+      `  Writing it into an empty field is O(1); rewriting it with an equal copy runs\n` +
+      `  equal() over every element. Reading it is NOT a property lookup:\n` +
+      `  executeSubSelectedArray maps every nested array into a new one (read result\n` +
+      `  === stored: ${readBack.matrix === shape.data.matrix}) and memoizes each array instance separately\n` +
+      `  (${m.arrays} executeSubSelectedArray entries for ${outer} inner arrays + 1 outer), so a cold read\n` +
+      `  is O(elements) and only a warm read is O(1). Any change replaces the whole\n` +
+      `  value and invalidates every one of those entries.`
   );
 }
 
@@ -703,75 +1004,71 @@ if (section("Nested arrays: outer x inner")) {
 if (section("Broadcast cost vs. number of watchers")) {
   const shape = wideNormalized(QUICK ? 200 : 2000);
   const watcherCounts = QUICK ? [1, 25] : [1, 10, 50, 200];
+  const changed = {
+    feed: shape.data.feed.map((item, i) =>
+      i === 0 ? { ...item, f0: "CHANGED" } : item
+    ),
+  };
+  const otherQuery = gql`
+    query Other {
+      unrelated {
+        __typename
+        id
+        v
+      }
+    }
+  `;
+  const otherData = { unrelated: { __typename: "Other", id: "o1", v: 1 } };
+
+  // Every watch is registered with `immediate: true`, as in steady state: its
+  // first broadcast computes (and warms) the optimistic read and records
+  // `lastDiff`, so later broadcasts go through the real equality gate,
+  // `equal(lastDiff.result, diff.result)`, before calling the callback.
+  const watchAll = (cache, queries, callback = () => {}) => {
+    for (const query of queries) {
+      cache.watch({ query, optimistic: true, immediate: true, callback });
+    }
+    return cache;
+  };
+
   const rows = [];
   for (const w of watcherCounts) {
-    const changed = {
-      feed: shape.data.feed.map((item, i) =>
-        i === 0 ? { ...item, f0: "CHANGED" } : item
-      ),
-    };
-
-    const setup = () => {
-      const cache = written(shape);
-      let calls = 0;
-      for (let i = 0; i < w; i++) {
-        cache.watch({
-          query: shape.query,
-          optimistic: true,
-          callback: () => calls++,
-        });
-      }
-      // Warm BOTH memo sets. Watches read with optimistic: true, which goes
-      // through the Stump's CacheGroup and therefore its own keyMaker Trie —
-      // warming only the root read would make every rep pay a cold optimistic
-      // read and swamp the fan-out signal we are trying to measure.
-      cache.readQuery({ query: shape.query });
-      cache.diff({ query: shape.query, optimistic: true, returnPartialData: true });
-      return { cache, changed, stats: () => calls };
-    };
+    const queries = Array.from({ length: w }, () => shape.query);
+    const setup = () => watchAll(written(shape), queries);
 
     const relevant = bench(`broadcast ${w} watchers, relevant write`, {
       setup,
-      run: ({ cache }) =>
-        cache.writeQuery({ query: shape.query, data: changed }),
+      run: (cache) => cache.writeQuery({ query: shape.query, data: changed }),
     });
 
     const irrelevant = bench(`broadcast ${w} watchers, unrelated write`, {
       setup,
-      run: ({ cache }) =>
-        cache.writeQuery({
-          query: gql`
-            query Other {
-              unrelated {
-                __typename
-                id
-                v
-              }
-            }
-          `,
-          data: { unrelated: { __typename: "Other", id: "o1", v: 1 } },
-        }),
+      run: (cache) => cache.writeQuery({ query: otherQuery, data: otherData }),
     });
 
     rows.push([w, w, { relevant: relevant, unrelated: irrelevant }]);
   }
   table(
-    "one write with w watchers registered on the same query",
+    "one write with W watchers registered on the same query (N = 2 000 items)",
     ["relevant", "unrelated"],
-    rows
+    rows,
+    "W"
   );
   note(
-    `  "unrelated" is the equality-gate path: the watches are not dirty, so\n` +
-      `  maybeBroadcastWatch returns its memoized value and no diff is recomputed.\n` +
-      `  That is the difference between O(w) cheap checks and O(w) full re-reads.`
+    `  "unrelated" is the memo-gate path: the watches are not dirty, so\n` +
+      `  maybeBroadcastWatch returns its memoized value and no diff is computed; each\n` +
+      `  watch costs one cache-key construction. "relevant" dirties every watch: the\n` +
+      `  first one re-reads the invalidated entries, the others get memo hits, and\n` +
+      `  every one of them then runs equal(lastDiff.result, diff.result), which walks\n` +
+      `  the rebuilt feed array (N elements) even though each element is ===.`
   );
 
-  // Identical-watch sharing: N watchers on the SAME query+variables share
-  // StoreReader memo entries, so the marginal cost per watcher is small. The
+  // Watchers on the SAME document share StoreReader memo entries. The
   // "distinct" documents below select exactly the same fields and differ only
   // by operation name, so any difference is document identity, not workload.
-  const distinctShape = (i) => ({
-    query: gql`
+  const distinctQueries = Array.from(
+    { length: 50 },
+    (_, i) => gql`
       query Distinct${i} {
         feed {
           __typename
@@ -779,53 +1076,49 @@ if (section("Broadcast cost vs. number of watchers")) {
           ${shape.scalarFields.join("\n          ")}
         }
       }
-    `,
-  });
+    `
+  );
+  const sameQueries = Array.from({ length: 50 }, () => shape.query);
+  const run = (cache) => cache.writeQuery({ query: shape.query, data: changed });
   const same = bench("broadcast 50 identical watches", {
-    setup: () => {
-      const cache = written(shape);
-      for (let i = 0; i < 50; i++) {
-        cache.watch({ query: shape.query, optimistic: true, callback() {} });
-      }
-      cache.diff({ query: shape.query, optimistic: true, returnPartialData: true });
-      return cache;
-    },
-    run: (cache) =>
-      cache.writeQuery({
-        query: shape.query,
-        data: {
-          feed: shape.data.feed.map((it, i) =>
-            i === 0 ? { ...it, f0: `x${Math.random()}` } : it
-          ),
-        },
-      }),
+    setup: () => watchAll(written(shape), sameQueries),
+    run,
   });
+  // Each rep of the two distinct-document cases takes seconds (setup included),
+  // so they use fewer repetitions than the default.
+  const slow = { reps: QUICK ? 3 : 9, warmup: 1 };
   const distinct = bench("broadcast 50 distinct-document watches", {
-    setup: () => {
-      const cache = written(shape);
-      for (let i = 0; i < 50; i++) {
-        const q = distinctShape(i).query;
-        cache.watch({ query: q, optimistic: true, callback() {} });
-        cache.diff({ query: q, optimistic: true, returnPartialData: true });
-      }
-      return cache;
-    },
-    run: (cache) =>
-      cache.writeQuery({
-        query: shape.query,
-        data: {
-          feed: shape.data.feed.map((it, i) =>
-            i === 0 ? { ...it, f0: `x${Math.random()}` } : it
-          ),
-        },
-      }),
+    setup: () => watchAll(written(shape), distinctQueries),
+    run,
+    ...slow,
   });
+  // The same 50 distinct documents with the executeSelectionSet limit raised
+  // far above the 50 x (N + 1) entries they need, to separate the cost of not
+  // sharing memo entries from the LRU cliff of section 9.
+  const distinctRoomy = withCacheSize(
+    "inMemoryCache.executeSelectionSet",
+    200_000,
+    () =>
+      bench("broadcast 50 distinct-document watches, limit 200 000", {
+        setup: () => watchAll(written(shape), distinctQueries),
+        run,
+        ...slow,
+      })
+  );
+  const entries = 50 * (shape.data.feed.length + 1);
   note(
-    `  50 watchers on the SAME document:      ${fmt(same)}\n` +
-      `  50 watchers on 50 DISTINCT documents:  ${fmt(distinct)}\n` +
-      `  Ratio: ${(distinct / same).toFixed(1)}x. Memo entries are keyed by selection-set\n` +
-      `  NODE identity, so structurally identical but separately-parsed documents\n` +
-      `  share nothing. This is why DocumentTransform's WeakCache matters.`
+    `  50 watchers on the SAME document:                       ${fmt(same)}\n` +
+      `  50 watchers on 50 DISTINCT documents:                   ${fmt(distinct)}  (${(distinct / same).toFixed(1)}x)\n` +
+      `  the same, executeSelectionSet limit raised to 200 000:  ${fmt(distinctRoomy)}  (${(distinctRoomy / same).toFixed(1)}x)\n` +
+      `  Memo entries are keyed by selection-set NODE identity, so identical but\n` +
+      `  separately-parsed documents share nothing: every watcher re-reads on its\n` +
+      `  own (the raised-limit line). ` +
+      (entries > 50000 ?
+        `With the default limit the 50 documents also\n` +
+        `  need ${entries} executeSelectionSet entries, over the 50 000 limit, so every\n` +
+        `  broadcast additionally pays the LRU cliff of section 9 (the default line).`
+      : `The 50 documents need ${entries} executeSelectionSet\n` +
+        `  entries here, under the 50 000 limit, so the two lines should agree.`)
   );
 }
 
@@ -833,37 +1126,53 @@ if (section("Broadcast cost vs. number of watchers")) {
 if (section("Transactions, optimistic layers, and layer depth")) {
   const shape = wideNormalized(QUICK ? 200 : 2000);
   const layerCounts = QUICK ? [1, 4] : [1, 4, 16, 64];
+  // Every optimistic layer writes one field of one entity (Item:i0.f0), as an
+  // optimistic mutation response typically does. The list itself is untouched,
+  // so an optimistic read still returns all N items.
+  const itemFragment = gql`
+    fragment ItemF0 on Item {
+      f0
+    }
+  `;
+  const addLayer = (cache, i) =>
+    cache.recordOptimisticTransaction((c) => {
+      c.writeFragment({
+        id: "Item:i0",
+        fragment: itemFragment,
+        data: { __typename: "Item", f0: `opt${i}` },
+      });
+    }, `layer-${i}`);
+
   const rows = [];
   for (const layers of layerCounts) {
+    const stack = (cache) => {
+      for (let i = 0; i < layers; i++) addLayer(cache, i);
+      return cache;
+    };
+
     const addRemove = bench(`add+remove ${layers} layers`, {
       setup: () => written(shape),
       run: (cache) => {
-        for (let i = 0; i < layers; i++) {
-          cache.recordOptimisticTransaction((c) => {
-            c.writeQuery({
-              query: shape.query,
-              data: {
-                feed: [{ ...shape.data.feed[0], f0: `opt${i}` }],
-              },
-            });
-          }, `layer-${i}`);
-        }
+        for (let i = 0; i < layers; i++) addLayer(cache, i);
         for (let i = 0; i < layers; i++) cache.removeOptimistic(`layer-${i}`);
       },
     });
 
+    // The optimistic memo set is cold after stacking: nothing has read it yet.
+    const readThroughCold = bench(`optimistic cold read through ${layers} layers`, {
+      setup: () => stack(written(shape)),
+      run: (cache) =>
+        cache.diff({
+          query: shape.query,
+          optimistic: true,
+          returnPartialData: true,
+        }),
+    });
+
     const readThrough = bench(`optimistic read through ${layers} layers`, {
       setup: () => {
-        const cache = written(shape);
-        for (let i = 0; i < layers; i++) {
-          cache.recordOptimisticTransaction((c) => {
-            c.writeQuery({
-              query: shape.query,
-              data: { feed: [{ ...shape.data.feed[0], f0: `opt${i}` }] },
-            });
-          }, `layer-${i}`);
-        }
-        cache.readQuery({ query: shape.query, optimistic: true });
+        const cache = stack(written(shape));
+        cache.diff({ query: shape.query, optimistic: true, returnPartialData: true });
         return cache;
       },
       run: (cache) =>
@@ -875,32 +1184,9 @@ if (section("Transactions, optimistic layers, and layer depth")) {
     });
 
     const removeBottom = bench(`remove BOTTOM of ${layers} layers`, {
-      setup: () => {
-        const cache = written(shape);
-        for (let i = 0; i < layers; i++) {
-          cache.recordOptimisticTransaction((c) => {
-            c.writeQuery({
-              query: shape.query,
-              data: { feed: [{ ...shape.data.feed[0], f0: `opt${i}` }] },
-            });
-          }, `layer-${i}`);
-        }
-        return cache;
-      },
+      setup: () => stack(written(shape)),
       run: (cache) => cache.removeOptimistic("layer-0"),
     });
-
-    const stack = (cache) => {
-      for (let i = 0; i < layers; i++) {
-        cache.recordOptimisticTransaction((c) => {
-          c.writeQuery({
-            query: shape.query,
-            data: { feed: [{ ...shape.data.feed[0], f0: `opt${i}` }] },
-          });
-        }, `layer-${i}`);
-      }
-      return cache;
-    };
 
     // Unwinding order is the whole story: LIFO pops the top layer each time,
     // FIFO removes the bottom and replays everything above it.
@@ -923,7 +1209,8 @@ if (section("Transactions, optimistic layers, and layer depth")) {
       layers,
       {
         "add+remove": addRemove,
-        "read through": readThrough,
+        "cold read": readThroughCold,
+        "warm read": readThrough,
         "remove bottom": removeBottom,
         "unwind LIFO": teardownLifo,
         "unwind FIFO": teardownFifo,
@@ -931,75 +1218,74 @@ if (section("Transactions, optimistic layers, and layer depth")) {
     ]);
   }
   table(
-    "k stacked optimistic layers over a 2000-entity store",
+    `L stacked optimistic layers over a ${QUICK ? 200 : 2000}-item list, each writing Item:i0.f0`,
     [
       "add+remove",
-      "read through",
+      "cold read",
+      "warm read",
       "remove bottom",
       "unwind LIFO",
       "unwind FIFO",
     ],
-    rows
+    rows,
+    "L"
   );
   note(
-    `  "remove bottom" is the expensive one: removing a layer that is not on top\n` +
-      `  replays every layer above it (EntityStore.removeLayer -> Layer.newLayer +\n` +
-      `  replay), so the cost is proportional to the number of layers above it times\n` +
-      `  the size of each layer's write.\n` +
+    `  "remove bottom" is the expensive removal: removing a layer that is not on\n` +
+      `  top rebuilds every layer above it (Layer.removeLayer -> parent.addLayer ->\n` +
+      `  new Layer -> replay), so it costs L - 1 replays of a layer's update.\n` +
       `\n` +
-      `  Compare the last two columns: unwinding the SAME stack costs O(k) popping from\n` +
-      `  the top and O(k^2) removing from the bottom, because every FIFO removal replays\n` +
-      `  the layers above it. "add+remove" uses the FIFO order, which is why it inherits\n` +
-      `  the same quadratic scale column.\n` +
+      `  Compare the last two columns: unwinding the SAME stack costs O(L) cheap\n` +
+      `  recursive calls per pop from the top (O(L^2) calls in total, no replays),\n` +
+      `  and O(L^2) REPLAYS when removing from the bottom, because every FIFO removal\n` +
+      `  replays the layers above it. "add+remove" uses the FIFO order, which is why\n` +
+      `  it inherits the same quadratic scale column.\n` +
       `\n` +
-      `  "read through" is FLAT in k, and that is not a contradiction: the read is warm,\n` +
-      `  so it is a memo hit at the top of the chain and never walks the layers at all.\n` +
-      `  The O(k) lookup chain is only paid on a memo MISS.`
+      `  "cold read" is the first optimistic read after stacking: every field read\n` +
+      `  walks down the layer chain until a store holds the field, O(L) per field.\n` +
+      `  "warm read" is FLAT in L: it is a memo hit at the top of the chain and never\n` +
+      `  walks the layers at all.`
   );
 
-  // Batching: one broadcast vs. N broadcasts.
+  // Batching: one broadcast vs. N broadcasts. Each write changes one field of a
+  // different item, so the watched list keeps all its items.
   const writes = QUICK ? 20 : 100;
+  const batchSetup = () => {
+    const cache = written(shape);
+    cache.watch({
+      query: shape.query,
+      optimistic: true,
+      immediate: true,
+      callback() {},
+    });
+    return cache;
+  };
+  const writeItems = (c) => {
+    for (let i = 0; i < writes; i++) {
+      c.writeFragment({
+        id: `Item:i${i}`,
+        fragment: itemFragment,
+        data: { __typename: "Item", f0: `v${i}` },
+      });
+    }
+  };
   const unbatched = bench(`${writes} separate writes (${writes} broadcasts)`, {
-    setup: () => {
-      const cache = written(shape);
-      cache.watch({ query: shape.query, optimistic: true, callback() {} });
-      cache.readQuery({ query: shape.query });
-      return cache;
-    },
-    run: (cache) => {
-      for (let i = 0; i < writes; i++) {
-        cache.writeQuery({
-          query: shape.query,
-          data: { feed: [{ ...shape.data.feed[i], f0: `v${i}` }] },
-        });
-      }
-    },
+    setup: batchSetup,
+    run: writeItems,
   });
   const batched = bench(`${writes} writes in one batch (1 broadcast)`, {
-    setup: () => {
-      const cache = written(shape);
-      cache.watch({ query: shape.query, optimistic: true, callback() {} });
-      cache.readQuery({ query: shape.query });
-      return cache;
-    },
-    run: (cache) =>
-      cache.batch({
-        update: (c) => {
-          for (let i = 0; i < writes; i++) {
-            c.writeQuery({
-              query: shape.query,
-              data: { feed: [{ ...shape.data.feed[i], f0: `v${i}` }] },
-            });
-          }
-        },
-      }),
+    setup: batchSetup,
+    run: (cache) => cache.batch({ update: writeItems }),
   });
   note(
-    `  ${writes} writes, 1 watcher on a ${QUICK ? 200 : 2000}-entity list:\n` +
+    `  ${writes} writes, each changing one field of a different item, 1 watcher on a\n` +
+      `  ${QUICK ? 200 : 2000}-item list:\n` +
       `    unbatched: ${fmt(unbatched)}\n` +
       `    batched:   ${fmt(batched)}   (${(unbatched / batched).toFixed(1)}x faster)\n` +
-      `  The saving is entirely the avoided re-reads: each broadcast recomputes the\n` +
-      `  watcher's diff, and a diff over the full list is the dominant term.`
+      `  The writes cost the same either way; the saving is the avoided broadcasts.\n` +
+      `  Unbatched, every write dirties the watch, and each broadcast re-reads the\n` +
+      `  list (O(N), section 2) and compares it with the previous result (O(N)).\n` +
+      `  Batched, the watch is broadcast once, after all ${writes} writes.`
   );
 }
 
@@ -1038,9 +1324,10 @@ if (section("Optimistic reads maintain a SECOND set of memo entries")) {
       `    after optimistic:false diff  : ${afterRoot}\n` +
       `    after optimistic:true  diff  : ${afterOptimistic}   (+${afterOptimistic - afterRoot} new)\n` +
       `    root result === optimistic result : ${a.result === b.result}\n` +
-      `  Every watched query therefore costs TWO full sets of memo entries, because\n` +
-      `  ObservableQuery always watches with optimistic: true while readQuery and\n` +
-      `  readFragment default to optimistic: false. Budget memo capacity accordingly.`
+      `  A query read both ways therefore costs TWO full sets of memo entries.\n` +
+      `  ObservableQuery always watches with optimistic: true, its notify() compares\n` +
+      `  that diff with an optimistic: false one, and readQuery / readFragment default\n` +
+      `  to optimistic: false. Budget memo capacity accordingly.`
   );
 
   // What the first optimistic read costs when only the root read is warm.
@@ -1104,13 +1391,33 @@ if (section("The memo LRU cliff (executeSelectionSet max = 50 000)")) {
       );
     }
   }
+  // The same mechanism at a small limit, counted instead of timed: how many
+  // executeSelectionSet entries does each "warm" read recompute?
+  const recomputed = withCacheSize("inMemoryCache.executeSelectionSet", 1000, () =>
+    [900, 1100, 1500, 3000].map((n) => {
+      const shape = wideNormalized(n, 1);
+      const c = written(shape);
+      const counts = countRecomputes(c);
+      c.readQuery({ query: shape.query });
+      c.readQuery({ query: shape.query });
+      counts.reset();
+      c.readQuery({ query: shape.query });
+      return `${n + 1} entities -> ${counts.selectionSets}`;
+    })
+  );
   note(
-    `  A single query whose result contains more entities than the memo can hold\n` +
-      `  evicts its own entries while it reads. Every subsequent "warm" read is then\n` +
-      `  a cold read, and the cliff is abrupt rather than gradual: below the limit the\n` +
-      `  read is microseconds, above it milliseconds. Raise it with\n` +
-      `  cacheSizes["inMemoryCache.executeSelectionSet"], or do not read that many\n` +
-      `  entities in one query.`
+    `  optimism trims an LRU only when the outermost memoized call returns, so a\n` +
+      `  read never loses entries during its own traversal. The trim afterwards\n` +
+      `  evicts the overflow (the oldest entries: the first items read), and\n` +
+      `  evicting an entry dirties its parents. The next "warm" read therefore\n` +
+      `  re-walks the list (O(N) memo lookups) and recomputes the evicted entities,\n` +
+      `  which become the newest, so the trim evicts the next-oldest ones. With\n` +
+      `  the limit set to 1 000, entries recomputed per warm read of a flat list:\n` +
+      `    ${recomputed.join("; ")}\n` +
+      `  (the overflow plus ROOT_QUERY). The cliff is abrupt rather than gradual:\n` +
+      `  below the limit the read is microseconds, above it milliseconds. Raise it\n` +
+      `  with cacheSizes["inMemoryCache.executeSelectionSet"], or do not read that\n` +
+      `  many entities in one query.`
   );
 }
 
@@ -1159,9 +1466,10 @@ if (section("Field-key construction: arguments and canonicalStringify")) {
     rows.push([k, Math.max(k, 1), { write: w, "read cold": rc }]);
   }
   table(
-    "one field with k arguments over a 50-item result",
+    "k arguments on the one root field over a 50-item result",
     ["write", "read cold"],
-    rows
+    rows,
+    "k"
   );
 
   // Nested object arguments: canonicalStringify has to sort recursively.
@@ -1191,8 +1499,9 @@ if (section("Field-key construction: arguments and canonicalStringify")) {
       run: (c) =>
         c.writeQuery({ query: nestedArgQuery, data: oneHit, variables }),
     });
-    // Repeated writes with the SAME variables object hit canonicalStringify's
-    // memo; a fresh (structurally equal) object each time does not.
+    // canonicalStringify memoizes only the SORTED KEY ORDER of each object
+    // shape, never the serialized output, so reusing the same variables object
+    // should buy nothing over a fresh, structurally equal one each call.
     const wFresh = bench(`write nested arg depth=${depth}, fresh vars`, {
       setup: () => freshCache(),
       run: (c) =>
@@ -1205,9 +1514,10 @@ if (section("Field-key construction: arguments and canonicalStringify")) {
     return [depth, depth, { write: w, "fresh vars": wFresh }];
   });
   table(
-    "one field whose argument is an object nested d levels deep (1-item result)",
+    "one root field whose argument is an object nested d levels deep (1-item result)",
     ["write", "fresh vars"],
-    nestedRows
+    nestedRows,
+    "d"
   );
 
   const c = freshCache();
@@ -1220,13 +1530,23 @@ if (section("Field-key construction: arguments and canonicalStringify")) {
     k.startsWith("search")
   );
   note(`  Resulting store field key (note the sorted, fully-serialized args):\n    ${key}`);
+  note(
+    `  The arguments sit on the single root field, so their key is built a\n` +
+      `  constant number of times per operation; next to the 50-item traversal even\n` +
+      `  24 of them are lost in the noise. Key construction is O(size of the\n` +
+      `  arguments) per field occurrence: the same arguments on a field of every\n` +
+      `  list item would be paid once per item.`
+  );
 }
 
 // ===========================================================================
 if (section("keyFields: identity extraction cost")) {
+  // Every Book carries an `id`, so the default configuration normalizes it too:
+  // the four normalizing rows differ only in how the id is computed.
   const data = {
     books: Array.from({ length: QUICK ? 200 : 2000 }, (_, i) => ({
       __typename: "Book",
+      id: `b${i}`,
       isbn: `isbn-${i}`,
       title: `Title ${i}`,
       author: { __typename: "Author", name: `Author ${i}` },
@@ -1237,6 +1557,7 @@ if (section("keyFields: identity extraction cost")) {
     query Books {
       books {
         __typename
+        id
         isbn
         title
         author {
@@ -1257,15 +1578,11 @@ if (section("keyFields: identity extraction cost")) {
     "keyFields: ['isbn']": {
       typePolicies: { Book: { keyFields: ["isbn"] } },
     },
-    "keyFields: 3 flat fields": {
-      typePolicies: {
-        Book: { keyFields: ["isbn", "title"] },
-      },
+    "keyFields: ['isbn', 'title']": {
+      typePolicies: { Book: { keyFields: ["isbn", "title"] } },
     },
-    "keyFields with nested path": {
-      typePolicies: {
-        Book: { keyFields: ["isbn", "author", ["name"]] },
-      },
+    "keyFields: isbn + author.name": {
+      typePolicies: { Book: { keyFields: ["isbn", "author", ["name"]] } },
     },
     "keyFields: false (embedded)": {
       typePolicies: { Book: { keyFields: false } },
@@ -1278,27 +1595,41 @@ if (section("keyFields: identity extraction cost")) {
       setup: () => freshCache(config),
       run: (c) => c.writeQuery({ query, data }),
     });
-    rows.push([label, 1, { write: w }]);
+    const rw = bench(`rewrite identical ${label}`, {
+      setup: () => {
+        const c = freshCache(config);
+        c.writeQuery({ query, data });
+        return c;
+      },
+      run: (c) => c.writeQuery({ query, data }),
+    });
+    const probe = freshCache(config);
+    probe.writeQuery({ query, data });
+    const entries = Object.keys(probe.extract()).length;
+    rows.push([label, 1, { write: w, rewrite: rw, entries }]);
   }
-  const baseline = rows[0][2].write;
+  const baseline = rows[0][2];
   if (!JSON_OUT) {
-    console.log(`\n  Book list write cost by keyFields configuration`);
+    console.log(`\n  Book list (${data.books.length} books) write cost by keyFields configuration`);
     console.log(
-      `  ${"config".padEnd(30)} ${"write".padStart(13)} ${"vs default".padStart(12)}`
+      `  ${"config".padEnd(30)} ${"store entries".padStart(13)} ${"write".padStart(11)} ${"vs default".padStart(11)} ${"rewrite".padStart(11)} ${"vs default".padStart(11)}`
     );
-    console.log(`  ${"-".repeat(58)}`);
+    console.log(`  ${"-".repeat(92)}`);
     for (const [label, , values] of rows) {
       console.log(
-        `  ${label.padEnd(30)} ${fmt(values.write).padStart(13)} ${`${(values.write / baseline).toFixed(2)}x`.padStart(12)}`
+        `  ${label.padEnd(30)} ${String(values.entries).padStart(13)} ${fmt(values.write).padStart(11)} ${`${(values.write / baseline.write).toFixed(2)}x`.padStart(11)} ${fmt(values.rewrite).padStart(11)} ${`${(values.rewrite / baseline.rewrite).toFixed(2)}x`.padStart(11)}`
       );
     }
   }
   note(
-    `  Every normalizable object pays identify() on write. A nested keyFields path\n` +
-      `  is the most expensive configuration: extractKeyPath walks into the sub-object\n` +
-      `  and canonically stringifies it for every entity. Note that keyFields: false is\n` +
-      `  NOT free — it removes the identify cost but turns the whole list into one\n` +
-      `  embedded field value, which the writer must deep-compare on every write.`
+    `  Every object with a selection set pays identify() on write. The default\n` +
+      `  key function reads two properties and concatenates a string. A keyFields\n` +
+      `  array runs a compiled key function instead: one readField per key path\n` +
+      `  (the nested path reads author, then author.name), a fresh DeepMerger to\n` +
+      `  collect the key object, and JSON.stringify of that object. keyFields: false\n` +
+      `  still calls identify(), whose key function returns undefined at once; the\n` +
+      `  books then stay embedded in ROOT_QUERY.books, which skips per-book staging\n` +
+      `  and store.merge but makes every rewrite deep-compare the whole list.`
   );
 }
 
@@ -1319,18 +1650,29 @@ if (section("Eviction, garbage collection and extract")) {
       run: (c) => c.evict({ id: "Item:i0", fieldName: "f0" }),
     });
 
+    // Right after a write, every entity's findChildRefIds memo is empty, so gc
+    // walks every field of every entity. A second gc with no write in between
+    // reuses those memos and only walks the store and its references.
     const gcNoop = bench(`gc with nothing to collect (${n})`, {
       setup: () => written(shape),
+      run: (c) => c.gc(),
+    });
+
+    const gcNoopAgain = bench(`gc again with nothing to collect (${n})`, {
+      setup: () => {
+        const c = written(shape);
+        c.gc();
+        return c;
+      },
       run: (c) => c.gc(),
     });
 
     const gcCollect = bench(`gc after unreachable ${n}`, {
       setup: () => {
         const c = written(shape);
-        // Detach the whole list from ROOT_QUERY: every Item becomes unreachable
-        // but still retained by the direct write, so release them too.
+        // Detach the whole list from ROOT_QUERY: every Item becomes unreachable.
+        // (writeQuery retains only ROOT_QUERY, not the items it wrote.)
         c.modify({ fields: { feed: (_, { DELETE }) => DELETE } });
-        for (let i = 0; i < n; i++) c.release(`Item:i${i}`);
         return c;
       },
       run: (c) => c.gc(),
@@ -1356,6 +1698,7 @@ if (section("Eviction, garbage collection and extract")) {
         "evict entity": evictOne,
         "evict field": evictField,
         "gc noop": gcNoop,
+        "gc noop again": gcNoopAgain,
         "gc collect": gcCollect,
         extract,
         restore,
@@ -1363,22 +1706,26 @@ if (section("Eviction, garbage collection and extract")) {
     ]);
   }
   table(
-    "lifecycle operations over a store of n entities",
+    "lifecycle operations over a list of N entities (store: S = N + 1 entries)",
     [
       "evict entity",
       "evict field",
       "gc noop",
+      "gc noop again",
       "gc collect",
       "extract",
       "restore",
     ],
-    rows
+    rows,
+    "N"
   );
   note(
-    `  gc() is a full mark-and-sweep: it walks every root and every reachable field\n` +
-      `  of every entity, so it is O(store) EVEN WHEN IT COLLECTS NOTHING. restore()\n` +
-      `  is dramatically cheaper than a write of the same data because it skips\n` +
-      `  normalization entirely — the snapshot is already normalized.`
+    `  gc() is a full mark-and-sweep: it copies the store, walks every reachable\n` +
+      `  entity and deletes the rest, so it is O(S) EVEN WHEN IT COLLECTS NOTHING.\n` +
+      `  "gc noop" runs right after a write, when no entity's child-reference memo\n` +
+      `  is valid, so it also walks every field of every entity; "gc noop again"\n` +
+      `  reuses those memos. restore() is much cheaper than a write of the same data\n` +
+      `  because it skips normalization entirely: the snapshot is already normalized.`
   );
 }
 
@@ -1390,7 +1737,7 @@ if (section("Result caching off: what memoization is worth")) {
   const withCaching = (() => {
     const c = written(shape);
     c.readQuery({ query: shape.query });
-    return bench(`read warm, resultCaching on (n=${n})`, {
+    return bench(`read warm, resultCaching on (N=${n})`, {
       run: () => c.readQuery({ query: shape.query }),
     });
   })();
@@ -1398,22 +1745,22 @@ if (section("Result caching off: what memoization is worth")) {
   const withoutCaching = (() => {
     const c = written(shape, { resultCaching: false });
     c.readQuery({ query: shape.query });
-    return bench(`read warm, resultCaching off (n=${n})`, {
+    return bench(`read warm, resultCaching off (N=${n})`, {
       run: () => c.readQuery({ query: shape.query }),
     });
   })();
 
-  const writeOn = bench(`write, resultCaching on (n=${n})`, {
+  const writeOn = bench(`write, resultCaching on (N=${n})`, {
     setup: () => freshCache(),
     run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
   });
-  const writeOff = bench(`write, resultCaching off (n=${n})`, {
+  const writeOff = bench(`write, resultCaching off (N=${n})`, {
     setup: () => freshCache({ resultCaching: false }),
     run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
   });
 
   note(
-    `  n=${n} entities:\n` +
+    `  N=${n} entities:\n` +
       `    read warm,  resultCaching: true   ${fmt(withCaching)}\n` +
       `    read warm,  resultCaching: false  ${fmt(withoutCaching)}   (${(withoutCaching / withCaching).toFixed(0)}x slower)\n` +
       `    write,      resultCaching: true   ${fmt(writeOn)}\n` +
@@ -1431,11 +1778,11 @@ section("Development-build overhead (maybeDeepFreeze + warnAboutDataLoss)");
   const n = QUICK ? 500 : 5000;
   const shape = wideNormalized(n);
 
-  const write = bench(`dev-overhead write n=${n}`, {
+  const write = bench(`dev-overhead write N=${n}`, {
     setup: () => freshCache(),
     run: (c) => c.writeQuery({ query: shape.query, data: shape.data }),
   });
-  const readCold = bench(`dev-overhead read cold n=${n}`, {
+  const readCold = bench(`dev-overhead read cold N=${n}`, {
     setup: () => {
       const c = written(shape);
       c.gc({ resetResultCache: true });
@@ -1450,36 +1797,50 @@ section("Development-build overhead (maybeDeepFreeze + warnAboutDataLoss)");
       `__DEV_RESULT__ ${JSON.stringify({ n, write, readCold, frozen: isDevBuild() })}`
     );
   } else {
-    const child = spawnSync(
-      process.execPath,
-      [
-        "--expose-gc",
-        "--conditions=development",
-        fileURLToPath(import.meta.url),
-        ...(QUICK ? ["--quick"] : []),
-        "--child-dev",
-      ],
-      { encoding: "utf8", timeout: 600_000 }
-    );
-    const line = (child.stdout || "")
-      .split("\n")
-      .find((l) => l.startsWith("__DEV_RESULT__"));
-    if (line) {
-      const dev = JSON.parse(line.slice("__DEV_RESULT__".length));
+    let dev = null;
+    if (AGGREGATE) {
+      const w = AGGREGATE.get(`dev-build write N=${n}`);
+      const r = AGGREGATE.get(`dev-build read cold N=${n}`);
+      if (w && r) {
+        dev = { write: w.median, readCold: r.median, frozen: AGGREGATE.devFrozen };
+      }
+    } else {
+      const child = spawnSync(
+        process.execPath,
+        [
+          "--expose-gc",
+          "--conditions=development",
+          fileURLToPath(import.meta.url),
+          ...(QUICK ? ["--quick"] : []),
+          "--child-dev",
+        ],
+        { encoding: "utf8", timeout: 600_000 }
+      );
+      const line = (child.stdout || "")
+        .split("\n")
+        .find((l) => l.startsWith("__DEV_RESULT__"));
+      if (line) {
+        dev = JSON.parse(line.slice("__DEV_RESULT__".length));
+        results.push({ label: `dev-build write N=${n}`, ns: dev.write });
+        results.push({ label: `dev-build read cold N=${n}`, ns: dev.readCold });
+        devFrozen = dev.frozen;
+      } else {
+        note(
+          `  Could not measure development-build overhead (child exited ${child.status}).`
+        );
+      }
+    }
+    if (dev) {
       note(
-        `  n=${n} entities, production build vs. development build:\n` +
+        `  N=${n} entities, production build vs. development build:\n` +
           `    write     prod ${fmt(write).padStart(10)}   dev ${fmt(dev.write).padStart(10)}   ${(dev.write / write).toFixed(2)}x\n` +
           `    read cold prod ${fmt(readCold).padStart(10)}   dev ${fmt(dev.readCold).padStart(10)}   ${(dev.readCold / readCold).toFixed(2)}x\n` +
           `    results frozen: prod=${isDevBuild()} dev=${dev.frozen}\n` +
-          `  The development build deep-freezes every object it returns and runs\n` +
-          `  warnAboutDataLoss on every write. The overhead is real but modest on this\n` +
-          `  shape, because maybeDeepFreeze short-circuits on already-frozen subtrees\n` +
-          `  and the reader reuses frozen memo entries. It grows with the proportion of\n` +
-          `  freshly-created result objects, so it is worst on cold reads.`
-      );
-    } else {
-      note(
-        `  Could not measure development-build overhead (child exited ${child.status}).`
+          `  The development build clones every scalar field value on write, runs\n` +
+          `  warnAboutDataLoss on every write, and deep-freezes every value it reads\n` +
+          `  and every result it computes. deepFreeze does NOT stop at objects that\n` +
+          `  are already frozen: it skips re-freezing them but still walks all their\n` +
+          `  children, so each recomputed memo entry walks its whole result subtree.`
       );
     }
   }
@@ -1490,17 +1851,61 @@ if (IS_CHILD) process.exit(0);
 // ===========================================================================
 section("Summary: slowest measurements");
 // ===========================================================================
+const meta = {
+  node: process.version,
+  platform: `${process.platform}/${process.arch}`,
+  quick: QUICK,
+  repsPerMeasurement: REPS,
+  warmupsPerMeasurement: WARMUP,
+  runs: RUNS,
+};
 if (JSON_OUT) {
-  console.log(JSON.stringify({ results }, null, 2));
+  if (AGGREGATE) {
+    const aggregated = [...AGGREGATE].map(([label, a]) => ({ label, ...a }));
+    console.log(JSON.stringify({ meta, results: aggregated }, null, 2));
+  } else {
+    console.log(JSON.stringify({ meta, devFrozen, results }, null, 2));
+  }
 } else {
-  const top = [...results].sort((a, b) => b.ns - a.ns).slice(0, 15);
+  const all =
+    AGGREGATE ?
+      [...AGGREGATE].map(([label, a]) => ({ label, ns: a.median }))
+    : results;
+  const top = [...all].sort((a, b) => b.ns - a.ns).slice(0, 15);
   console.log();
   for (const { label, ns } of top) {
     console.log(`  ${fmt(ns).padStart(12)}  ${label}`);
   }
   console.log(
-    `\n  ${results.length} measurements. Node ${process.version} on ${process.platform}/${process.arch}.`
+    `\n  ${all.length} measurements. Node ${process.version} on ${process.platform}/${process.arch}.`
   );
+  console.log(
+    `  Each measurement: median of ${REPS} timed repetitions after ${WARMUP} untimed warm-ups` +
+      (AGGREGATE ?
+        `,\n  then the median of those medians across ${RUNS} independent processes.`
+      : `\n  (single run; pass --runs=R to aggregate R independent processes).`)
+  );
+  if (AGGREGATE) {
+    // Run-to-run spread: (max - min) / median of the per-run medians.
+    const spreads = [...AGGREGATE]
+      .map(([label, a]) => ({
+        label,
+        spread: (a.max - a.min) / a.median,
+        a,
+      }))
+      .sort((x, y) => x.spread - y.spread);
+    const pct = (q) => spreads[Math.min(spreads.length - 1, Math.floor(q * spreads.length))].spread;
+    console.log(
+      `\n  Run-to-run spread, (max - min) / median across the ${RUNS} runs:\n` +
+        `    median measurement: ${(pct(0.5) * 100).toFixed(0)}%   90th percentile: ${(pct(0.9) * 100).toFixed(0)}%\n` +
+        `    noisiest measurements:`
+    );
+    for (const { label, spread, a } of spreads.slice(-8).reverse()) {
+      console.log(
+        `    ${`${(spread * 100).toFixed(0)}%`.padStart(6)}  ${label}  (${fmt(a.min)} .. ${fmt(a.max)})`
+      );
+    }
+  }
   console.log(
     `  Development build: ${isDevBuild()} (true = results are deep-frozen)`
   );
