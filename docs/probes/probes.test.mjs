@@ -111,3 +111,37 @@ test("the A/B report times every measurement against both caches", () => {
     assert.equal(ratio, rsNs / apolloNs);
   }
 });
+
+test("a saved run only re-renders against the cache it measured", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "probe-save-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const saved = join(dir, "agg.json");
+  const perf = probe("cache-performance-probe.mjs");
+  const section = ["--quick", "--sections=10"];
+
+  const save = runNode([
+    "--expose-gc",
+    perf,
+    ...section,
+    "--runs=1",
+    "--cache=rs",
+    `--save=${saved}`,
+  ]);
+  assert.equal(save.status, 0, save.stderr);
+
+  const same = runNode([
+    "--expose-gc",
+    perf,
+    ...section,
+    `--load=${saved}`,
+    "--cache=rs",
+  ]);
+  assert.equal(same.status, 0, same.stderr);
+
+  const other = runNode(["--expose-gc", perf, ...section, `--load=${saved}`]);
+  assert.notEqual(other.status, 0);
+  assert.match(
+    other.stderr,
+    /was measured with --cache=rs; pass the same flag/
+  );
+});

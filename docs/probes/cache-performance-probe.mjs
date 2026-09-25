@@ -330,6 +330,7 @@ function aggregateRuns() {
 function aggregateToJson(aggregate) {
   return {
     meta: {
+      cache: cacheName,
       node: process.version,
       platform: `${process.platform}/${process.arch}`,
       quick: QUICK,
@@ -347,6 +348,13 @@ if (LOAD_PATH && !IS_CHILD) {
   if (saved.meta.quick !== QUICK) {
     throw new Error(
       `${LOAD_PATH} was measured ${saved.meta.quick ? "with" : "without"} --quick; pass the same flag to render it`
+    );
+  }
+  // Files saved before --cache existed measured Apollo's cache.
+  const savedCache = saved.meta.cache ?? "apollo";
+  if (savedCache !== cacheName) {
+    throw new Error(
+      `${LOAD_PATH} was measured with --cache=${savedCache}; pass the same flag to render it`
     );
   }
   AGGREGATE = new Map(saved.results.map(({ label, ...a }) => [label, a]));
