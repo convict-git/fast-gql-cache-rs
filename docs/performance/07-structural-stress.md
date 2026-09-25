@@ -40,7 +40,7 @@ flowchart TB
     D --> R["<b>READ (cold)</b><br/>D nested executeSelectionSet frames<br/><i>one memo entry per level: O(F·D) for a chain<br/>(O(D²) objects frozen in development)</i>"]:::read
     D --> I["<b>INVALIDATION</b><br/>a leaf change re-executes the D + 1<br/>entries on its path, and each level's<br/>clean report climbs to the root<br/><i>O(D²): MORE than a cold read</i>"]:::dirty
 
-    W --> WORST["<b>Worst case:</b><br/>deep chain + frequent leaf updates<br/>= every update is worse than a cold read<br/><i>measured 2.5x at D=128</i>"]:::dirty
+    W --> WORST["<b>Worst case:</b><br/>deep chain + frequent leaf updates<br/>= every update is worse than a cold read<br/><i>measured 5.8x at D=512</i>"]:::dirty
     R --> WORST
     I --> WORST
 
@@ -64,7 +64,7 @@ rooted at the leaf rather than to the whole chain.
 ## 7.2 Breadth
 
 Breadth is the friendly dimension. Writes and cold reads are linear, warm reads are
-constant, and point updates are linear with a small constant (7–9.5× cheaper than a cold
+constant, and point updates are linear with a small constant (several times cheaper than a cold
 read, [§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
 
 Where breadth *does* bite:
@@ -117,26 +117,28 @@ flowchart LR
     classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
 ```
 
-The same `n` objects with 6 scalar fields each, once normalized and once embedded in a
-single field:
+The same `N` objects with 6 scalar fields each, once normalized (with an `id`) and once
+embedded in a single field (without one); the probe's section 3:
 
-| `n` | write normalized | write embedded | read warm normalized | read warm embedded |
-| --- | --- | --- | --- | --- |
-| 100 | 874 µs | 711 µs | 2.9 µs | 3.0 µs |
-| 1 000 | 8.14 ms | 5.86 ms | 2.5 µs | 2.5 µs |
-| 5 000 | 44.10 ms | 28.91 ms | 2.6 µs | 2.6 µs |
+| `N` | write normalized | write embedded | rewrite identical, normalized | rewrite identical, embedded | read warm normalized | read warm embedded |
+| --- | --- | --- | --- | --- | --- | --- |
+| 100 | 1.81 ms | 1.55 ms | 1.46 ms | 1.12 ms | 5.0 µs | 5.2 µs |
+| 1 000 | 16.54 ms | 10.85 ms | 14.32 ms | 11.82 ms | 4.4 µs | 4.1 µs |
+| 5 000 | 83.55 ms | 53.25 ms | 77.82 ms | 57.32 ms | 3.8 µs | 4.0 µs |
 
-Store entries at `n = 2 000`:
+Store entries at `N = 2 000`:
 
 ```
-normalized: 2001 entries (1 root + n entities)
+normalized: 2001 entries (1 root + N entities)
 embedded:      1 entry   (root only — the whole list lives in one field)
 ```
 
-Embedding writes about **1.5× faster** at `n = 5 000` (no id to compute, no per-entity
-staging and merge, no reference indirection) and reads identically fast when warm. What it gives up is not speed, it is **granularity**: the whole
-list is one cache field, so changing one element dirties all of it, and nothing is shared
-with any other query. The 1.5× is the price of per-entity invalidation.
+Embedding writes **1.57× faster** at `N = 5 000` (`identify` finds no id at once, and
+there is no per-entity staging, merge or reference indirection) and reads as fast when
+warm: both warm reads are one memo hit. What it gives up is not speed, it is
+**granularity**: the whole list is one cache field, so changing one element dirties all of
+it, and nothing is shared with any other query. The difference is the price of per-entity
+invalidation.
 
 The rule of thumb that follows:
 
@@ -144,15 +146,14 @@ The rule of thumb that follows:
 | --- | --- |
 | shared, individually updated, referenced by several queries | **normalized** |
 | a settings object, a chart series, a geometry payload, an opaque JSON column | **embedded** |
-| large **and** written once, read often | **embedded** — one `equal()` on write, free thereafter |
+| large **and** written once, read often | **embedded** — no per-entity staging on the write, a memo hit on every warm read |
 
 Rewriting unchanged content does not change this ranking. The embedded form pays `equal()`
 over the whole list on every rewrite, but the normalized form pays the traversal,
-`identify`, staging and per-entity merge instead. A direct check with 5 000 small objects
-(the same shape as the table) measured an identical rewrite at 17.0 ms embedded against
-22.9 ms normalized. Choose normalization for granularity and sharing, not to make
-rewrites cheaper; to make rewrites of a large unchanged value cheap, see
-[§7.4](#74-the-untyped-blob-pathology).
+`identify`, staging and per-entity merge instead: at `N = 5 000` an identical rewrite
+costs 57.32 ms embedded against 77.82 ms normalized. Choose normalization for granularity
+and sharing, not to make rewrites cheaper; to make rewrites of a large unchanged value
+cheap, see [§7.4](#74-the-untyped-blob-pathology).
 
 ## 7.4 The untyped-blob pathology
 
@@ -230,12 +231,15 @@ completely differently from the normalized matrix in [§3.5](03-read-path.md#35-
 
 | `G × R` | write into an empty field | scale | rewrite with an equal copy | scale | read cold | scale | read warm | scale |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 10 × 100 | 6.8 µs | — | — | — | — | — | 2.2 µs | — |
-| 100 × 100 | 7.0 µs | 0.10 | — | — | — | — | 2.1 µs | 0.10 |
-| 100 × 1 000 | 6.7 µs | 0.10 | — | — | — | — | 2.1 µs | 0.10 |
+| 10 × 100 | 13.4 µs | — | 179.0 µs | — | 132.6 µs | — | 4.5 µs | — |
+| 100 × 100 | 12.4 µs | 0.09 | 867.5 µs | 0.48 | 649.4 µs | 0.49 | 4.2 µs | 0.09 |
+| 100 × 1 000 | 12.3 µs | 0.10 | 7.70 ms | 0.89 | 2.54 ms | 0.39 | 4.4 µs | 0.11 |
 
 Writing into an empty field and reading warm are **constant**, at 100 000 elements.
-Rewriting and reading cold are linear.
+Rewriting and reading cold grow with the element count. At these sizes part of their cost
+is per inner array rather than per element (one `equal()` call and one memo entry per
+array), which is why their `scale` column sits below `1.00` — on both steps for the cold
+read, whose per-array cost still dominates at `100 × 1 000`.
 
 A list of scalars with **no sub-selection** is the degenerate — and cheapest — case to
 *write*. `processFieldValue` returns immediately:
@@ -319,12 +323,12 @@ renders, not cache work.
 ## 7.7 Argument-heavy fields
 
 The measurements are in [§2.4](02-write-path.md#24-field-key-construction). The summary:
-**the key costs `O(A)` per field occurrence, whatever the values are.** Going from a 1-level
-to a 128-level nested argument object takes the write from 18.0 µs to 150.3 µs, and using a
-fresh `variables` object every call changes nothing. Going from 0 to 24 arguments is lost
-in the noise in the probe, but only because those arguments sit on the one root field and
-are paid a constant number of times per operation; on a field selected for every list
-item they would be paid once per item.
+**the key costs `O(A)` per field occurrence, whatever the values are.** Going from a
+1-level to a 128-level nested argument object takes the write from 33.6 µs to 247.6 µs,
+and using a fresh `variables` object every call changes nothing. Going from 0 to 24
+arguments is lost in the noise in the probe, but only because those arguments sit on the
+one root field and are paid a constant number of times per operation; on a field selected
+for every list item they would be paid once per item.
 
 Costs, in order:
 
