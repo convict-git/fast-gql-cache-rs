@@ -11,25 +11,41 @@
 > **Measurements.** Every table and timing in this guide comes from
 > [`probes/cache-performance-probe.mjs`](../probes/cache-performance-probe.mjs), whose full
 > output is committed at [`probes/cache-performance-probe.log`](../probes/cache-performance-probe.log).
-> The few one-off checks made outside the probe are labelled "verified" or "a direct check"
-> in the text and do not appear in the log.
+> The few checks made outside the probe are labelled "verified" in the text; they are
+> counts, not timings, so they do not vary from run to run.
 >
-> The committed log records 165 medians on Node v22.14.0, linux/x64, **production
-> build**. Treat the absolute values as indicative and the **growth rates and ratios**
-> as the real result: a re-run on darwin/arm64 with Node 24.6 reproduced the same
-> shapes with different absolute timings.
+> **How the numbers are aggregated.** Timings vary from run to run, so no number in this
+> guide is a single measurement. Each one is a **median of medians**:
+>
+> 1. inside one run, an operation is repeated 25 times after 3 untimed warm-ups, and the
+>    run keeps the median of the 25 timings;
+> 2. the whole probe is run **5 times, in 5 separate Node processes**, and the guide
+>    reports the median of the 5 per-run medians.
+>
+> Medians rather than means, because a single GC pause or JIT recompilation can
+> multiply one sample and would drag a mean with it. Separate processes, because JIT
+> state and heap layout differ between processes and one process can be slow as a whole.
+> The committed log ends with the **run-to-run spread** of every measurement, so you can
+> see how far each number moves between runs.
+>
+> The committed log was produced on Node v22.22.2, linux/x64, **production build**.
+> Treat the absolute values as indicative and the **growth rates and ratios** as the
+> real result: absolute timings depend on the machine, growth rates do not.
 
 ## Running the probe
 
 From the repository root:
 
 ```bash
-node --expose-gc docs/probes/cache-performance-probe.mjs
+node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
 ```
 
-Add `--quick` for a faster, coarser run, or `--json` for machine-readable output suitable
-for tracking regressions in CI. The probe deliberately runs the production build; its last
-section measures the development-build overhead in a child process.
+`--runs=R` repeats the measurement in `R` separate processes and reports the median
+across them, as described above. Without it the probe makes a single run. Add `--quick`
+for a faster, coarser run, or `--json` for machine-readable output suitable for tracking
+regressions in CI (with `--runs`, the JSON holds each measurement's median, minimum,
+maximum and per-run values). The probe deliberately runs the production build; its
+last measured section measures the development-build overhead in a child process.
 
 ## How to read this guide
 
@@ -81,19 +97,30 @@ flowchart TB
 Both are links.
 
 **The `scale` column.** It is the growth factor between two adjacent rows divided by their
-size ratio: `1.00n` is linear, and a quadratic step reads as the size ratio itself. See
-[§1.3](01-cost-model.md#13-measured-the-shape-of-the-curves) for the full legend.
+size ratio: `1.00` is linear, `1/ratio` is constant, and a quadratic step reads as the
+size ratio itself. See [§1.3](01-cost-model.md#13-measured-the-shape-of-the-curves) for
+the full legend.
 
-**Notation.**
+**Notation.** Every complexity in this guide is written with the symbols below. A chapter
+that needs an extra symbol defines it where it is used. The first column of every
+measured table names the symbol it varies.
 
 | Symbol | Meaning |
 | --- | --- |
-| `E` | number of distinct **entities** touched by an operation |
-| `F` | number of **fields** selected per entity |
-| `D` | **depth** of the selection set / result tree |
-| `N` | **length** of a list field |
-| `W` | number of registered **watches** |
-| `L` | number of stacked optimistic **layers** |
-| `S` | total size of the **store** (number of `dataId` entries) |
+| `E` | **objects** in the payload (write) or result tree (read) that have a sub-selection: entities *and* embedded objects, counted once per occurrence, plus the root object |
+| `F` | **fields** selected per object, after fragments are flattened (`__typename` and `id` count) |
+| `D` | **depth** of an object: the number of steps (field names and list indices) on the path from the root object down to it. A list item under `ROOT_QUERY.feed` has `D = 2`; the leaf of a chain of `D` nested entities has depth `D`. It is also the number of read memo entries above the object's own entry |
+| `N` | **length** of one list field |
+| `S` | **store entries**: the number of `dataId` keys in the normalized store, `ROOT_QUERY` included |
+| `W` | registered **watches** (`cache.watch` calls; one per active `ObservableQuery`) |
+| `L` | optimistic **layers** stacked above the permanent `Stump` |
+| `B` | **size of a value**: the number of objects, arrays and primitives in a stored or incoming field value (a JSON scalar, an embedded object, a list) |
+| `A` | **size of a field's arguments**, counted the same way |
+| `V` | **size of an operation's variables**, counted the same way |
+| `K` | **key-field reads** a `keyFields` specifier makes per object: one per step of every key path (`["isbn"]` makes one, `["isbn", "author", ["name"]]` makes three) |
+
+`O(...)` is an upper bound on the work in these symbols. Where a bound hides a factor
+that matters in practice (a per-level chain walk, a per-watch comparison), the chapter
+states it separately rather than folding it into a constant.
 
 **Start here:** [Part 1 — The cost model in one page](01-cost-model.md)

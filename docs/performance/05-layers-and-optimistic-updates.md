@@ -33,8 +33,8 @@ Three distinct costs:
 ```mermaid
 flowchart TB
     subgraph reading["Reading through L layers"]
-        R1["EntityStore.lookup(dataId)"]:::read
-        R2["walk child → parent until a layer has the dataId<br/><i>O(L) per MISS, O(1) per hit at the top</i>"]:::read
+        R1["EntityStore.get(dataId, field)<br/>and has(dataId)"]:::read
+        R2["walk child → parent until a store holds it<br/><i>O(L) per field lookup on a memo MISS;<br/>a memo hit never walks the chain</i>"]:::read
         R1 --> R2
     end
 
@@ -45,8 +45,8 @@ flowchart TB
     end
 
     subgraph removing["Removing a layer"]
-        D1["removeLayer(id) on the TOP layer<br/>→ dirty the fields it shadowed<br/><i>O(layer size)</i>"]:::dirty
-        D2["removeLayer(id) BELOW the top<br/>→ rebuild + replay EVERY layer above it<br/><i>O(L · layer size)</i>"]:::dirty
+        D1["removeLayer(id) on the TOP layer<br/>→ recurse down the chain, dirty the fields it shadowed<br/><i>O(L + e · L + B_ℓ)</i>"]:::dirty
+        D2["removeLayer(id) BELOW the top<br/>→ the same, plus rebuild + replay EVERY layer above it<br/><i>+ one replay per layer above</i>"]:::dirty
         D1 ~~~ D2
     end
 
@@ -65,7 +65,7 @@ The practical rules that fall out:
   ([architecture §8.5](../architecture/08-client-pipeline.md#85-mutations--optimistic-layer-final-write-root-field-scrub)).
 - **Remove layers in LIFO order.** Measured at 298× on a stack of 64 (82 µs against
   24.4 ms). Removing the bottom of a stack replays everything above it.
-- **Every notification does two diffs.** `ObservableQuery.notify` compares the optimistic
+- **A notification that re-reads the cache does two diffs.** `ObservableQuery.notify` compares the optimistic
   and non-optimistic reads ([architecture §8.7](../architecture/08-client-pipeline.md#87-broadcast--notify--reobserve)). Contrary to what the stale comment in
   `init()` suggests, these never share memo entries ([§4.2](04-dependency-graph-and-broadcast.md#42-optimistic-reads-maintain-a-second-set-of-memo-entries)) — the second diff is a genuine
   second read, cheap only because it is separately memoized.

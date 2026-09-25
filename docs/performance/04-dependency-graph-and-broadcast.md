@@ -31,8 +31,18 @@ Two costs hide here:
    (`cache.modify({ fields: { feed } })` does not need it: it visits and dirties each
    variant's full key.) It doubles the dependency count for argument-bearing fields.
 2. **`depend` recurses to parent groups.** Reading through the optimistic `Stump` registers
-   in both the stump's group and the root's group, so an optimistic read costs twice the
-   dependency bookkeeping of a root read.
+   every dependency in both the stump's group and the root's group, so an optimistic read
+   holds twice the dependencies of a root read. The *calls* grow with the layer chain:
+   `EntityStore.get` calls `depend` in every store it passes on its way down, so a field
+   lookup that walks `L` layers makes `O(L)` `depend` calls (the duplicates are no-ops in
+   the dependency `Set`, but each call still costs a key build and a `Set` insert).
+
+The other side is `dirty`. `group.dirty(dataId, storeFieldName)` visits every memo entry
+that registered that dependency and marks it dirty; each newly dirty entry then marks its
+parents as having a dirty child, climbing until it reaches an ancestor that is already
+marked. So one dirtied field costs `O(entries that read it + their not-yet-marked
+ancestors)`. A dependency on `__exists` is *forgotten* instead of dirtied: its entries are
+dropped from the memo entirely and their parents are dirtied.
 
 ## 4.2 Optimistic reads maintain a *second* set of memo entries
 
@@ -49,8 +59,11 @@ introduced:
 this.optimisticData = rootStore.stump;
 ```
 
-`optimisticData` is **never** the `Root`: with zero optimistic layers it is the `Stump`, and
-with layers it is the top layer, which shares the `Stump`'s group. The `Stump` owns its own
+`optimisticData` is **never** the `Root` outside a `batch` update (while the update of a
+`batch` whose `optimistic` option is `false` or a layer id runs, `data` and
+`optimisticData` both point at the same store): with zero optimistic
+layers it is the `Stump`, and with layers it is the top layer, which shares the `Stump`'s
+group. The `Stump` owns its own
 `CacheGroup`, hence its own `keyMaker` `Trie`, hence its own memo entries, even with zero
 optimistic layers active:
 
@@ -121,10 +134,12 @@ earliest (the first list items) are the oldest, and the trim evicts exactly the 
 Evicting an entry also dirties its parents, so the next "warm" read re-walks the list and
 recomputes those evicted items; they become the newest, and the trim evicts the next-oldest
 ones. Every read therefore recomputes **about as many entities as the overflow** plus the
-list ancestors. That was verified with a limit of 1 000: 1 101 entities recompute 102
-entries per warm read, 1 501 entities 502, and 3 001 entities 2 002. The jump at the
-threshold is abrupt because crossing it turns a microsecond memo hit into an `O(N)` list
-re-walk; beyond it, the cost grows with the overflow.
+list ancestors. The probe counts this with the limit lowered to 1 000 (its section 9): a
+flat list of 1 101 entities recomputes 102 entries per warm read, 1 501 entities 502, and
+3 001 entities 2 002. With `X` entries over the limit, a "warm" read costs
+`O(X · F)` for the recomputed entities plus a re-walk of every list on the path to them
+(`O(N)` for a flat list of `N`). The jump at the threshold is abrupt because crossing it
+turns a microsecond memo hit into that re-walk; beyond it, the cost grows with `X`.
 
 ```mermaid
 flowchart LR

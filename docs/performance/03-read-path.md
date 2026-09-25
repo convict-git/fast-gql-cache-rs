@@ -20,7 +20,8 @@ this.executeSelectionSet = wrap((options) => { /* ... */ }, {
 
 The memo key is `(selectionSetNode, dataId | object, varString)`, resolved through
 `EntityStore.makeCacheKey` → `group.keyMaker.lookupArray(arguments)`, a three-level `Trie`
-walk. Every entity × selection-set pair is one memo entry.
+walk. Every (selection set, entity, variables) triple is one memo entry; an embedded object
+is keyed by the stored object itself.
 
 > This is why result caching is worth so much: a warm read is a handful of `Trie` node
 > lookups, not a tree traversal.
@@ -39,12 +40,12 @@ why `resultCaching: false` is a debugging tool rather than a tuning knob.
 
 ## 3.2 The cost of a cold read
 
-`execSelectionSetImpl` per entity:
+`execSelectionSetImpl` per object (entity or embedded object):
 
 ```ts
-const objectsToMerge: Record<string, any>[] = [];      // 1 array per entity
-const missingMerger = new DeepMerger();                // 1 merger per entity, even when nothing is missing
-const workSet = new Set(selectionSet.selections);      // 1 Set per entity
+const objectsToMerge: Record<string, any>[] = [];      // 1 array per object
+const missingMerger = new DeepMerger();                // 1 merger per object, even when nothing is missing
+const workSet = new Set(selectionSet.selections);      // 1 Set per object
 
 workSet.forEach((selection) => {
   // ... per field:
@@ -55,13 +56,25 @@ workSet.forEach((selection) => {
   }
 });
 
-const result = mergeDeepArray(objectsToMerge);         // 1 more DeepMerger; F-1 merges
+const result = mergeDeepArray(objectsToMerge);         // 1 more DeepMerger; one merge per field
 const frozen = maybeDeepFreeze(finalResult);           // dev only: full recursive freeze
 if (frozen.result) this.knownResults.set(frozen.result, selectionSet);
 ```
 
-Per entity read: **one `Set`, two `DeepMerger`s, one array, `F` single-key objects**, plus
-`F` `readField` calls each of which does a `group.depend(dataId, storeFieldName)`.
+Per object read: **one `Set`, two `DeepMerger`s (the second only when there is more than
+one field to merge), one array, `F` single-key objects**, plus `F` `readField` calls. Each
+`readField` builds the field's store key (`O(A)` with arguments), reads the value, and
+registers a dependency with `group.depend(dataId, storeFieldName)` — two with arguments
+([§4.1](04-dependency-graph-and-broadcast.md#41-depend-and-dirty)). A `Reference` also
+costs one `store.has` check, which registers an `__exists` dependency. So a cold read is
+`O(F)` per object and `O(E · F)` in total; a repeated (entity, selection set) pair is a
+memo hit after its first occurrence.
+
+On an optimistic read (`optimistic: true`) every one of those lookups starts at the top of
+the layer chain: `EntityStore.get` checks the store it was called on and, if that store
+does not hold the field, calls its parent, registering a dependency at every level. With
+`L` layers a field lookup costs up to `O(L)`, so a cold optimistic read is up to
+`O(E · F · L)` ([Part 5](05-layers-and-optimistic-updates.md)).
 
 The symmetry with the write path is not accidental — both are "traverse the selection set,
 allocate one object per field, merge them". The difference is only that the reader's result
@@ -106,17 +119,39 @@ flowchart TB
 | Change | Memo entries whose body re-executes |
 | --- | --- |
 | 1 field of 1 leaf entity in a flat list of `N` | `3` — the entity, the array, the root |
-| 1 field of 1 entity at depth `D` | `D + 1` — the entity and every ancestor |
+| 1 field of 1 entity at depth `D` | `D + 1` — the entity and its `D` ancestor entries |
 | 1 field of `k` entities in a flat list | `k + 2` |
-| a field of `ROOT_QUERY` | `1` — but that entry is the whole result |
+| a scalar field of `ROOT_QUERY` | `1` — the root entry; its child entries are memo hits |
+
+(All four rows are counted by the probe or were verified by counting
+`execSelectionSetImpl` and `execSubSelectedArrayImpl` calls.)
 
 **Entries recomputed is not the same as work done.** Only three entries re-execute after a
 point change in a list of `N`, but one of them is the array entry, and re-executing it
 means a `filter` pass with `N` `canRead` calls plus an `N`-element `map` whose per-element
 `executeSelectionSet` calls are memo *hits*. A memo hit is cheap — a three-level `Trie`
-lookup plus an `optimism` dirty check — but it is not free, so the re-read is still `O(N)`:
+lookup, an `optimism` dirty check, and re-registering the child under its parent — but it
+is not free, so the re-read is still `O(N)`.
 
-`readQuery` over a list of `n` normalized entities:
+In general, a re-executed entry costs its own fields, `O(F)`, plus one memo lookup per
+child entry. On top of that, `optimism` 0.18.1 has a bookkeeping cost that depends on
+*depth*. When a child entry registers as clean under a parent that is itself only
+"dirty by child" (not dirty itself), the parent reports clean to *its* parent, and so on
+up to the root. In a re-read every ancestor of the change is in that state, so each clean
+child costs one step per level above it. An entry at depth `D` with `c` child entries
+therefore costs `O(F + c · D)`:
+
+- a list of `N` near the root costs `O(N)` (measured: `2N + 1` clean reports for a list at
+  depth 1, against `N + 1` on a cold read);
+- a chain of `D` nested entities costs `Σ d = O(D²)` (measured: `(D + 1)(D + 2) / 2`
+  clean reports after a leaf change, against `D + 1` on a cold read).
+
+The counts come from an instrumented copy of `optimism` (verified, not in the probe). A
+cold read does not pay the climb: new entries are dirty themselves, so a clean report
+stops at the first parent.
+
+`readQuery` over a list of `N` normalized entities (`F = 8`: `__typename`, `id` and six
+scalar fields):
 
 | `n` | cold | scale | warm | scale | after 1 dirty field | scale |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -198,17 +233,22 @@ array = array.map((item, i) => { /* recurse */ });
 ```
 
 - **`filter` allocates a second array** and calls `canRead` per element. `canRead` on a
-  `Reference` is `store.has(__ref)`, which walks the layer chain and registers an
-  `__exists` dependency. So an `N`-element list of references registers `N` extra
-  dependencies beyond the per-field ones.
+  `Reference` is `store.has(__ref)`, which walks the layer chain until a store holds the
+  entity (`O(L)` on an optimistic read) and registers an `__exists` dependency. So an
+  `N`-element list of references registers `N` extra dependencies beyond the per-field
+  ones.
 - **`map` allocates a third array.** For a list of references with a sub-selection, each
   element then goes through `executeSelectionSet` (memoized).
+- **Every non-empty list goes through `executeSubSelectedArray`**, including a list of
+  scalars with no sub-selection: it is `map`ped into a new array, so a cold read of such a
+  list is `O(N)`, not a property lookup ([§7.5](07-structural-stress.md#75-arrays-of-arrays)).
 - **Nested arrays recurse into `executeSubSelectedArray`**, each level being its own memo
   entry keyed by `(fieldNode, arrayObject, varString)`. The key is the **array instance
   stored in the cache**. When a write replaces the outer array, its inner arrays are new
   objects too, so every inner array entry misses.
 
-`outer` groups each holding `inner` normalized rows:
+The probe's shape here is not an array of arrays but a list of `G` group entities, each
+with a list field of `R` row entities (`G × R` rows in total):
 
 | shape | write | scale | read cold | scale | read warm | scale | 1 row dirty | scale |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -222,8 +262,8 @@ is **three orders of magnitude** slower than every other warm read, and its scal
 reads `207.39n`.
 
 That is not an array-nesting effect. `100 × 500` rows + 100 groups + `ROOT_QUERY` = 50 101
-entities, just over the 50 000 `executeSelectionSet` limit — so the read evicts its own memo
-entries as it walks. This is the LRU cliff of [§4.3](04-dependency-graph-and-broadcast.md#43-the-memo-lru-cliff), reached by accident from a shape that
+entities, just over the 50 000 `executeSelectionSet` limit — so the LRU trim that follows
+every read evicts entries this query needs, and the next "warm" read recomputes them. This is the LRU cliff of [§4.3](04-dependency-graph-and-broadcast.md#43-the-memo-lru-cliff), reached by accident from a shape that
 looks entirely unremarkable. It is the single best argument for checking memo sizes before
 blaming the cache.
 
@@ -252,10 +292,15 @@ It does **not** short-circuit on already-frozen objects: `deepFreeze` skips re-f
 frozen object but still walks all of its children. Every recomputed level therefore walks
 its whole result subtree, including children reused from the memo, and every
 `getFieldValue` walks the stored value it returns. After one field changes in a
-1 000-item list, a development re-read walks about 2 000 objects (verified): the new
+1 000-item list, a development re-read walks about 2 000 objects (verified: 2 006): the new
 result tree plus the stored list of references. The tax is proportional to the size of
-what is recomputed and read, not just to what is new. Never profile the development
-build.
+what is recomputed and read, not just to what is new.
+
+Because every recomputed entry walks its whole subtree, the tax also grows with depth. On
+a cold read, each of the `D` entries of a chain freezes everything below it, so a
+development read of a chain of `D` entities walks `O(D²)` objects (verified: 186, 626 and
+2 274 objects for `D` = 16, 32 and 64), where the production read is `O(D)`. Never profile
+the development build.
 
 <!-- nav:bottom -->
 

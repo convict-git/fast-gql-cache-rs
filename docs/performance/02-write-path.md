@@ -13,18 +13,18 @@ flowchart TB
 
     subgraph phase1["Phase 1 — staging (no store mutation)"]
         direction TB
-        P1A["canonicalStringify(variables) → varString<br/><i>once per write</i>"]:::memo
-        P1B["processSelectionSet — recursive<br/><b>per entity:</b> new Set, new Map, new Trie<br/><b>per field:</b> new path array, getStoreFieldName,<br/>getChildMergeTree, getMergeFunction, DeepMerger.merge"]:::write
-        P1C["policies.identify(result) per object<br/><i>default id: a string concat;<br/>keyFields: key extraction + JSON.stringify</i>"]:::write
-        P1D["context.incomingById: Map#lt;dataId, staged#gt;<br/><i>duplicate entities collapse here</i>"]:::store
+        P1A["canonicalStringify(variables) → varString<br/><i>once per write, O(V)</i>"]:::memo
+        P1B["processSelectionSet — recursive, once per object occurrence<br/><b>per object:</b> new Set, new Map, new Trie<br/><b>per field:</b> new path array (length D), getStoreFieldName,<br/>getChildMergeTree, getMergeFunction, DeepMerger.merge"]:::write
+        P1C["policies.identify(result) per object occurrence<br/><i>default id: a string concat;<br/>keyFields: K key paths + JSON.stringify</i>"]:::write
+        P1D["duplicate guard + isFresh, then<br/>context.incomingById: Map#lt;dataId, staged#gt;<br/><i>duplicates collapse here, after their<br/>fields were already processed</i>"]:::store
         P1A --> P1B --> P1C --> P1D
     end
 
     subgraph phase2["Phase 2 — effectful merge"]
         direction TB
-        P2A["for each staged entity:<br/>applyMerges (user merge functions)"]:::write
+        P2A["for each staged entity (distinct dataId):<br/>applyMerges (user merge functions)"]:::write
         P2B["__DEV__ only: warnAboutDataLoss<br/><i>per field with a selection set</i>"]:::dirty
-        P2C["store.merge(dataId, storeObject)<br/><b>new DeepMerger per entity</b><br/><b>equal() per changed field</b>"]:::dirty
+        P2C["store.merge(dataId, storeObject)<br/><b>new DeepMerger per entity</b><br/><b>equal() per object-valued field<br/>that is not === the stored value</b>"]:::dirty
         P2D["group.dirty(dataId, storeFieldName)<br/>per field that actually changed"]:::memo
         P2A --> P2B --> P2C --> P2D
     end
@@ -38,6 +38,14 @@ flowchart TB
     classDef dirty fill:#fecaca,stroke:#dc2626,stroke-width:2px,color:#0f172a
 ```
 
+Phase 1 is proportional to the **payload**, not to the number of distinct entities. The
+duplicate guard (`context.written`, [architecture §4.7](../architecture/04-store-writer.md#47-the-duplicate-guard-and-the-isfresh-short-circuit))
+and the `isFresh` check run at the *end* of `processSelectionSet`, after the object's fields
+have been processed and every child object has been recursed into. An entity that appears
+three times in a payload is traversed and identified three times and staged once; the
+probe counts this in its section 1 (three occurrences of an entity with one child: six
+`identify` calls). Phase 2 is proportional to the distinct entities staged.
+
 ## 2.2 The per-entity and per-field allocation budget
 
 This is the part most people underestimate. Reading `processSelectionSet` allocation by
@@ -45,11 +53,11 @@ allocation:
 
 ```ts
 private processSelectionSet({ dataId, result, selectionSet, context, mergeTree, path }) {
-  let incoming: StoreObject = {};                    // 1 object per entity
+  let incoming: StoreObject = {};                    // 1 object per object
   // ...
-  const fieldNodeSet = new Set<FieldNode>();          // 1 Set per entity
+  const fieldNodeSet = new Set<FieldNode>();          // 1 Set per object
 
-  this.flattenFields(selectionSet, result, context, typename)  // 1 Map + 1 Trie per entity
+  this.flattenFields(selectionSet, result, context, typename)  // 1 Map + 1 Trie per object
     .forEach((context, field) => {
       const path = [...currentPath, field.name.value];          // 1 array of length D per FIELD
       // ...
@@ -73,25 +81,28 @@ if (isArray(value)) {
 }
 ```
 
-Per write of `E` entities with `F` fields each, at depth `D`, containing lists of total
-length `N`:
+Per write of `E` objects with `F` fields each, at depth up to `D`:
 
 | Allocation | Count | Note |
 | --- | --- | --- |
-| `incoming` store object | `E` | |
+| `incoming` store object | `2E` | the initial `{}`, plus the one copy the write's shared `DeepMerger` makes on the first field (see below) |
 | `Set<FieldNode>` | `E` | |
 | `Map<FieldNode, TContext>` (from `flattenFields`) | `E` | |
 | `Trie` (`limitingTrie`) | `E` | fragment-revisit guard, discarded immediately |
+| `readField` closure and `{ ...result, ...incoming }` | `E` each | the spread, made by `identify` for the key function, copies `O(F)` properties |
 | single-key object `{ [storeFieldName]: value }` | `E · F` | fed to `DeepMerger` |
-| `path` array of length ≤ `D` | `E · F` + `N` | `[...currentPath, name]` and `[...path, i]` |
-| `MergeTree` node | up to `E · F` | recycled via `maybeRecycleChildMergeTree` |
-| `DeepMerger` for `store.merge` | `E` | one per entity, in phase 2 |
+| `path` array of length ≤ `D` | `E · F`, plus one per list element | `[...currentPath, name]` per field, `[...path, i]` per list element |
+| `MergeTree` node | up to `E · F`, plus one per list element | recycled via `maybeRecycleChildMergeTree` |
+| `DeepMerger` for `store.merge` | one per distinct staged entity | phase 2 |
 
 > **The `path` array is the sneaky one.** `[...currentPath, field.name.value]` copies the
-> whole path at every field, so a selection set of depth `D` allocates
-> `O(D)` words per field and `O(E · F · D)` words per write. Depth is therefore
-> **quadratic-ish in allocation** even though the traversal itself is linear. Section 7.1
-> measures this.
+> whole path at every field, so each field costs `O(D)` time and words, and a write costs
+> `O(E · F · D)`. For a flat list the items sit at `D = 2` and the copy is negligible. For a
+> chain of `D` nested entities, level `d` copies a path of length `d` for each of its `F`
+> fields, so the chain costs `O(F · D²)` in total. The constant is tiny (copying
+> pointers), so the quadratic term only becomes visible at depths of several hundred: see
+> the `write normalized` column of the depth table in
+> [§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept).
 
 The one thing that is *not* re-allocated: `context.merge` is a single
 `makeProcessedFieldsMerger()` for the whole write, and `DeepMerger.shallowCopyForMerge`
@@ -117,7 +128,7 @@ delta.
 
 ## 2.3 The deep-equality tax
 
-The most expensive single line on the write path is in `entityStore.ts`:
+The line with the largest potential cost on the write path is in `entityStore.ts`:
 
 ```ts
 function storeObjectReconciler(existingObject, incomingObject, property) {
@@ -132,26 +143,31 @@ function storeObjectReconciler(existingObject, incomingObject, property) {
 }
 ```
 
-`equal` is `@wry/equality`'s cycle-tolerant deep comparison. It runs for **every field of
-every entity whose incoming value is not `===` the stored value**. For data arriving fresh
-off the network, unchanged primitives (strings, numbers, booleans) *are* `===`, so they are
-skipped before the reconciler is even called. Every object-valued field is a fresh object,
-though: `Reference`s, lists, embedded objects, and JSON scalars all pay for `equal()`.
+`equal` is `@wry/equality`'s cycle-tolerant deep comparison. `DeepMerger` calls the
+reconciler for **every incoming field that the stored entity already has and whose value is
+not `===` the stored one**. For data arriving fresh off the network, unchanged primitives
+(strings, numbers, booleans) *are* `===`, so they are skipped before the reconciler is even
+called. Every object-valued field is a fresh object, though: `Reference`s (the writer makes
+a new `{ __ref }` object each time), lists, embedded objects, and JSON scalars all pay for
+`equal()`.
 
 It does *not* run when the entity is new: `EntityStore.merge` calls
 `new DeepMerger(storeObjectReconciler).merge(existing, incoming)`, and with no `existing`
 there is nothing to reconcile. That is why creating an entity and overwriting it with
-identical data cost about the same ([§2.7](#27-measured-write-scaling)) — one pays for dirtying, the other for comparing.
+identical data cost about the same ([§2.7](#27-measured-write-scaling)): a creation dirties
+every field, an overwrite compares every field instead.
 
-This is a deliberate trade: pay `O(size of the field value)` on the write to preserve
-referential identity, so the read path's memo entries stay valid and React does not
-re-render. The comment says so explicitly. But it means:
+This is a deliberate trade: pay `O(B)` on the write to preserve referential identity, so
+the read path's memo entries stay valid and React does not re-render. The comment says so
+explicitly. `equal()` walks the whole value when the two values are equal and stops at the
+first difference when they are not, so the costs below are for the *unchanged* case, the
+one that polling produces:
 
-| Field value shape | Equality cost |
+| Field value shape | Equality cost when unchanged |
 | --- | --- |
-| scalar (`string`, `number`) | `O(1)` |
+| scalar (`string`, `number`, `boolean`) | never reaches `equal()` — it is `===` |
 | `Reference` (`{ __ref }`) | `O(1)` — one key |
-| array of `Reference` of length `N` | `O(N)` |
+| array of `Reference` of length `N` | `O(N)` (`O(1)` when the lengths differ) |
 | **embedded object blob of size `B`** | `O(B)` — full recursive walk |
 | **array of embedded blobs**, total size `B` | `O(B)` |
 
@@ -179,19 +195,28 @@ let sortedKeys = sortingMap.get(unsortedKey);    // LRU of 1 000 KEY-SET PERMUTA
 The LRU maps a **key-set permutation** (`'["type","limit"]'`) to the sorted array of those
 same keys. It does **not** memoize the serialized output. So:
 
-- the full `JSON.stringify` walk runs on **every** call — `O(size of args)`, always;
-- what is saved is the recursive `keys.sort()`, and only for objects whose keys were not
-  already in order;
+- the full `JSON.stringify` walk runs on **every** call — `O(A)` for arguments of size
+  `A`, always;
+- what is saved is `keys.sort()`, and only for objects whose keys were not already in
+  order. The per-object `Object.keys`, the order check and, for an unsorted object, the
+  `JSON.stringify(keys)` lookup key and a re-ordered copy of the object still happen on
+  every call;
 - the LRU is bounded by the number of distinct object **shapes** in the app, not by the
-  number of distinct argument *values*, so it essentially never fills up. Fresh variable
-  objects on every render cost nothing extra here.
+  number of distinct argument *values*, so it rarely fills up. Fresh variable objects on
+  every render cost nothing extra here. (`cache.gc()` empties it.)
 
 There is no memoization one level up either: `Policies.getStoreFieldName` is called
-per field per entity on both the read and the write path and rebuilds the key every time.
-Argument cost is therefore paid per field occurrence, and it scales with the *size of the
-argument structure*, not with how many distinct values it takes:
+per field per object on both the read and the write path (on the read path, once per
+field of every memo entry that recomputes) and rebuilds the key every time. Argument cost
+is therefore `O(A)` per field occurrence: it scales with the *size of the argument
+structure*, not with how many distinct values it takes. Separately, every `write`,
+`read` and `diff` serializes the whole `variables` object once into `varString`, the
+memo-key component: `O(V)` per call.
 
-| argument nesting depth `d` | write, same `variables` object | write, **fresh** `variables` object each call |
+The probe writes one root field whose single argument is an object nested `d` levels
+deep (each level has three keys, so `A` grows linearly with `d`), over a one-item result:
+
+| `d` | write, same `variables` object | write, **fresh** `variables` object each call |
 | --- | --- | --- |
 | 1 | 18.0 µs | 17.0 µs |
 | 8 | 23.9 µs | 24.9 µs |
@@ -202,9 +227,11 @@ The two columns are identical within noise, which is the direct confirmation tha
 memoized per *value* — reusing the same `variables` object buys nothing. Cost tracks the
 size of the argument structure, close to linearly.
 
-Argument **count**, by contrast, vanishes into the noise as soon as there is a real result
-to traverse: 0, 2, 8 and 24 arguments on a field over a 50-item result all write in
-259–305 µs. Large or deep arguments cost; many shallow ones do not.
+Argument **count** looks free in the probe, but only because of where the arguments sit:
+0, 2, 8 and 24 arguments on the one root field over a 50-item result all write in
+259–305 µs, because that one key is built a constant number of times per operation and
+the 50-item traversal dominates. Count is part of `A`: the same 24 arguments on a field
+selected on every list item would be paid once per item.
 
 The resulting key is the fully serialized, key-sorted form, which is also what makes
 `feed(type: "top", limit: 10)` and `feed(limit: 10, type: "top")` collide correctly:
@@ -250,21 +277,27 @@ turns a field into a black box for the writer:
 | --- | --- |
 | the field's existing value is read back from the store | `existing` must be materialized before the call |
 | the writer cannot skip the field | `merge` may produce anything |
-| `equal()` still runs on the result | `store.merge` reconciles the merge function's output |
+| `equal()` still runs on the result | `store.merge` reconciles the merge function's output with the stored value |
 | pagination helpers copy the whole list | `[...existing, ...incoming]` is `O(N)` per page |
 
 A `merge` on a list field turns each incremental page write from `O(page)` into
-`O(accumulated list)`, so loading `P` pages of size `k` costs `O(P² · k)` in total. That is
-usually acceptable (`P` is small), but it is the reason infinite scroll degrades:
+`O(accumulated list)`. Loading `P` pages of `M` items each copies `M · P(P + 1) / 2` items,
+`O(P² · M)` in total. That is usually acceptable (`P` is small), but it is the reason
+infinite scroll degrades. The `equal()` that `store.merge` runs on the merged list is cheap
+while the list grows: two arrays of different lengths are unequal after one length check.
+It walks the whole list only when a write leaves the length unchanged, such as a refetch of
+a page that is already loaded. The read side grows the same way: every page dirties the
+list field, so each watcher of it re-reads the accumulated list, `O(i · M)` for page `i`
+([§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
 
 ```mermaid
 flowchart LR
-    A["page 1<br/>merge: [] + k = k"]:::write
-    B["page 2<br/>merge: k + k = 2k"]:::write
-    C["page 3<br/>merge: 2k + k = 3k"]:::write
-    D["page P<br/>merge: (P-1)k + k = Pk"]:::dirty
+    A["page 1<br/>merge: [] + M = M"]:::write
+    B["page 2<br/>merge: M + M = 2M"]:::write
+    C["page 3<br/>merge: 2M + M = 3M"]:::write
+    D["page P<br/>merge: (P-1)M + M = PM"]:::dirty
     A --> B --> C --> D
-    T["total copied: k·P(P+1)/2 = O(P²k)<br/>plus one equal() over the accumulated list per write"]:::dirty
+    T["total copied: M·P(P+1)/2 = O(P²·M)<br/>and each page's re-read walks the accumulated list"]:::dirty
     D --> T
 
     classDef write fill:#fde68a,stroke:#d97706,stroke-width:2px,color:#0f172a

@@ -38,10 +38,23 @@ public gc() {
 }
 ```
 
-`toObject()` materializes the whole store (merging the layer chain if called on a layer),
-and `findChildRefIds` walks every field of every reachable entity looking for `__ref`s. The
-per-entity result is memoized in `this.refs[dataId]` and invalidated whenever that entity is
-merged — so a `gc()` immediately after a large write re-walks everything that write touched.
+`toObject()` makes a shallow copy of the whole store, and `findChildRefIds` walks every
+field of every reachable entity looking for `__ref`s. The per-entity result is memoized in
+`this.refs[dataId]` and invalidated whenever that entity is merged — so a `gc()`
+immediately after a large write re-walks everything that write touched. Putting it
+together, with `R` the references held by reachable entities:
+
+- `O(S)` for the copy and the sweep, **always**, even when nothing is collected;
+- `O(R)` to follow the references when every reachable entity's memo is valid;
+- plus `O(B)` for each reachable entity merged since its last walk, which is `O(S · F)`
+  right after a write that touched every entity (the probe's `gc noop` column);
+- plus `O(F)` to delete each collected entity (the `gc collect` column).
+
+`InMemoryCache.gc()` runs on `optimisticData`, which is never the `Root` (it is the `Stump`
+or the top layer, [§4.2](04-dependency-graph-and-broadcast.md#42-optimistic-reads-maintain-a-second-set-of-memo-entries)).
+A layer's `toObject()` spreads its parent's copy into a new object, so the copy is made
+once per store in the chain: two copies with no layers, `L + 2` with `L` layers. It also
+empties the `canonicalStringify` and `print` caches.
 
 There is no incremental mode. Do not call `gc()` on a timer; call it after bulk evictions.
 
@@ -52,15 +65,18 @@ memory reclamation tool, and it makes the **next** read of every query cold.
 ## 6.2 `evict` is cheap, its consequences are not
 
 Evicting one entity is `O(F)` — `delete` routes through `modify` with a `DELETE` modifier
-for every field, then dirties each removed field plus `__exists`. But every read that had a
+for every field, then dirties each removed field plus `__exists`. Evicting one field is
+also `O(F)`, not `O(1)`: `modify` visits every field of the entity to find the ones whose
+name matches. But every read that had a
 dependency on it is now invalidated, and every list containing a reference to it must be
 re-filtered by `canRead` on the next read ([§3.5](03-read-path.md#35-arrays)). The eviction is fast; the re-reads it
 triggers are the cost.
 
 One detail that matters with layers active: `InMemoryCache.evict` calls
 `this.optimisticData.evict(options, this.data)`, and `EntityStore.evict` recurses to its
-parent until it reaches that `limit`. So an evict walks the entire layer chain and is
-`O(L · F)`, not `O(F)`, when optimistic layers are stacked. The `limit` argument is what
+parent until it reaches that `limit`. So an evict walks the entire layer chain: `O(L)` to
+visit the stores, plus `O(F)` in every store that holds the entity, `O(L · F)` at worst,
+when optimistic layers are stacked. The `limit` argument is what
 bounds the walk: normally `this.data` is the `Root`, so the eviction reaches all the way
 down, but *during* an optimistic update `this.data` is temporarily the current `Layer`,
 which stops the eviction at that layer. (It also means an eviction inside an optimistic

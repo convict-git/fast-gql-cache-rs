@@ -11,8 +11,8 @@ flowchart TB
     subgraph T["The four dominant costs"]
         direction TB
         C1["<b>1. Traversal</b><br/>walking the selection set x result tree<br/><i>write: processSelectionSet</i><br/><i>read: execSelectionSetImpl</i>"]:::write
-        C2["<b>2. Deep equality</b><br/>@wry/equality on every field whose<br/>reference changed<br/><i>storeObjectReconciler, broadcast gate</i>"]:::dirty
-        C3["<b>3. Allocation</b><br/>one object per field, one Map/Set/Trie<br/>per entity, one path array per field<br/><i>then GC pressure</i>"]:::store
+        C2["<b>2. Deep equality</b><br/>@wry/equality on every object-valued<br/>field whose incoming value is not ===<br/>the stored one<br/><i>storeObjectReconciler, broadcast gate</i>"]:::dirty
+        C3["<b>3. Allocation</b><br/>one object per field, one Map/Set/Trie<br/>per object, one path array per field<br/><i>then GC pressure</i>"]:::store
         C4["<b>4. Memo bookkeeping</b><br/>Trie key lookup + dep registration<br/>per field read, dirty propagation<br/>per field written"]:::memo
     end
 
@@ -43,21 +43,47 @@ The single most important structural fact:
 
 ## 1.2 Headline complexity table
 
+Symbols are defined in the [notation table](README.md#conventions): `E` objects, `F`
+fields per object, `D` depth, `N` list length, `S` store entries, `W` watches, `L`
+optimistic layers, `B` value size, `A` argument size, `V` variables size, `K` key-field
+reads.
+A few rows need a symbol of their own; those are defined under the table.
+
 | Operation | Complexity | Memoized? | Dominant term |
 | --- | --- | --- | --- |
-| `write` (entities are new) | `O(E · F)` | no | traversal + `identify` + allocation + dirtying every field |
-| `write` (overwrite, identical payload) | `O(E · F)` + `O(bytes compared)` | no | `storeObjectReconciler` → `equal()` |
-| `read` / `diff` (cold) | `O(E · F)` | — | traversal + `mergeDeepArray` |
-| `read` / `diff` (warm, nothing dirty) | `O(1)` amortized | **yes** | one Trie lookup |
-| `read` after `k` dirty entities | `O(k · F + ancestors)`; a list ancestor of length `N` costs `O(N)` | partial | recompute the invalidated entries and every ancestor |
-| `broadcast` (nothing relevant dirty) | `O(W)` cheap checks | yes | `maybeBroadcastWatch` memo hit |
-| `broadcast` (relevant write) | `O(W · affected subtree)` | partial | one re-read per distinct document |
-| `modify` / `evict` (single id) | `O(F)`, `O(L · F)` with `L` layers | — | dirty propagation |
-| `gc()` | `O(S · F)` **always** | no | mark-and-sweep over the whole store |
-| `extract()` | `O(S)` | no | `toObject` (a shallow copy of the entity map) + `__META` |
+| `write` (entities are new) | `O(V + E · F · D)`; `O(V + E · F)` when depth is bounded. Add `O(A)` per field with arguments and `O(K)` per object with `keyFields` | no | traversal + `identify` + allocation + dirtying every field |
+| `write` (overwrite, identical payload) | the same, plus `O(ΣB)` | no | `storeObjectReconciler` → `equal()` |
+| `read` / `diff` (cold) | `O(V + E · F)` from the root store; up to `O(V + E · F · L)` through `L` layers. Add `O(A)` per field with arguments | — | traversal + one `depend` per field + `mergeDeepArray` |
+| `read` / `diff` (warm, nothing dirty) | `O(V)` — independent of `E` | **yes** | serializing the variables + one `Trie` lookup |
+| `read` after `k` dirty entities | `O(k · F)` plus every ancestor entry: `O(N)` for a list ancestor near the root, `O(D²)` for a chain of `D` ancestors ([§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)) | partial | recompute the invalidated entries and every ancestor |
+| `broadcast` (nothing relevant dirty) | `O(W · V)` | yes | one memo-key build + `maybeBroadcastWatch` memo hit per watch |
+| `broadcast` (relevant write, one shared document) | one re-read + `O(W · P)` | partial | one re-read, then one `equal(lastDiff.result, diff.result)` per watch |
+| `broadcast` (relevant write, `W` distinct documents) | `W` re-reads + `O(W · P)` | no sharing | one re-read per document ([§4.5](04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)) |
+| `modify` (single id) | `O(F + ΣB)` on the root store; add `O(L)` with `optimistic: true` | — | one modifier call per field + `equal()` on the changed values + dirtying |
+| `evict` (single id) | `O(F)`; with layers `O(L + F · L′)`, at worst `O(L · F)` | — | delete every field + dirtying |
+| `gc()` | never less than `O(S)`: `O(S + R)` when every entity's reference memo is valid, `O(S · F)` right after a write that touched every entity; the store copy is made once per store in the chain, `O((L + 2) · S)` with layers | no | mark-and-sweep over the whole store |
+| `extract()` | `O(S)`; `O((L + 2) · S)` for `extract(true)` with layers | no | `toObject` (a shallow copy of the entity map) + `__META` |
 | `restore()` | `O(S · F)` | no | one merge per entity, no normalization; every field is walked for dirtying, and the snapshot objects are adopted by reference |
-| `removeOptimistic` (top layer) | `O(layer size)` | no | dirty the layer's fields |
-| `removeOptimistic` (bottom of `L`) | `O(L · layer size)` | no | **replay every layer above** |
+| `removeOptimistic` (top layer) | `O(L + e · L + B_ℓ)` | no | walk the chain, dirty the layer's fields |
+| `removeOptimistic` (bottom of `L`) | the same, plus `L − 1` layer replays | no | **replay every layer above** |
+
+Symbols used only in this table:
+
+| Symbol | Meaning |
+| --- | --- |
+| `ΣB` | total size of the object-valued incoming field values (references, lists, embedded objects, JSON scalars) that are not `===` the stored ones. `equal()` walks each of them completely when they are equal, and stops at the first difference otherwise |
+| `k` | entities with at least one dirtied field |
+| `P` | the part of the new result that `equal()` has to walk: every container rebuilt by the re-read, with all of its keys. For one changed item in a list of `N` that is the root object, the list (`N` elements) and the item, so `P = O(N + F)` |
+| `L′` | stores in the optimistic chain that hold the evicted entity (at most `L + 2`) |
+| `R` | `{ __ref }` references held by the reachable entities |
+| `e`, `B_ℓ` | entities in the removed layer, and the total size of their field values |
+
+Two costs are deliberately left out of the rows. Every mutating call (`write`, `modify`,
+`evict`, `removeOptimistic`, `batch`) ends with a broadcast unless it runs inside a
+transaction; that cost is the `broadcast` rows. And every dirtied field costs one step
+per memo entry that read it, plus the upward marking of those entries' ancestors
+([§4.1](04-dependency-graph-and-broadcast.md#41-depend-and-dirty)). User `read`, `merge`
+and modifier functions add whatever they themselves cost.
 
 ## 1.3 Measured: the shape of the curves
 
@@ -97,10 +123,10 @@ flowchart TB
     subgraph writeside["WRITE — always full cost"]
         direction TB
         WA["payload arrives"]:::write
-        WB["traverse selection set x result<br/><i>O(E·F)</i>"]:::write
-        WC["identify() every object<br/><i>O(E) + keyFields extraction</i>"]:::write
-        WD["deep-equality vs. existing<br/><i>O(bytes changed + bytes compared)</i>"]:::dirty
-        WE["dirty each changed field<br/><i>O(changed fields)</i>"]:::dirty
+        WB["traverse selection set x result<br/><i>O(E·F·D); O(E·F) at bounded depth</i>"]:::write
+        WC["identify() every object<br/><i>O(E); O(E·K) with keyFields</i>"]:::write
+        WD["deep-equality vs. existing<br/><i>O(ΣB): object-valued fields not ===</i>"]:::dirty
+        WE["dirty each changed field<br/><i>O(changed fields + their readers)</i>"]:::dirty
         WA --> WB --> WC --> WD --> WE
     end
 
@@ -108,7 +134,7 @@ flowchart TB
         direction TB
         RA["read requested"]:::read
         RB{"memo entry clean?"}:::memo
-        RC["return cached tree<br/><i>O(1)</i>"]:::memo
+        RC["return cached tree<br/><i>O(V), independent of E</i>"]:::memo
         RD["recompute ONLY dirty subtrees<br/>+ every ANCESTOR of them"]:::read
         RA --> RB
         RB -->|yes| RC

@@ -13,7 +13,7 @@ flowchart LR
     WRITE -->|yes| BLOB["The deep-equality tax (§2.3).<br/>→ find the big object-valued field<br/>→ stop selecting it, or<br/>→ add a version-aware merge (§7.4)"]:::dirty
     WRITE -->|no| REAL["Genuine work.<br/>→ reduce payload size<br/>→ batch related writes (§4.6)"]:::write
     START -->|"re-renders on<br/>unrelated changes"| REND["Over-broad selections.<br/>→ @nonreactive on display-only spreads<br/>(saves renders, not cache work)<br/>→ narrower selection sets<br/>→ useFragment on the leaf entity"]:::memo
-    START -->|"one update →<br/>whole tree recomputes"| DEEP["Depth (§7.1).<br/>→ subscribe to the leaf entity directly<br/>→ shorten the reactive path"]:::dirty
+    START -->|"one update →<br/>whole tree recomputes"| DEEP["Depth (§7.1): O(D²) re-read.<br/>→ subscribe to the leaf entity directly<br/>→ shorten the reactive path"]:::dirty
     START -->|"gets slower<br/>over time"| GROW{"Store or memo<br/>growth?"}:::store
     GROW -->|store| GC["→ evict + gc() after bulk changes<br/>→ check retain/release balance"]:::store
     GROW -->|memo| DOC["Document identity (§4.5).<br/>→ hoist gql out of render<br/>→ verify DocumentTransform caching<br/>→ inspect client.getMemoryInternals()"]:::dirty
@@ -44,13 +44,17 @@ flowchart LR
 | Knob | Effect | When to change it |
 | --- | --- | --- |
 | `cacheSizes["inMemoryCache.executeSelectionSet"]` | read memo capacity (default 50 000) | large stores with many distinct queries — remember watched queries consume two entries per entity ([§4.2](04-dependency-graph-and-broadcast.md#42-optimistic-reads-maintain-a-second-set-of-memo-entries)) |
-| `cacheSizes["inMemoryCache.executeSubSelectedArray"]` | array memo capacity (default 10 000) | many long lists |
+| `cacheSizes["inMemoryCache.executeSubSelectedArray"]` | array memo capacity (default 10 000) | many long lists, or arrays of arrays (one entry per inner array, [§7.5](07-structural-stress.md#75-arrays-of-arrays)) |
 | `cacheSizes["inMemoryCache.maybeBroadcastWatch"]` | broadcast memo capacity (default 5 000) | more than a few thousand simultaneous watches |
 | `cacheSizes["canonicalStringify"]` | key-sort memo, one entry per argument **shape** (default 1 000) | rarely — it is bounded by distinct object shapes, not values ([§2.4](02-write-path.md#24-field-key-construction)) |
 | `resultCaching: false` | disables the memo graph entirely | debugging only — see the measured cost in [§3.1](03-read-path.md#31-the-memo-graph-is-the-read-path) |
 | `typePolicies[T].keyFields` | identity extraction cost and normalization granularity | see [§7.3](07-structural-stress.md#73-typed-normalized-versus-untyped-embedded-data) |
 | `typePolicies[T].fields[f].keyArgs` | shortens store field keys, collapses variants | argument-heavy fields |
 | `possibleTypes` | required for interface/union fragments to match at all: without it, only exact type names match | any interface/union usage |
+
+The three `inMemoryCache.*` sizes are read when the memoized functions are created: in the
+`InMemoryCache` constructor, and again whenever the result cache is reset (`restore`,
+`reset`, `gc({ resetResultCache: true })`). Set them before constructing the cache.
 
 ## 9.4 What a Rust/WASM re-implementation should target
 
@@ -60,9 +64,12 @@ with the shape of the data:
 
 1. **`equal()` in `storeObjectReconciler`** — a hot spot whenever large object-valued
    fields (lists, embedded objects, JSON scalars) are rewritten. A Rust implementation can
-   compare interned/hashed values instead of walking structures, turning `O(blob)` into
-   `O(1)` for unchanged fields.
-2. **Allocation churn** — one object per field on both paths, plus a `path` array per field.
+   compare interned/hashed values instead of walking structures. Hashing the incoming value
+   is still `O(B)`, but it can happen once, while the response is decoded, and the
+   comparison itself becomes `O(1)`: the `O(B)` JavaScript walk per unchanged field
+   disappears.
+2. **Allocation churn** — one object per field on both paths, plus a `path` array per field
+   (`O(D)` each, [§2.2](02-write-path.md#22-the-per-entity-and-per-field-allocation-budget)).
    Arena allocation and index-based paths remove essentially all of it.
 3. **The traversal itself** — `processSelectionSet` / `execSelectionSetImpl`. A compiled
    selection-set plan (resolved field keys, merge functions, and key extractors bound once
@@ -78,12 +85,14 @@ with the shape of the data:
    the part whose semantics are hardest to preserve. Invariants R1, R2 and D1–D3 in the
    architecture document are the contract. The exception is invalidation in deep chains
    ([§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)),
-   where a leaf change costs more than a cold read; a port can do better there while
-   keeping the same observable behaviour.
+   where a leaf change costs `O(D²)` in `optimism`'s clean-report bookkeeping and more than
+   a cold read; a port that stops the upward report at the first ancestor still being
+   recomputed makes it `O(D)` while keeping the same observable behaviour.
 
 > The asymmetry from [§1.1](01-cost-model.md#11-the-four-costs-that-matter) is the guiding principle for a port: **optimize the write path,
-> preserve the read path's semantics exactly.** Reads are already `O(1)` when warm; the
-> value a re-implementation adds is on the side that has no memoization to hide behind.
+> preserve the read path's semantics exactly.** Warm reads already cost the same at any
+> result size; the value a re-implementation adds is on the side that has no memoization to
+> hide behind.
 
 <!-- nav:bottom -->
 
