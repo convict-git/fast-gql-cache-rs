@@ -1,14 +1,17 @@
 /**
- * The `Benchmark gate` check (benchmark.yml), required on main. It starts with
- * every Benchmark run, so it is pending from the moment a benchmark starts:
+ * The `Benchmark gate` check (benchmark.yml), required on main. Every Benchmark
+ * run evaluates it once at the start, and a run that measures evaluates it
+ * again at the end; the newest check of that name is the one that counts.
  *
  * - the PR has no `benchmark` label (read now, not from the event) -> pass
- * - labelled -> follow the run that benchmarks the PR's current commit (this
- *   run, or one already in flight when this run does not measure) and pass
- *   only when its report succeeds; fail when it fails or when no run of this
- *   commit measures
+ * - labelled -> look at the run that benchmarks the PR's current commit (this
+ *   run, or one in flight when this run does not measure): pass when its
+ *   report succeeded; fail while it is running (its final check will pass)
+ *   and when it failed or no run of this commit measures
  *
- * Any API error fails the check: the gate never passes by accident.
+ * It never waits: a job holding a runner for the length of a benchmark was
+ * cancelled from outside after 47 minutes, leaving the PR blocked. Any API
+ * error fails the check: the gate never passes by accident.
  *
  * Environment: GH_TOKEN, REPO, PR, SHA (the PR head), RUN_ID (this run),
  * MEASURES ("true" when this run benchmarks the commit).
@@ -94,17 +97,17 @@ export function state({ REPO, PR, SHA, RUN_ID, MEASURES }) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  for (;;) {
-    const verdict = assess(state(process.env));
-    if (verdict.action === "pass") {
-      console.log(verdict.message);
-      break;
-    }
-    if (verdict.action === "fail") {
-      console.log(`::error::${verdict.message}`);
-      process.exit(1);
-    }
-    console.log(`Waiting for the benchmark in run ${verdict.runId}...`);
-    await new Promise((r) => setTimeout(r, 60_000));
+  const verdict = assess(state(process.env));
+  if (verdict.action === "pass") {
+    console.log(verdict.message);
+  } else {
+    console.log(
+      `::error::${
+        verdict.action === "wait" ?
+          `The benchmark of this commit is running (run ${verdict.runId}); this check passes when it finishes.`
+        : verdict.message
+      }`
+    );
+    process.exit(1);
   }
 }

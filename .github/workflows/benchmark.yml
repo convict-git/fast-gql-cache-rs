@@ -110,13 +110,44 @@ jobs:
           name: benchmark-comment
           path: comment/
 
-  # Starts with every run (no `needs`), so the check is pending from the moment
-  # a benchmark starts rather than when it ends; scripts/bench/gate.mjs decides.
+  # Evaluated at the start of every run, so an earlier success on this commit
+  # never stands in for a benchmark that has just started, and again at the
+  # end of a run that measures (gate-final). scripts/bench/gate.mjs decides.
   gate:
     name: Benchmark gate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 300
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/bench/gate.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+          # The `measure` job's condition (keep the two in sync).
+          MEASURES: >-
+            ${{ github.event_name == 'workflow_dispatch'
+              || (contains(github.event.pull_request.labels.*.name, 'benchmark')
+                  && (contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
+                      || (github.event.action == 'labeled' && github.event.label.name == 'benchmark'))) }}
+
+  gate-final:
+    name: Benchmark gate
+    needs: [measure, report]
+    if: always() && github.event_name == 'pull_request' && needs.measure.result != 'skipped'
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: read
