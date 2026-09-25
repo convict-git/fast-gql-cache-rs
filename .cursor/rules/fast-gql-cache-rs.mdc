@@ -1,7 +1,0 @@
----
-description: fast-gql-cache-rs project conventions — Rust-WASM InMemoryCache for Apollo Client
-alwaysApply: true
----
-
-Project conventions (production vs development code, import rules, package boundaries,
-phase strategy, skills) live in `AGENTS.md` at the repo root. Follow them for every change.
