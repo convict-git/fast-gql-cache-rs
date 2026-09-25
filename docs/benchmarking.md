@@ -28,7 +28,9 @@ is one cache on one side), with 25 timed repetitions per measurement.
 Add the **`benchmark`** label. [`benchmark.yml`](../.github/workflows/benchmark.yml)
 compares the PR head with its merge base, splits the sections across four parallel jobs
 (each measures all four configurations of its sections on one runner), and posts one
-comment on the PR, updated in place. It takes about 30–40 minutes. The label is removed
+comment on the PR, updated in place. It takes about 75 minutes: the slowest group of
+sections (and section 7 on its own) runs for over an hour on GitHub's runners, which
+measured about 2.6× slower than a recent laptop. The label is removed
 when the comment is posted; add it again to re-run after new pushes. Until then, the
 comment says the results are for an older commit.
 

@@ -45,7 +45,7 @@ export function nextBody(existing, event) {
           MARKER,
           "> [!NOTE]",
           "> Not benchmarked yet. Add the `benchmark` label to compare this PR's",
-          "> performance against its base (takes about 30–40 minutes).",
+          "> performance against its base (takes about 75 minutes).",
           "",
         ].join("\n")
       );

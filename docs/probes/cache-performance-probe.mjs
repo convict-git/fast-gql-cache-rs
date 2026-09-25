@@ -8,6 +8,7 @@
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --quick
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --json > results.json
+ *   node --expose-gc docs/probes/cache-performance-probe.mjs --json-out=results.json
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --sections=1,13
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --cache=rs
  *   node --expose-gc docs/probes/cache-performance-probe.mjs --runs=5 --save=agg.json
@@ -53,7 +54,9 @@
  * visible without a curve fit.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cacheSizes } from "@apollo/client/utilities";
@@ -62,7 +65,15 @@ import { gql } from "graphql-tag";
 import { cacheName, InMemoryCache } from "./select-cache.mjs";
 
 const QUICK = process.argv.includes("--quick");
-const JSON_OUT = process.argv.includes("--json");
+/**
+ * `--json-out=FILE` is `--json` written to FILE instead of stdout. Tools that
+ * parse the results use it: stdout also carries whatever the cache under test
+ * prints, and a benchmark must survive an arbitrary (old, noisy) build.
+ */
+const JSON_FILE = process.argv
+  .find((a) => a.startsWith("--json-out="))
+  ?.slice("--json-out=".length);
+const JSON_OUT = process.argv.includes("--json") || Boolean(JSON_FILE);
 const IS_CHILD = process.argv.includes("--child-build");
 /** `--sections=1,13` runs only those sections (for investigating one area). */
 const SECTIONS = (() => {
@@ -275,6 +286,8 @@ function withCacheSize(key, value, fn) {
  */
 function aggregateRuns() {
   const perLabel = new Map();
+  // Each child writes its results to a file here (see --json-out).
+  const resultDir = mkdtempSync(join(tmpdir(), "cache-probe-runs-"));
   let devFrozen;
   const sections =
     SECTIONS ?
@@ -287,12 +300,13 @@ function aggregateRuns() {
           `  measuring: run ${r + 1} of ${RUNS}, section ${k}...\n`
         );
       }
+      const childJson = join(resultDir, `run-${r}-section-${k}.json`);
       const child = spawnSync(
         process.execPath,
         [
           "--expose-gc",
           fileURLToPath(import.meta.url),
-          "--json",
+          `--json-out=${childJson}`,
           `--sections=${k}`,
           `--cache=${cacheName}`,
           ...(QUICK ? ["--quick"] : []),
@@ -304,7 +318,7 @@ function aggregateRuns() {
           `Measuring run ${r + 1}, section ${k} failed (exit ${child.status}):\n${child.stderr}`
         );
       }
-      const parsed = JSON.parse(child.stdout);
+      const parsed = JSON.parse(readFileSync(childJson, "utf8"));
       if (parsed.devFrozen !== undefined) devFrozen = parsed.devFrozen;
       for (const { label, ns } of parsed.results) {
         if (!perLabel.has(label)) perLabel.set(label, []);
@@ -312,6 +326,7 @@ function aggregateRuns() {
       }
     }
   }
+  rmSync(resultDir, { recursive: true, force: true });
   const aggregate = new Map();
   for (const [label, values] of perLabel) {
     aggregate.set(label, {
@@ -1997,11 +2012,13 @@ const meta = {
   runs: RUNS,
 };
 if (JSON_OUT) {
-  if (AGGREGATE) {
-    console.log(JSON.stringify(aggregateToJson(AGGREGATE), null, 2));
-  } else {
-    console.log(JSON.stringify({ meta, devFrozen, results }, null, 2));
-  }
+  const json = JSON.stringify(
+    AGGREGATE ? aggregateToJson(AGGREGATE) : { meta, devFrozen, results },
+    null,
+    2
+  );
+  if (JSON_FILE) writeFileSync(JSON_FILE, `${json}\n`);
+  else console.log(json);
 } else {
   const all =
     AGGREGATE ?
