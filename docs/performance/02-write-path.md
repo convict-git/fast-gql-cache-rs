@@ -97,9 +97,9 @@ Per write of `E` objects with `F` fields each, at depth up to `D`:
 
 > **The `path` array is the sneaky one.** `[...currentPath, field.name.value]` copies the
 > whole path at every field, so each field costs `O(D)` time and words, and a write costs
-> `O(E · F · D)`. For a flat list the items sit at `D = 2` and the copy is negligible. For a
-> chain of `D` nested entities, level `d` copies a path of length `d` for each of its `F`
-> fields, so the chain costs `O(F · D²)` in total. The constant is tiny (copying
+> `O(E · F · D)`. For a flat list the items sit at `D = 2` and the copy is negligible. For
+> a chain of `D` nested entities, level `d` copies a path of length `d` for each of its
+> `F` fields, so the chain costs `O(F · D²)` in total. The constant is tiny (copying
 > pointers), so the quadratic term only becomes visible at depths of several hundred: see
 > the `write normalized` column of the depth table in
 > [§3.3](03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept).
@@ -216,22 +216,25 @@ memo-key component: `O(V)` per call.
 The probe writes one root field whose single argument is an object nested `d` levels
 deep (each level has three keys, so `A` grows linearly with `d`), over a one-item result:
 
-| `d` | write, same `variables` object | write, **fresh** `variables` object each call |
-| --- | --- | --- |
-| 1 | 18.0 µs | 17.0 µs |
-| 8 | 23.9 µs | 24.9 µs |
-| 32 | 49.1 µs | 53.5 µs |
-| 128 | 150.3 µs | 154.3 µs |
+| `d` | write, same `variables` object | scale | write, **fresh** `variables` object each call | scale |
+| --- | --- | --- | --- | --- |
+| 1 | 33.6 µs | — | 34.9 µs | — |
+| 8 | 43.0 µs | 0.16 | 44.5 µs | 0.16 |
+| 32 | 79.9 µs | 0.46 | 80.6 µs | 0.45 |
+| 128 | 247.6 µs | 0.77 | 245.0 µs | 0.76 |
 
-The two columns are identical within noise, which is the direct confirmation that nothing is
-memoized per *value* — reusing the same `variables` object buys nothing. Cost tracks the
-size of the argument structure, close to linearly.
+The two columns agree within the run-to-run noise, which is the direct confirmation that
+nothing is memoized per *value* — reusing the same `variables` object buys nothing. Cost
+tracks the size of the argument structure: the `scale` column rises towards `1.00` as the
+argument grows and the fixed cost of the one-item write stops dominating.
 
 Argument **count** looks free in the probe, but only because of where the arguments sit:
-0, 2, 8 and 24 arguments on the one root field over a 50-item result all write in
-259–305 µs, because that one key is built a constant number of times per operation and
-the 50-item traversal dominates. Count is part of `A`: the same 24 arguments on a field
-selected on every list item would be paid once per item.
+0, 2, 8 and 24 arguments on the one root field over a 50-item result write in 912.2 µs,
+612.0 µs, 588.7 µs and 511.7 µs. The times do not grow with the count: the first row is
+the section's first measurement and carries its warm-up, and the others fall as the
+process warms. That is because the one key is built a constant number of times per
+operation and the 50-item traversal dominates. Count is part of `A`: the same 24 arguments
+on a field selected on every list item would be paid once per item.
 
 The resulting key is the fully serialized, key-sorted form, which is also what makes
 `feed(type: "top", limit: 10)` and `feed(limit: 10, type: "top")` collide correctly:
@@ -242,31 +245,43 @@ search({"filter":{"a":2,"nested":{"a":2,"nested":{"a":2,"m":3,"z":1},"z":1},"z":
 
 ## 2.5 Identity extraction
 
-Every normalizable object pays `policies.identify` on write. Cost by configuration:
+Every object with a selection set pays `policies.identify` on write. The probe writes
+2 000 books, each with an `id`, an `isbn`, a `title` and two embedded objects (`author`,
+`published`), under five configurations. Every normalizing row stores the same 2 001
+entries, so the rows differ only in how the id is computed (`K` is the number of
+key-field reads per book):
 
-| `keyFields` configuration | write, 2 000 books | vs. default |
-| --- | --- | --- |
-| default (`__typename` + `id`) | 21.64 ms | 1.00× |
-| `["isbn"]` | 27.94 ms | 1.29× |
-| `["isbn", "title", "year"]` | 29.76 ms | 1.37× |
-| `["isbn", "author", ["name"]]` (nested path) | 30.88 ms | 1.43× |
-| `false` (object stays embedded) | 21.69 ms | 1.00× |
+| `keyFields` configuration | `K` | store entries | write | vs. default | rewrite, identical payload | vs. default |
+| --- | --- | --- | --- | --- | --- | --- |
+| default (`__typename` + `id`) | — | 2 001 | 59.44 ms | 1.00× | 61.12 ms | 1.00× |
+| `["isbn"]` | 1 | 2 001 | 64.47 ms | 1.08× | 66.24 ms | 1.08× |
+| `["isbn", "title"]` | 2 | 2 001 | 68.47 ms | 1.15× | 69.66 ms | 1.14× |
+| `["isbn", "author", ["name"]]` (nested path) | 3 | 2 001 | 73.24 ms | 1.23× | 73.18 ms | 1.20× |
+| `false` (books stay embedded) | — | 1 | 48.71 ms | 0.82× | 53.14 ms | 0.87× |
 
-The ranking follows directly from `key-extractor.ts`:
+The ranking follows directly from `key-extractor.ts`, and each normalizing row costs
+`O(K)` per object on top of the same traversal:
 
-- **default `__typename` + `id`** — two property reads, one string concat. Nothing else in
-  the cache is this cheap, which is the practical argument for just having an `id`.
-- **`keyFields: ["isbn"]`** — the specifier is compiled once, but per object the compiled
-  function runs `collectSpecifierPaths` (a fresh `DeepMerger`), extracts every path through
-  `context.readField` (the full `Policies.readField` machinery, once per key path),
-  `normalize`s the value, and `JSON.stringify`s the key object. Adding more flat key paths
-  grows this roughly linearly (1.29× for one, 1.37× for three).
-- **nested path (`["isbn", "author", ["name"]]`)** — additionally descends into the
-  sub-object via `extractKeyPath`, and `normalize`s (key-sorts) the extracted value.
+- **default `__typename` + `id`** — `defaultDataIdFromObject` reads two properties,
+  concatenates a string, and records `{ id }` as the key object. Nothing else in the cache
+  is this cheap, which is the practical argument for just having an `id`.
+- **`keyFields: ["isbn"]`** — the specifier is compiled once (cached by its JSON), but per
+  object the compiled function runs `collectSpecifierPaths` (a fresh `DeepMerger`),
+  extracts every key path through `context.readField` (the full `Policies.readField`
+  machinery, once per step of each path), `normalize`s the value (a no-op for a scalar),
+  and `JSON.stringify`s the key object. Each extra key-field read adds to the cost, as
+  the `["isbn", "title"]` row shows.
+- **nested path (`["isbn", "author", ["name"]]`)** — `["author", ["name"]]` is one path of
+  two steps: `readField("author")` on the book, then `readField("name")` on the embedded
+  author. Only the extracted scalar goes into the key; the author object is not
+  serialized.
 - **`keyFields: false`** — `identify` still runs, but its key function returns `undefined`
-  immediately, so the cost is the same as the default. The object then stays *embedded*,
-  which moves the cost to the parent field's deep equality ([§2.3](#23-the-deep-equality-tax))
-  on later writes. Not free, just moved.
+  immediately. The books then stay *embedded* in `ROOT_QUERY.books`, so the write skips
+  per-book staging, `store.merge` and references, which is why it is the cheapest row.
+  The cost moves into the parent field: every rewrite runs one `equal()` over the whole
+  list ([§2.3](#23-the-deep-equality-tax)). For this shape that is still cheaper than
+  re-staging 2 000 entities, but it grows with the list and invalidates the whole field
+  when anything in it changes ([§7.3](07-structural-stress.md#73-typed-normalized-versus-untyped-embedded-data)).
 
 ## 2.6 Merge functions
 
@@ -306,50 +321,52 @@ flowchart LR
 
 ## 2.7 Measured: write scaling
 
-`writeQuery` into a list of `n` normalized entities:
+`writeQuery` into a list of `N` normalized entities (`F = 8` fields each):
 
-| `n` | cold | scale | identical payload | scale | one field changed | scale |
+| `N` | cold | scale | identical payload | scale | one field changed | scale |
 | --- | --- | --- | --- | --- | --- | --- |
-| 100 | 1.50 ms | — | 796 µs | — | 757 µs | — |
-| 1 000 | 8.79 ms | 0.59n | 7.75 ms | 0.97n | 7.62 ms | 1.01n |
-| 5 000 | 44.00 ms | 1.00n | 39.65 ms | 1.02n | 39.68 ms | 1.04n |
-| 20 000 | 182.46 ms | 1.04n | 164.33 ms | 1.04n | 166.83 ms | 1.05n |
+| 100 | 1.95 ms | — | 1.42 ms | — | 1.34 ms | — |
+| 1 000 | 15.99 ms | 0.82 | 13.86 ms | 0.97 | 13.83 ms | 1.04 |
+| 5 000 | 83.41 ms | 1.04 | 75.95 ms | 1.10 | 72.18 ms | 1.04 |
+| 20 000 | 349.28 ms | 1.05 | 322.07 ms | 1.06 | 317.53 ms | 1.10 |
 
-Writes are **linear in `n` and insensitive to what actually changed**. The three columns
-converge as `n` grows, because the traversal, the `identify` calls, the per-field
-allocations and the `equal()` comparisons all happen regardless — dirtying fields is the
-only part a no-op write avoids, and it is the cheapest part.
+Writes are **linear in `N` and insensitive to what actually changed**. The three columns
+stay close at every size, because the traversal, the `identify` calls, the per-field
+allocations and the store merge all happen regardless — dirtying fields is the only part
+a no-op write avoids.
 
 > For a fresh payload there is no "nothing changed" fast path: the writer only learns that
 > the payload is unchanged by normalizing it and comparing field by field. (The `isFresh`
 > shortcut only applies to objects the reader itself handed out, and it skips the merge,
-> not the traversal.) This is the single most
-> useful fact for reasoning about polling and subscription workloads.
+> not the traversal.) This is the single most useful fact for reasoning about polling and
+> subscription workloads.
 
-The `n = 100` cold cell looks anomalous — it drags the next row's `scale` well below `1.00n`
-— so the probe re-measures the same three writes later in the process, once everything has
-warmed up:
+The `N = 100` cold cell is the first measurement in its process, so the probe
+re-measures the same kind of write later in the same process:
 
 | write of 100 entities | time |
 | --- | --- |
-| cold `n = 100`, as measured first in the table above | 1.50 ms |
-| the same write, re-measured into a **brand-new** cache | 875 µs |
-| into a primed but **empty** cache | 840 µs |
-| overwriting 100 **existing** entities | 718 µs |
+| cold `N = 100`, as measured first in the table above | 1.95 ms |
+| the same write, re-measured into a **brand-new** cache | 1.53 ms |
+| into a primed but **empty** cache | 1.57 ms |
+| overwriting 100 **existing** entities | 1.44 ms |
 
-Two effects, neither of them per-entity work. The first is **JIT**: the table's cold
-`n = 100` is the first measurement the process makes, and re-measuring the identical
-operation later costs 40 % less. The second is **one-time per-cache setup** — transforming
-the document, materializing type policies, allocating a fresh `StoreReader`/`StoreWriter` —
-which is the ~34 µs gap between the brand-new and primed caches.
+Two effects can inflate that cell, neither of them per-entity work. The first is **JIT**:
+the table's cold `N = 100` is the first measurement the process makes, and re-measuring
+the same write later costs 22 % less. The second would be **one-time per-cache setup** —
+transforming the document, materializing type policies, allocating a fresh
+`StoreReader`/`StoreWriter` — which is what separates a brand-new cache from a primed one.
+In this run it is not visible: the primed write (1.57 ms) is no faster than the brand-new
+one (1.53 ms), so at this size the setup cost is within the run-to-run noise.
 
-With both removed, creating entities and overwriting them cost about the same: 840 µs
-against 718 µs for 100 entities, overwriting being about 15 % cheaper in this run (and
-10 % cheaper at `n = 20 000` in the scaling table above):
+Creating entities and overwriting them cost about the same: 1.57 ms against 1.44 ms for
+100 entities, overwriting being 8 % cheaper in this run (and 8 % cheaper at `N = 20 000`
+in the scaling table above, where the cold column also pays the per-cache setup):
 
-> **Creating `n` entities costs roughly what overwriting `n` identical ones costs.** The
-> dirtying a creation performs is worth about as much as the `equal()` calls an overwrite
-> performs. Per-entity write cost depends little on whether the entity already existed.
+> **Creating `N` entities costs roughly what overwriting `N` identical ones costs.** A
+> creation dirties every field; an overwrite compares every incoming field with the stored
+> one instead (and runs `equal()` on the object-valued ones). Per-entity write cost
+> depends little on whether the entity already existed.
 
 <!-- nav:bottom -->
 

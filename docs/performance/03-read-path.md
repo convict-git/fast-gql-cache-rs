@@ -26,15 +26,18 @@ is keyed by the stored object itself.
 > This is why result caching is worth so much: a warm read is a handful of `Trie` node
 > lookups, not a tree traversal.
 
-Turning the memo graph off is the cleanest way to price it. Over 5 000 entities:
+Turning the memo graph off is the cleanest way to price it. Over 5 000 entities (the
+probe's section 13):
 
 | | `resultCaching: true` | `resultCaching: false` | ratio |
 | --- | --- | --- | --- |
-| warm read | 1.8 µs | 28.33 ms | **16 000× slower** |
-| write | 45.07 ms | 39.54 ms | 0.88× (12 % *cheaper*) |
+| warm read | 5.1 µs | 49.35 ms | **9618× slower** |
+| write | 88.82 ms | 76.15 ms | 0.86× (14 % *cheaper*) |
 
 Memoization is a read-path optimization **paid for on the write path** through dependency
-bookkeeping. The read-side win is four orders of magnitude; the write-side cost is a modest
+bookkeeping: with `resultCaching: false` the store skips the dirtying loop in
+`EntityStore.merge` entirely. The read-side win is thousands of times (the exact ratio is
+noisy, because the numerator is a few microseconds); the write-side cost is a modest
 constant factor. That trade is the central design decision of the whole cache, and it is
 why `resultCaching: false` is a debugging tool rather than a tuning knob.
 
@@ -143,8 +146,9 @@ therefore costs `O(F + c · D)`:
 
 - a list of `N` near the root costs `O(N)` (measured: `2N + 1` clean reports for a list at
   depth 1, against `N + 1` on a cold read);
-- a chain of `D` nested entities costs `Σ d = O(D²)` (measured: `(D + 1)(D + 2) / 2`
-  clean reports after a leaf change, against `D + 1` on a cold read).
+- a chain of `D` nested entities costs `Σ d = O(D²)` (measured: exactly `D(D + 1) / 2`
+  clean reports after a leaf change — 136 for `D = 16`, 2 080 for `D = 64` — against `D`
+  on a cold read).
 
 The counts come from an instrumented copy of `optimism` (verified, not in the probe). A
 cold read does not pay the climb: new entries are dirty themselves, so a clean report
@@ -153,48 +157,56 @@ stops at the first parent.
 `readQuery` over a list of `N` normalized entities (`F = 8`: `__typename`, `id` and six
 scalar fields):
 
-| `n` | cold | scale | warm | scale | after 1 dirty field | scale |
+| `N` | cold | scale | warm | scale | after 1 dirty field | scale |
 | --- | --- | --- | --- | --- | --- | --- |
-| 100 | 1.56 ms | — | 2.9 µs | — | 187 µs | — |
-| 1 000 | 15.70 ms | 1.01n | 2.5 µs | 0.09n | 1.66 ms | 0.89n |
-| 5 000 | 78.63 ms | 1.00n | 2.7 µs | 0.21n | 8.87 ms | 1.07n |
-| 20 000 | 333.45 ms | 1.06n | 2.5 µs | 0.23n | 45.08 ms | 1.27n |
+| 100 | 2.88 ms | — | 4.5 µs | — | 362.8 µs | — |
+| 1 000 | 28.95 ms | 1.01 | 3.8 µs | 0.09 | 2.99 ms | 0.83 |
+| 5 000 | 155.23 ms | 1.07 | 3.8 µs | 0.20 | 19.53 ms | 1.30 |
+| 20 000 | 701.99 ms | 1.13 | 3.6 µs | 0.24 | 93.03 ms | 1.19 |
 
-Read the `after 1 dirty` column against `cold`: at every size the re-read is **7–9.5× cheaper**
-than a cold read and **scales the same way**. That factor is the value of structure sharing;
-the linearity is the cost of the monolithic array entry.
+Read the `after 1 dirty` column against `cold`: the cold read costs 7.9×, 9.7×, 7.9× and
+7.5× the re-read at the four sizes, and both **scale the same way**. That factor is the
+value of structure sharing; the linearity is the cost of the monolithic array entry.
 
-Depth behaves completely differently. A single chain of `d` nested entities:
+Depth behaves completely differently. A single chain of `D` nested entities (three scalar
+fields each; the leaf is at depth `D`), from the probe's section 4:
 
-| `d` | write normalized | scale | read cold | scale | read warm | scale | **read after leaf change** | scale |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 4 | 68.2 µs | — | 74.4 µs | — | 2.8 µs | — | 71.7 µs | — |
-| 16 | 170.5 µs | 0.63n | 206.4 µs | 0.69n | 2.7 µs | 0.24n | 220.6 µs | 0.77n |
-| 64 | 610.2 µs | 0.89n | 737.3 µs | 0.89n | 2.4 µs | 0.22n | 1.26 ms | 1.43n |
-| 128 | 1.15 ms | 0.94n | 1.37 ms | 0.93n | 2.4 µs | 0.50n | **3.45 ms** | 1.37n |
+| `D` | write normalized | scale | write embedded | scale | read cold | scale | read warm | scale | **read after leaf change** | scale |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 | 121.6 µs | — | 87.8 µs | — | 177.0 µs | — | 5.2 µs | — | 147.0 µs | — |
+| 16 | 503.9 µs | 1.04 | 233.1 µs | 0.66 | 478.8 µs | 0.68 | 4.2 µs | 0.20 | 514.1 µs | 0.87 |
+| 64 | 1.24 ms | 0.62 | 907.4 µs | 0.97 | 1.38 ms | 0.72 | 3.8 µs | 0.23 | 2.05 ms | 1.00 |
+| 256 | 5.29 ms | 1.07 | 3.85 ms | 1.06 | 5.26 ms | 0.95 | 3.7 µs | 0.24 | 19.92 ms | 2.42 |
+| 512 | 12.43 ms | 1.18 | 9.16 ms | 1.19 | 11.58 ms | 1.10 | 4.8 µs | 0.65 | **67.73 ms** | 1.70 |
 
-Two things stand out.
+Three things stand out.
 
-- **The leaf-change re-read scales superlinearly in `d`.** Its `scale` column climbs to
-  ~1.4 while `read cold` stays at ~0.9 (linear); over `d = 16…128` that is roughly `d^1.3`.
-  Invalidating the leaf marks every ancestor as having a dirty child, and in optimism 0.18.1
-  every such ancestor reruns completely on the next read
-  ([architecture §1.1](../architecture/01-foundations.md#entry--the-dependency-graph)): it
-  forgets its old child edges and dependencies, re-registers them, and rebuilds its result.
-  A cold read does the same per-level work without the forget step. The measurements show
-  the re-read growing faster than linearly and overtaking the cold read, and the shape
-  reproduces on a different machine and Node version; the probe does not isolate which
-  part of the per-level work grows with depth.
-- **From `d = 16` upward, re-reading after a leaf change already costs more than a cold read
-  of the entire chain**, and the gap widens: 2.5× at `d = 128`. The memo graph is not merely
+- **The leaf-change re-read grows superlinearly in `D`, towards quadratic.** Its `scale`
+  column climbs towards the step ratio (`4` for the 4× steps, `2` for the last 2× step)
+  while `read cold` stays near `1.00`. Over `D` = 64 → 512 (8×) the re-read grows 33.0× —
+  between linear (8×) and quadratic (64×), because the linear per-level work is still a
+  large share at these depths — and the cold read 8.4×. The re-read re-executes exactly
+  the `D + 1` entries on the path (the probe counts them), so the growth is not more
+  entries: it is the per-level cost. Every ancestor has only a dirty *child*, and in
+  optimism 0.18.1 such an entry reruns completely on the next read
+  ([architecture §1.1](../architecture/01-foundations.md#entry--the-dependency-graph)); as
+  each level finishes it reports clean to its parent, and that report climbs all the way
+  to the root, so level `d` costs `O(d)` extra and the chain `O(D²)` (the counts are in
+  the list above: `D(D + 1) / 2` clean reports, against `D` on a cold read).
+- **The re-read overtakes the cold read of the entire chain.** It is 1.07× the cold read
+  at `D = 16`, 1.49× at `D = 64` and 5.85× at `D = 512`. The memo graph is not merely
   useless in this shape — it is a net cost.
+- **The write columns creep above `1.00` at the deepest rows.** That is the `O(D)` path
+  copy per field of [§2.2](02-write-path.md#22-the-per-entity-and-per-field-allocation-budget),
+  `O(F · D²)` for the chain; at these depths it is still a small effect next to the rest of
+  the per-level work.
 
-Note also that `read warm` stays flat at ~2.5 µs regardless of depth. Depth is free when
-nothing changed and disproportionately expensive when something did.
+Note also that `read warm` stays at a few microseconds regardless of depth. Depth is free
+when nothing changed and disproportionately expensive when something did.
 
 So the rule is sharper than "depth is expensive":
 
-> **Breadth costs a linear factor with a small constant. Depth costs a superlinear factor
+> **Breadth costs a linear factor with a small constant. Depth costs a quadratic factor
 > and, past a point, more than recomputing from scratch.** Point mutations at the bottom of
 > deep normalized chains are the single worst shape for the read path.
 
@@ -250,31 +262,40 @@ array = array.map((item, i) => { /* recurse */ });
 The probe's shape here is not an array of arrays but a list of `G` group entities, each
 with a list field of `R` row entities (`G × R` rows in total):
 
-| shape | write | scale | read cold | scale | read warm | scale | 1 row dirty | scale |
+| `G × R` | write | scale | read cold | scale | read warm | scale | 1 row dirty | scale |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 10 × 10 | 596 µs | — | 838 µs | — | 2.6 µs | — | 78.1 µs | — |
-| 10 × 100 | 4.52 ms | 0.76n | 8.62 ms | 1.03n | 2.3 µs | 0.09n | 306 µs | 0.39n |
-| 100 × 100 | 47.74 ms | 1.06n | 88.20 ms | 1.02n | 2.1 µs | 0.09n | 570 µs | 0.19n |
-| 100 × 500 | 251.86 ms | 1.06n | 472.01 ms | 1.07n | **2.21 ms** | **207.39n** | 2.27 ms | 0.80n |
+| 10 × 10 | 1.60 ms | — | 2.16 ms | — | 4.5 µs | — | 155.5 µs | — |
+| 10 × 100 | 9.26 ms | 0.58 | 15.13 ms | 0.70 | 4.0 µs | 0.09 | 586.7 µs | 0.38 |
+| 100 × 100 | 93.29 ms | 1.01 | 178.93 ms | 1.18 | 4.1 µs | 0.10 | 1.21 ms | 0.21 |
+| 100 × 500 | 500.60 ms | 1.07 | 1.02 s | 1.14 | **4.60 ms** | **224.02** | 4.74 ms | 0.78 |
 
-Everything is linear in the total element count except one cell. The `100 × 500` warm read
-is **three orders of magnitude** slower than every other warm read, and its scale column
-reads `207.39n`.
+Write and cold read grow linearly with the total row count once the fixed cost of the
+smallest shape is amortized (their first step reads below `1.00`). The `1 row dirty`
+column does not: changing one row re-executes the row, `g0`'s rows array, `g0`, the groups
+array and the root, and re-walks both arrays with memo hits, so it costs `O(G + R)`, not
+`O(G · R)`; its `scale` column, computed against `G × R`, reads below `1.00` (the last row
+also carries the LRU cliff described next).
+
+The exception is one cell. The `100 × 500` warm read is **three orders of magnitude**
+slower than every other warm read (4.60 ms against 4.1 µs for `100 × 100`), and its scale
+column reads `224.02`.
 
 That is not an array-nesting effect. `100 × 500` rows + 100 groups + `ROOT_QUERY` = 50 101
 entities, just over the 50 000 `executeSelectionSet` limit — so the LRU trim that follows
-every read evicts entries this query needs, and the next "warm" read recomputes them. This is the LRU cliff of [§4.3](04-dependency-graph-and-broadcast.md#43-the-memo-lru-cliff), reached by accident from a shape that
-looks entirely unremarkable. It is the single best argument for checking memo sizes before
-blaming the cache.
+every read evicts entries this query needs, and the next "warm" read recomputes them. This
+is the LRU cliff of [§4.3](04-dependency-graph-and-broadcast.md#43-the-memo-lru-cliff),
+reached by accident from a shape that looks entirely unremarkable. It is the single best
+argument for checking memo sizes before blaming the cache.
 
 ## 3.6 The dev-build tax
 
-Same 5 000-entity shape, production build against development build:
+Same 5 000-entity shape, production build against development build, each measured in a
+fresh process that runs only this comparison (the probe's section 14):
 
 | | production | development | ratio |
 | --- | --- | --- | --- |
-| write | 45.01 ms | 45.50 ms | 1.01× |
-| read cold | 79.76 ms | 88.21 ms | 1.11× |
+| write | 87.22 ms | 99.00 ms | 1.14× |
+| read cold | 155.42 ms | 180.54 ms | 1.16× |
 | results frozen | `false` | `true` | — |
 
 `maybeDeepFreeze` walks every returned object recursively, and `getFieldValue` calls it on
