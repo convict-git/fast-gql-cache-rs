@@ -100,17 +100,22 @@ Single-context: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
 ## Environment and toolchain
 
 Standard scripts live in `package.json`. The notes below are the non-obvious bits; the
-Cursor Cloud startup script (`.cursor/environment.json`) handles the first three.
+Cursor Cloud startup script (`.cursor/environment.json`) installs the submodules, npm
+dependencies and Rust toolchain.
 
 - **Node from `.nvmrc`** (`nvm use`). Node 24.6.x fails every Jest suite with "module is
   already linked" (nodejs/node#59480), and `jest.config.mjs` refuses to start on it; the
   submodule's CommonJS-loaded Jest environment needs Node 22.12+.
 - **Submodules are required.** `apollo-client-sm` backs the Jest environment
   (`apollo-client-sm/config/FixJSDOMEnvironment.js`), `tsconfig*.json` `extends`, the
-  Prettier config, and the `@apollo/client/testing/internal` mapping. Its `.gitmodules`
-  URL is SSH, which fails in cloud; override it to HTTPS before
-  `git submodule update` (as the README setup does). `rust-skills` is optional.
-- **Rust stable + `wasm32-unknown-unknown`** (`wasm/rust-toolchain.toml`).
+  Prettier config, and the `@apollo/client/testing/internal` mapping. `rust-skills` is
+  optional.
+- **Rust from `rust-toolchain.toml`** at the repo root (pinned version, `wasm32` target,
+  `rustfmt`, `clippy`); `rustup toolchain install` installs it. It sits at the root
+  because rustup resolves it from the working directory, where the npm scripts run.
+- **Reproducible by construction**: pin every tool version in a committed file, keep
+  scripts free of host paths and OS-specific flags, and check a change the way CI does
+  (`.github/workflows/ci.yml`). Host-only workarounds stay out of the repo.
 - `npm install` runs `patch-package` (`postinstall`) to patch `@apollo/client`; keep it.
 
 ### Building the WASM `pkg/`

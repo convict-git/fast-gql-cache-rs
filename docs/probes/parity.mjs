@@ -46,16 +46,26 @@ if (rs.stdout === apollo.stdout && rs.status === apollo.status) {
   process.exit(0);
 }
 
+// Report the first differing lines with context: enough to locate the
+// divergence without an external diff tool.
+const [want, got] = [apollo.stdout.split("\n"), rs.stdout.split("\n")];
+const first = want.findIndex((line, i) => line !== got[i]);
+const at = first === -1 ? Math.min(want.length, got.length) : first;
+const context = (lines) =>
+  lines
+    .slice(Math.max(0, at - 3), at + 8)
+    .map(
+      (line, i) =>
+        `  ${String(Math.max(0, at - 3) + i + 1).padStart(5)}  ${line}`
+    )
+    .join("\n");
 const dir = mkdtempSync(join(tmpdir(), "cache-parity-"));
-const [a, b] = [
-  join(dir, "InMemoryCache.out"),
-  join(dir, "InMemoryCacheRs.out"),
-];
-writeFileSync(a, apollo.stdout);
-writeFileSync(b, rs.stdout);
-const diff = spawnSync("diff", ["-u", a, b], { encoding: "utf8" });
-console.log(diff.stdout);
+writeFileSync(join(dir, "InMemoryCache.out"), apollo.stdout);
+writeFileSync(join(dir, "InMemoryCacheRs.out"), rs.stdout);
 console.log(
-  `PARITY FAILED: InMemoryCacheRs output differs from InMemoryCache (exit ${rs.status} vs ${apollo.status}).\nFull outputs: ${dir}`
+  `PARITY FAILED: InMemoryCacheRs output differs from InMemoryCache from line ${at + 1} ` +
+    `(exit ${rs.status} vs ${apollo.status}).\n\n` +
+    `InMemoryCache:\n${context(want)}\n\nInMemoryCacheRs:\n${context(got)}\n\n` +
+    `Full outputs: ${dir}`
 );
 process.exit(1);
