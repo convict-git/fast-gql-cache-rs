@@ -53,6 +53,7 @@ table of contents.
 ```bash
 git config submodule.apollo-client-sm.url https://github.com/apollographql/apollo-client.git
 git submodule update --init --recursive --depth 1
+nvm use  # Node from .nvmrc; Node 24.6.x cannot run the ESM Jest suite (nodejs/node#59480)
 npm install
 
 # Skip the toolchain update if the nightly wasm32 target is already installed.

@@ -19,6 +19,9 @@
     "dist",
     "pkg"
   ],
+  "engines": {
+    "node": ">=22.21.0 <23 || >=24.7.0"
+  },
   "scripts": {
     "clean": "rimraf dist coverage",
     "wasm:dev": "bash scripts/wasm-pack.sh --dev",

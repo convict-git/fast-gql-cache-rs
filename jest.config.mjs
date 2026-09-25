@@ -1,6 +1,16 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Node 24.6.x links an ES module twice when two importers reach it (a diamond),
+// so every suite fails with "module is already linked" before any test runs.
+// Fixed in 24.7.0: https://github.com/nodejs/node/issues/59480
+if (process.versions.node.startsWith("24.6.")) {
+  throw new Error(
+    `Node ${process.versions.node} cannot run Jest's ESM tests (nodejs/node#59480). ` +
+      "Use the version in .nvmrc (`nvm use`)."
+  );
+}
+
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const apolloSm = join(rootDir, "apollo-client-sm");
 
