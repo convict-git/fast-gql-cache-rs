@@ -595,11 +595,14 @@ if (section("Write cost vs. list breadth (normalized entities)")) {
         `    brand-new cache, 100 new entities   : ${fmt(coldFresh)} (${pctChange(coldFresh, rows[0][2].cold)} vs. first)\n` +
         `    primed EMPTY cache, 100 new         : ${fmt(coldPrimed)} (${pctChange(coldPrimed, coldFresh)} vs. brand-new)\n` +
         `    overwrite of 100 existing           : ${fmt(overwrite)}\n` +
-        `  Two separate effects:\n` +
+        `  Two effects can inflate it:\n` +
         `    1. JIT. The table's cold N=100 is the FIRST measurement in the process;\n` +
         `       the difference to "brand-new" is what warming up the process buys.\n` +
         `    2. One-time per-cache setup (document transform, type policies, fresh\n` +
-        `       StoreReader/StoreWriter): the gap between "brand-new" and "primed".\n` +
+        `       StoreReader/StoreWriter): the gap between "brand-new" and "primed"` +
+        (coldPrimed < coldFresh ?
+          `.\n`
+        : `,\n       which is not visible in this run (the primed write is not faster).\n`) +
         `  With both removed, CREATING n entities and OVERWRITING n identical ones cost\n` +
         `  about the same (${cheaper}): a creation dirties every\n` +
         `  field, an overwrite compares every incoming field with the stored one instead.`
@@ -1326,7 +1329,8 @@ if (section("Transactions, optimistic layers, and layer depth")) {
       `  "cold read" is the first optimistic read after stacking: every field read\n` +
       `  walks down the layer chain until a store holds the field, O(L) per field.\n` +
       `  "warm read" is FLAT in L: it is a memo hit at the top of the chain and never\n` +
-      `  walks the layers at all.`
+      `  walks the layers at all. (Each rep is the first hit after a fresh setup,\n` +
+      `  which costs more than the repeated hits measured in section 2.)`
   );
 
   // Batching: one broadcast vs. N broadcasts. Each write changes one field of a
