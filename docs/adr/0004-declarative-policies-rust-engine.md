@@ -8,7 +8,8 @@ status: proposed
 `keyArgs` as specifier arrays or `false`, `possibleTypes` as a plain map, and `merge` (and a
 few `read` behaviours) chosen from a **closed set of descriptors the cache defines**. It
 rejects JavaScript functions in policies, at construction, with an error that names each
-one. In exchange, no user code runs inside a read or a write. That removes the constraint
+one. In exchange, no policy code runs inside a read or a write, and Rust never calls
+JavaScript. That removes the constraint
 that shaped [ADR 0001](0001-js-rust-wasm-boundary.md): the store, the write engine, the
 reader, the result memo and invalidation all move into Rust. JavaScript keeps the
 `ApolloCache` API, the operation-level callbacks that API defines (modifiers, `update`
@@ -18,7 +19,9 @@ This record amends ADR 0001 (the boundary, contracts 2, 4–6, the migration ord
 and [ADR 0002](0002-compatibility-target.md) (tier 2). It leaves
 [ADR 0003](0003-wasm-initialization.md) unchanged. It is proposed: nothing below has been
 measured yet, and every performance statement is a hypothesis that the
-[experiments and gates](#migration-order-and-gates) decide.
+[experiments and gates](#migration-order-and-gates) decide. It was revised after an
+adversarial review on 2026-09-26; [that section](#review-of-2026-09-26) lists what the
+review changed and what the maintainer decided.
 
 ## Context
 
@@ -34,7 +37,7 @@ assumption forced most of ADR 0001:
 | ADR 0001 decision | Forced by |
 | --- | --- |
 | the reader, the read memo and every `optimism` dependency stay in JS (A4) | dependency capture is ambient: user `read` functions and reactive variables register dependencies from inside the memoized read (F14) |
-| policy `storage` stays in JS (F16) | only `read` and `merge` functions use it |
+| policy `storage` stays in JS (F16) | `read` and `merge` functions use it (so do modifiers, which stay: section 3) |
 | a resumable write engine that flushes a dirty report before every callout (contracts 4–6) | `merge`, `keyFields` and `keyArgs` functions run mid-write, can read the cache and can throw (F6, F12, F15) |
 | stored values as JS *slots* (A2), and stored-value identity (contract 2) | user functions and Apollo's `StoreReader` see JS identity (F3, F8) |
 | V0: a Rust store under Apollo's reader and writer | the reader and writer could not move while they run user code |
@@ -46,13 +49,21 @@ path. Around every write sit the costs of reacting to it: a re-read after one di
 (19.53 ms), a broadcast to 200 watchers of one document (95.99 ms), and the
 same broadcast when those watchers use separately parsed documents (7.42 s,
 [§4.5](../performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
-A write-heavy application pays all of them on every write. Apollo's reader stays in JS under
+A write-heavy application pays some of them on most writes, not all of them on every one:
+an identical rewrite dirties nothing, an unrelated write wakes no watcher, and a batch shares
+one broadcast. So the experiments measure real write, read-back and broadcast sequences on a
+declared workload rather than adding these numbers up. Apollo's reader stays in JS under
 ADR 0001, so ADR 0001 could only reach the first.
 
 **What the premise costs in tests.** By a pattern count over `src/__tests__`, 46 of the 266
-ported test cases configure a `read`, `merge`, `keyFields` or `keyArgs` function, a custom
-`dataIdFromObject`, a pagination helper or a reactive variable. The other 220 exercise only
-declarative configuration and stay the oracle. The performance probe's sections 1–13 use no
+`it(` call sites (Jest runs 316 tests) configure a `read`, `merge`, `keyFields` or `keyArgs`
+function, a custom `dataIdFromObject`, a pagination helper or a reactive variable. The count
+is provisional: the step 2 inventory classifies every test. Those tests are not converted or
+deleted; they stay as the untouched oracle ([Compatibility](#compatibility-amends-adr-0002)).
+Five suites (`diffAgainstStore`, `readFromStore`, `writeToStore`, `roundtrip`,
+`recordingCache`) drive Apollo's `StoreReader` and `StoreWriter` directly, so they need
+twins that go through the public API before this engine can be judged by them. The
+performance probe's sections 1–13 use no
 policy functions, so ADR 0001's gates already measure the declarative workload. Two
 behaviour-probe sections depend on functions: 10 (a concat `merge`) and 11 (`read`
 functions, a reactive variable, a cache redirect).
@@ -71,18 +82,23 @@ unchanged.
 | `typePolicies[T].fields[f].merge`, `typePolicies[T].merge` | `true`, `false`, a [merge descriptor](#2-the-descriptor-vocabulary) | functions |
 | `typePolicies[T].fields[f].read` | a [read descriptor](#2-the-descriptor-vocabulary) | functions |
 | `typePolicies[T].queryType` / `mutationType` / `subscriptionType` | as Apollo | — |
-| `possibleTypes` | exact type names | pattern entries (fuzzy subtypes, [architecture §3.6](../architecture/03-policies.md#36-fragmentmatches--type-condition-resolution)), until a regex engine earns its size |
-| `dataIdFromObject` | — (the default `__typename:id` / `_id` behaviour is built in) | any value |
+| `possibleTypes` | exact type names | pattern entries (fuzzy subtypes, [architecture §3.6](../architecture/03-policies.md#36-fragmentmatches--type-condition-resolution)): any entry that is not a plain type name, which Apollo would compile into a `RegExp` (decided by the maintainer; [review](#review-of-2026-09-26)) |
+| `dataIdFromObject` | — (the default `__typename:id` / `_id` behaviour is built in) | any value (confirmed by the maintainer in the review) |
 | `fragments` (fragment registry) | as Apollo | — |
 | `resultCaching` | `true`, which is Apollo's default and the only mode | `false`: result caching is always on, and the option is not in `InMemoryCacheRsConfig` |
-| `cache.policies.addTypePolicies` / `addPossibleTypes` | the same accepted shapes, validated the same way | the same rejected shapes |
+| `cache.policies.addTypePolicies` / `addPossibleTypes` | the same accepted shapes, validated the same way, the whole argument before any of it applies | the same rejected shapes; nothing from a rejected call is applied |
+| values written into the cache | passive data: JSON values and plain `Date`s | nothing is rejected, since checking a Proxy runs its traps; class instances other than `Date`, getters, Proxies and custom coercion are documented as unsupported ([contract 2](#4-the-contracts)) |
 
 `InMemoryCacheRsConfig` is our own type, so the rejected shapes are compile errors for
 TypeScript users. For JavaScript users, the constructor and `addTypePolicies` **throw**
 (decided by the maintainer; there is no warn-and-ignore mode). The error names every
 offending path (`typePolicies.Query.fields.feed.merge`) and links the migration guide. The
-profile ships first, on top of today's delegation, so adopters can check their
-configuration before the engine exists ([step 0](#migration-order-and-gates)).
+profile ships at [step 2](#migration-order-and-gates), after E10 and E11 have been measured,
+so adopters can check their configuration before the engine exists.
+
+A subtype's policy is built from its supertypes' the first time it is used, and later
+changes to a supertype do not reach it, as in Apollo (`cache/inmemory/policies.ts:649-669`).
+The Rust policy table keeps that first-use snapshot rather than compiling policies eagerly.
 
 **Why `resultCaching: false` goes.** In Apollo it is a debugging tool: it makes a warm read
 about 9 600× slower and a write about 14 % cheaper
@@ -106,8 +122,12 @@ The catalogue below comes from three sources:
   (`cache/inmemory/__tests__/policies.ts`).
 
 Every descriptor reproduces the Apollo helper or idiom it replaces exactly, and ships with
-the Apollo tests that exercise that idiom, converted to the descriptor. The spelling is
-settled in step 0 ([open question 1](#open-questions-for-the-maintainer)). The semantics
+twins of the Apollo tests that exercise that idiom: the same scenario and assertions, with
+Apollo's own helper on the `InMemoryCache` side and the descriptor on ours, never one
+implementation on both sides. The originals stay as they are. The twins' cases are derived
+branch by branch from the helper's source (for `offsetLimitPagination`: no `args`, a
+default offset, the `keyArgs` parameter). The spelling is
+settled in step 2 ([open question 1](#open-questions-for-the-maintainer)). The semantics
 are what this record fixes.
 
 **Merge descriptors** (`merge:` on a field policy, or on a type policy where Apollo allows
@@ -121,7 +141,7 @@ it):
 | `{ list: "prepend" }` | `[...incoming, ...existing]` (newest first) | caching guide, `notifications` |
 | `{ list: "append" \| "prepend", dedupe: "ref" }` | appending only references not already present | `policies.ts` tests (2870, 4930) |
 | `{ list: "append" \| "prepend", dedupe: { by: KeySpecifier } }` | appending only items whose key is new | `policies.ts` test (2615, deduplication by `isbn`) |
-| `{ list: "offset", offsetArg?: "offset" }` | `offsetLimitPagination()`: splice `incoming` at `args[offsetArg]` | `utilities/policies/pagination.ts`; the helper's comment invites renaming the argument, hence `offsetArg` |
+| `{ list: "offset", offsetArg?: "offset" }` | `offsetLimitPagination()`: splice `incoming` at `args[offsetArg]`, leaving holes before it; with no `args`, append | `utilities/policies/pagination.ts`; the helper's comment invites renaming the argument, hence `offsetArg` |
 | `{ ...a list descriptor, path: "items" }` | a list inside a wrapper object: `{ ...incoming, items: [...existing.items, ...incoming.items] }` | caching guide, `posts` |
 | `{ connection: "relay" }` | `relayStylePagination()`, a paired read and merge | `utilities/policies/pagination.ts`, `utilities/policies/__tests__/relayStylePagination.test.ts` |
 | `{ keep: "existing" }` | first write wins: `existing ?? incoming` | `policies.ts` test (6157) |
@@ -147,6 +167,9 @@ that needs no descriptor.
   [architecture §3.3](../architecture/03-policies.md#keyargs-specifiers) applies.
 - A read and a merge descriptor on one field must agree on their list mode (`offset` with
   `slice`, `relay` with `relay`); validation rejects other pairs.
+- A list keeps holes distinct from `null` and `undefined`. `offsetLimitPagination` at
+  offset 2 stores two holes, which a read skips; after a JSON `extract()`/`restore()` the
+  holes are `null`s and read as `null` (review, #16). `extract()` emits the holes as holes.
 - The set grows by amending this record, one descriptor at a time, each with the Apollo
   tests it mirrors. Candidates are logged as adopters report policies the catalogue
   cannot express.
@@ -180,7 +203,7 @@ flowchart TB
     end
 
     subgraph codecs["Boundary codecs — TypeScript, own the wire format"]
-        ENC["<b>encoder</b><br/>walks a result by its plan<br/>fresh objects → one op (isFresh)"]:::write
+        ENC["<b>encoder</b><br/>walks a result by its plan<br/>fresh entities: staging skipped (isFresh)"]:::write
         MAT["<b>materializer</b><br/>node records → frozen JS objects<br/>node id ↔ object cache (identity, R2)"]:::read
         FMT["<b>formatter, interner, leaf slots</b><br/>strings by value → ids<br/>dataId via JSON.stringify<br/>storeFieldName via canonicalStringify<br/>JSON blobs · custom scalars"]:::store
     end
@@ -234,7 +257,7 @@ it is a return value: Rust calls nothing.
 | Stays in JS | Crosses (bulk, per operation) | Rust owns |
 | --- | --- | --- |
 | the `ApolloCache` surface, `txCount`, `batch` modes, `onWatchUpdated`, `onAfterBroadcast` | a write's op buffer, in | the normalized store, layers, snapshots, tombstones, retain counts, gc |
-| modifiers, `update` and replay functions, watch callbacks: operation-level user code, run by JS between Rust calls | new result node records and dirtied watch ids, out | identity (entity keys), staging, descriptors, reconciliation, dirtying |
+| modifiers, `update` and replay functions, watch callbacks: operation-level user code, run by JS between Rust calls; policy `storage`, which modifiers receive | new result node records and dirtied watch ids, out | entity ids (formatted by the encoder, contract 5), staging, descriptors, reconciliation, dirtying |
 | document transforms and the fragment registry | a compiled document, once per AST | plans, the result memo, missing trees, the dependency index, the watch registry |
 | string, `dataId` and `storeFieldName` formatting and interning; leaf slots (JSON blobs, custom scalars) | ids, not bytes | hash-consed stored values; result nodes, stable per memo entry |
 | development-only work: freezing results, printing warnings Rust returns | | |
@@ -247,11 +270,32 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    materialization cache is disposable: dropping any entry costs a re-materialization from
    Rust's nodes, never a re-read of the store and never a wrong answer.
 2. **Rust calls no JavaScript.** The module imports nothing on any cache path. Every
-   exported operation runs to completion and returns. User code runs only in the JS shell,
-   between Rust calls, as it does in Apollo at operation level
+   exported operation runs to completion and returns. Operation-level user code runs in the
+   JS shell, between Rust calls, as it does in Apollo
    ([architecture §6.4](../architecture/06-reactivity.md#64-batch--the-transactional-api),
-   §2.7, §2.10). With no callouts, ADR 0001's resumable engine, continuations, per-callout
-   flushes and origin-classified exceptions (contracts 5 and 6) have nothing left to do.
+   §2.7, §2.10). With no callouts, ADR 0001's resumable engine, continuations and
+   per-callout flushes (contracts 5 and 6) have nothing left to do.
+
+   **Application code can still run inside a write.** Rust stages a write, JS compares the
+   stored leaf values that changed with `@wry/equality` (section 5, leaf slots), and Rust
+   commits. That comparison runs the values' getters, `valueOf` and iterators. Apollo runs
+   the same code at the same step, `storeObjectReconciler`, after the entities before it in
+   the write are merged (review, #5, #7). So:
+   - the supported input is passive data (section 1); values with getters, Proxies or
+     custom coercion are **unsupported**, documented and not detected;
+   - while a write is being encoded or compared, a cache call that mutates throws a checked
+     re-entrancy error, and a read sees the store as it was before the write;
+   - a throw during the comparison discards the staged write, so none of it is committed.
+     The original value is rethrown, whatever it is, and watches are still broadcast in
+     `finally`; a callback that throws there replaces it, as in Apollo (#10, #33).
+
+   A supported input reaches the last point too: a JSON blob nested 10 000 levels deep
+   overflows the stack in `equal()`. Apollo's production build has committed the entities
+   before it by then; this design has committed none. That is a tier-3 drift of W1, and it
+   gets its register entry, pinned by that deep-blob case, in the PR that implements the
+   comparison. Getters and the like are not the "callbacks that read" whose mid-write
+   visibility ADR 0002 puts in tier 2; that tier covers policy functions (decided by the
+   maintainer; [review](#review-of-2026-09-26)).
 3. **Synchronous read-your-writes (F1, kept).** A write is visible to the next read in the
    same call stack, because both are synchronous calls into the same store.
 4. **Bulk crossings only.** Nothing crosses per field on a hot path. A write crosses as one
@@ -262,28 +306,58 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    (`JSON.stringify` of the key object, P2), `storeFieldName`s (`canonicalStringify`,
    [architecture §3.3](../architecture/03-policies.md#33-field-identity-getstorefieldname)),
    `extract()` keys and missing-field messages are built by the same JS functions Apollo
-   uses. The results are interned, and Rust computes over ids. Arguments come only from the
-   document and the variables, so a plan binds its `storeFieldName`s once per
-   (plan, variables), not once per entity. String values are interned by value in JS
-   (`Map<string, id>`), so Rust never decodes UTF-8 on a hot path. This point is the
-   hypothesis that experiment E10 tests.
+   uses. The results are interned, and Rust computes over ids. A field's `storeFieldName`
+   depends on the arguments *and* on the policy of the entity's typename: under one
+   selection set, typename `A` with `keyArgs: false` stores `value`, and `B` with
+   `keyArgs: ["x"]` stores `value:{"x":1}` (review, #15). So a plan binds each field once
+   per (field, variables, effective typename policy), and a policy change bumps a policy
+   epoch. The epoch governs new bindings only: like Apollo, it does not invalidate results
+   already memoized (#17). Identity is the encoder's: it holds each entity's key values
+   while it walks the result, evaluates the compiled `keyFields` and formats the `dataId`,
+   so Rust never sees `keyFields`. For reads, JS precomputes, when it binds a plan, a
+   default binding per field plus overrides for the typenames whose policies define that
+   field, so Rust never has to ask JS mid-read; a typename first met later takes the
+   default. This split is a prototype candidate that E10 measures, with redirects,
+   composite keys and sorting over interned strings as its cases. String values are
+   interned by value in JS (`Map<string, id>`), so Rust never decodes UTF-8 on a hot path.
 6. **`isFresh` survives (F3, tier 2).** The materializer records `object → (node, plan)` in
    a `WeakMap`. When the encoder meets a result object the reader handed out and that node
-   is still current for (plan, entity) in the store being written, it emits one "fresh" op
-   and skips the subtree, as Apollo skips staging it. Without this, writing back a read
-   result through a `concat` descriptor would append the page twice (E1).
-7. **Identity (R2, a performance target, ADR 0002).** Result nodes are stable per memo
-   entry, and the JS frontier maps each node to one frozen object, so unchanged subtrees
-   come back `===`. [Section 5](#5-where-javascript-objects-live-the-frontier) has the
-   mechanism and every case.
+   is still current for (plan, entity) in the store being written, it marks the entity
+   fresh, and Rust skips staging that entity's own fields, as Apollo does. Without this,
+   writing back a read result through a `concat` descriptor would append the page twice
+   (E1). "Current" is exact because an entity entry that recomputes gets a new node
+   (contract 7).
+
+   The encoder **still walks the subtree** below a fresh entity, because Apollo does:
+   it processes the children before it tests the parent's freshness
+   (`cache/inmemory/writeToStore.ts:359-369`, `:478-483`), so a child can still be
+   written. Read an embedded `Item` under `keyFields: false`, switch it to
+   `keyFields: ["id"]` and write the saved result back: Apollo adds `Item:{"id":1}` and
+   leaves `ROOT_QUERY.item` embedded (review, #40). Skipping the walk would lose that
+   write, and marking the parent stale instead would turn the field into a reference.
+   Skipping descendants is an optimization that needs its own proof that nothing
+   below can be written differently (for example, no policy epoch change since the read)
+   and this oracle case; E10 measures the walk.
+7. **Identity (R2, a performance target, ADR 0002).** The JS frontier maps each result
+   node to one frozen object, so unchanged subtrees come back `===`. Below the entity
+   level, a memo entry that recomputes to equal content keeps its node. An **entity-level**
+   entry that recomputes always gets a new node, even when its content is equal, because
+   `isFresh` tests entity-level objects and Apollo's write-back semantics depend on it
+   (decided by the maintainer; [review](#review-of-2026-09-26)).
+   [Section 5](#5-where-javascript-objects-live-the-frontier) has the mechanism and every
+   case.
 8. **Invalidation is Rust's (replaces contract 4).** Reads register dependencies on
    `(entity, storeFieldName)` and `__exists` in Rust. Writes dirty them there, with D1–D3
    and L5 as the specification. At the end of a transaction JS asks Rust which watches were
    **dirtied**. That set, not "changed", is what gate 1 and `onWatchUpdated` need (D7,
    [§9.3](../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
-   Propagation stops at the first ancestor that is already dirty, so a leaf change at
-   depth `D` costs `O(D)`, not `optimism`'s `O(D²)`
+   Propagation stops at the first ancestor that is already dirty, so dirtying a leaf at
+   depth `D` costs `O(D)`. `optimism`'s `O(D²)` is elsewhere: in the *re-read*, where each
+   clean child reports up through every ancestor that is only dirty by a child
    ([performance §3.3](../performance/03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
+   The Rust reader is designed without a "dirty by a child" state to report through, so
+   that its re-read is `O(D)`; E11 measures the re-read at `D` = 64 to 512, not only the dirtying (review,
+   #23).
 9. **The equality gate (D5, kept).** The same root node id means equal, and the callback is
    skipped in `O(1)`. Different ids mean "compare": the gate runs `equal()` on the two
    materialized results, which is cheap because unchanged children are `===` and
@@ -292,7 +366,10 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    never suppress a callback that `equal()` would allow. When `lastDiff` was cleared (gate
    0 in
    [architecture §8.2](../architecture/08-client-pipeline.md#82-observablequery--the-caches-principal-client))
-   the callback fires, as in Apollo. The
+   the callback fires, as in Apollo. "Same id" is sound only because node ids are never
+   reused: they count up from 0, cross as `f64` (exact to 2⁵³), and running out raises a
+   checked error rather than wrapping. A freed node's id can therefore outlive it in a
+   `lastDiff` or the `isFresh` map without ever matching a new node. The
    `diff` object passed to `onWatchUpdated` is the one passed to the callback
    (`lastOwnDiff`), and `evict`, `modify` and `reset` stay instance-assignable
    ([§9.3](../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
@@ -301,12 +378,33 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
     `resultCaching` is always on); reconciliation under `@wry/equality` rules (`-0` equals
     `0`, `NaN` equals `NaN`) and dirtying by `!==`. Own-property presence, stored-value
     identity, reconciliation equality and invalidation stay four separate contracts.
-    Interning must not collapse them: two `NaN`s may share a value node and still dirty.
+    Interning must not collapse them, so each stored-value node has two keys:
+    - a **representation id**, by `Object.is`: `-0` and `+0` are different values, and
+      each field keeps the sign it was written with, as in Apollo (review, #29);
+    - an **equivalence id**, with `-0` read as `0` and one canonical `NaN`: equal
+      equivalence ids mean reconciliation keeps the existing value, in `O(1)`.
+
+    Dirtying stays `!==` on the field's stored value. So a scalar `NaN` rewrite dirties,
+    while a list holding a `NaN` is kept by reference and does not (#37). The `O(1)` claim
+    covers interned structures only: leaf slots still compare in JS.
 11. **Leaf values without a selection set are JS slots** (F5): custom scalars and JSON
     blobs, as [section 5](#5-where-javascript-objects-live-the-frontier) explains.
 12. **Panic-free, one instance (ADR 0001 F15 and F19, kept).** Checked inputs and
-    `Result`s, an audit and tests. A trap poisons every cache in the realm.
+    `Result`s, an audit and tests. A trap poisons every cache in the realm. That is a
+    deliberate, conservative policy (an abort skips destructors in the shared allocator and
+    interner), not something ADR 0001's E7 showed: there, another object still worked. A
+    trap is recognized by a poisoned flag the shell sets around its own Rust calls, never
+    by the error's class, since user code can throw a `WebAssembly.RuntimeError` too (#33).
 13. **Wasm memory views are re-acquired after every call** that can grow memory (F13).
+14. **Ownership and disposal.** Every table belongs to one cache handle; nothing is shared
+    between caches, although they share the WASM instance. Every holder of an id is
+    counted: store values, result nodes and parents, compiled plans, materialization
+    records, and a staged write while JS compares its slots. Slot and string ids that are
+    reused carry a generation, so a stale JS lookup can never alias a new value. A cache's
+    tables are freed by `cache[Symbol.dispose]()` (decided by the maintainer, v2), with a
+    `FinalizationRegistry` as a fallback only: JavaScript may run finalizers late or never,
+    and a server that builds a cache per request would otherwise leak WASM memory.
+    [Section 7](#7-memory) has the requirements.
 
 ### 5. Where JavaScript objects live: the frontier
 
@@ -333,10 +431,11 @@ materializes once, which is the saving `batch` exists for
 ([performance §4.6](../performance/04-dependency-graph-and-broadcast.md#46-batching)).
 
 **Result nodes are stable per memo entry, not hash-consed globally.** A result node
-belongs to one memo entry, (plan, entity or embedded parent, view). When an entry
-recomputes, Rust compares its new content with its previous content shallowly: scalars by
-id, children by node id. If they are equal, the entry keeps its old node, and nothing
-above it changes. `optimism` has this short-circuit (`reportCleanChild`,
+belongs to one memo entry, (plan, entity or embedded parent, view). When an entry *below
+the entity level* recomputes, Rust compares its new content with its previous content
+shallowly: scalars by id, children by node id. If they are equal, the entry keeps its old
+node, and nothing above it changes. An entity-level entry always gets a new node when it
+recomputes ([contract 7](#4-the-contracts)). `optimism` has this short-circuit (`reportCleanChild`,
 [architecture §1.1](../architecture/01-foundations.md#entry--the-dependency-graph)), but
 Apollo can almost never use it, because `execSelectionSetImpl` builds a new object on
 every run. Two things are deliberately not shared:
@@ -352,7 +451,12 @@ objects, are still hash-consed (A6): that is what makes reconciliation `O(1)`.
 **Lifetime: pinned plus LRU** (decided by the maintainer, 2026-09-26). The frontier holds an
 object for as long as someone can still compare against it. Every node reachable from a
 watch's current `lastDiff` is pinned, because Rust keeps a reachability count from watch
-roots. Other nodes live in a bounded LRU, which is the guarantee Apollo gives. A `WeakRef`
+roots. The pin follows the cache's own record of what it last delivered to each watch, and
+is released at the next broadcast or when the watch is removed: `ObservableQuery` clears
+`watch.lastDiff` itself (`core/ObservableQuery.ts:684`), so the watch object's field is not
+a reliable signal. A pin is a performance measure only. `evict` and `gc` may free a pinned
+node's record; its id stays valid for comparison because ids are never reused
+(contract 9). Other nodes live in a bounded LRU, which is the guarantee Apollo gives. A `WeakRef`
 variant was considered: it keeps identity exactly as long as any object holds the result,
 at the cost of one `WeakRef` per node and garbage-collector-driven releases of Rust nodes.
 It stays available if the memory probe shows the LRU evicting objects that are still held.
@@ -368,7 +472,10 @@ field that is already stored:
 - the same object (`===`) is unchanged, and nothing crosses;
 - otherwise the write is two-phase. Rust stages it and returns the slot pairs that need
   `equal()`. JS compares them, then calls commit with the answers. JS drives both calls,
-  so Rust still calls no JavaScript.
+  so Rust still calls no JavaScript. The comparison can run application code, and
+  [contract 2](#4-the-contracts) says what that code may do and what a throw leaves. E10
+  measures comparing all pairs in one pass against Apollo's order (one entity at a time,
+  each committed before the next), because polling hands every blob over as a new object.
 
 Interning blobs in Rust instead was rejected. It costs `O(B)` on every write (encode and
 hash), where `equal()` stops at the first difference. It doubles the blob's memory. And it
@@ -377,10 +484,25 @@ loses the written object's identity. A descriptor that looks inside a blob
 holds the object.
 
 **Values handed to user code.** Modifiers, `readField` inside modifiers, and `extract()`
-receive materialized store values through a value-node cache. A modifier that returns the
-value it received returns an object `===` to what was passed, so nothing changes, as in
-Apollo. A modifier that returns an equal copy is encoded, gets the same value id, and
-dirties nothing, as `storeObjectReconciler` does.
+receive materialized store values through a value cache keyed by **occurrence**: the level
+that owns the value, the entity, the `storeFieldName` and the field's version. It is never
+keyed by value id alone. Apollo hands two equal lists stored on two entities over as two
+arrays with two sets of references, and one occurrence as the same array across `modify`
+calls and through `readField` (review, #11, #12); a Layer that inherits an unchanged Root
+value shares the Root's occurrence. A modifier that returns the value it received returns
+an object `===` to what was passed, so nothing changes, as in Apollo. A modifier that
+returns an equal copy is encoded, gets the same value id, and dirties nothing, as
+`storeObjectReconciler` does, yet `modify` still returns `true`, as Apollo's does: the
+return value, equality and dirtying are separate.
+
+These values are **frozen in every build** (decided by the maintainer). Apollo freezes them
+only in development; in production a modifier that pushes onto the array it received
+changes Apollo's store in place, with no broadcast. Here the store is in Rust, so the same
+push would change only the cached JS copy, and the copy would disagree with the store.
+Freezing turns that into a `TypeError`, which is what correct applications already never
+meet, since Apollo's development build throws the same way. Leaf slots are never frozen:
+they are the application's own objects. The PR that implements this adds the register
+entry for the production difference.
 
 #### Every identity case
 
@@ -389,23 +511,24 @@ dirties nothing, as `storeObjectReconciler` does.
 | 1 | warm re-read, nothing written | the same root object (R2) | the same node, the same object |
 | 2 | one field of one item in a list of `N` changes | new root, list and item; `N − 1` items `===` | the same; the new list is built from `N` cached children, `O(N)` as in Apollo |
 | 3 | an identical payload is rewritten (polling) | nothing dirtied; the same objects | equal value ids; nothing dirtied; nothing materialized |
-| 4 | `INVALIDATE`, or a field `evict` that removes nothing | the entry recomputes into new, equal objects; the gate walks them and skips the callback | the entry keeps its node: the same objects, an `O(1)` gate |
-| 5 | a layer is removed and the values underneath are equal | new objects on every dirtied path | kept nodes where the content is equal |
+| 4 | `INVALIDATE`, or a field `evict` that removes nothing | the entry recomputes into new, equal objects; the gate walks them and skips the callback | an entity entry that recomputes gets a new node, as in Apollo, so `isFresh` stays exact ([review](#review-of-2026-09-26)); embedded objects and lists below it keep their nodes when equal |
+| 5 | a layer is removed and the values underneath are equal | new objects on every dirtied path | as case 4: new entity-level nodes, kept embedded nodes where the content is equal |
 | 6 | a value goes A → B → A over two broadcasts | three distinct objects | three distinct objects |
-| 7 | a read result is written back (F3) | `isFresh` skips staging after traversing the subtree | a `WeakMap` hit on a current node: one op, the subtree is not even walked |
+| 7 | a read result is written back (F3) | `isFresh` skips staging after traversing the subtree | a `WeakMap` hit on a current node skips staging the entity; the subtree is still walked, as in Apollo ([contract 6](#4-the-contracts)) |
 | 8 | a component holds a result that the memo has evicted | the next read builds a new, equal object, which can cause an extra render | pinned while any watch's `lastDiff` reaches it; otherwise the LRU, as in Apollo |
 | 9 | optimistic and root reads of the same data | different objects (L2) | different objects |
 | 10 | equal embedded objects in two places | two objects | two objects |
 | 11 | a JSON blob is read | the object the application wrote (production) | the same object (slot) |
 | 12 | a JSON blob is rewritten with an equal new object | `equal()`, `O(B)`; the old object is kept | `equal()` in JS, `O(B)`; the old slot is kept |
 | 13 | a JSON blob is rewritten with the same object | skipped by `===` | skipped by `===` |
-| 14 | a custom scalar (`Date`, a class instance) | identity kept (F5) | identity kept (slot) |
+| 14 | a plain `Date` scalar | identity kept (F5) | identity kept (slot); other class instances are outside the supported input (section 1) |
 | 15 | a modifier returns the value it received | no change | no change |
 | 16 | `extract()` twice, no write in between | the same entity objects | the same objects while the value cache holds them (tier 3) |
 | 17 | development builds | `maybeDeepFreeze` re-walks subtrees on every read ([performance §3.6](../performance/03-read-path.md#36-the-dev-build-tax)) | each object is frozen once, when it is materialized |
 
-In no case does the design keep fewer objects stable than Apollo. In cases 4, 5, 7 and 8 it
-keeps more, and a stable object is a skipped render. What it adds is cost: materializing
+In no case does the design keep fewer objects stable than Apollo. In cases 7 and 8 it keeps
+more, and in cases 4 and 5 it keeps more below the entity level; a stable object is a
+skipped render. What it adds is cost: materializing
 new nodes, and a JS lookup per child when a node is built. E11 measures that.
 
 ### 6. A network write, end to end
@@ -423,7 +546,7 @@ sequenceDiagram
     SH->>SH: ++txCount
     QI->>SH: writeQuery({ query, data, variables })
     SH->>EN: encode(plan, variables, data)
-    Note over EN: one pass over the result, no allocation per field#59;<br/>strings interned by value#59; fresh objects → one op
+    Note over EN: one pass over the result, no allocation per field#59;<br/>strings interned by value#59; fresh entities not staged
     EN->>RS: write(opBuffer)
     Note over RS: normalize · identify · stage · descriptors ·<br/>reconcile · commit · dirty dependencies
     RS-->>SH: ok (or a checked error)
@@ -463,6 +586,27 @@ The [memory probe](../probes/cache-memory-probe.mjs) measures Apollo's `InMemory
   store value, result node or frontier object goes. The probe's plateau checks exist to
   catch a table that only grows.
 - **The frontier** is pinned plus an LRU (section 5), and the LRU is bounded in bytes.
+- **A dropped cache must give its WASM memory back.** JavaScript's garbage collector cannot
+  see inside WASM memory, and a `FinalizationRegistry` callback may run late or never. Left
+  to the finalizer alone, a server that builds a cache per request, or a test suite that
+  builds thousands, leaks. So (contract 14, maintainer's decision, v2):
+  - `cache[Symbol.dispose]()` frees every table of that cache's handle at once, so
+    `using cache = new InMemoryCacheRs()` works. It is idempotent, and any later call on
+    the cache throws a checked "disposed" error rather than touching freed memory.
+  - The finalizer stays as a fallback for caches nobody disposes.
+  - `ApolloClient` never disposes its cache (`stop()` and `clearStore()` do not), so the
+    migration guide and the SSR guide say who calls it.
+  - The memory probe checks, deterministically, that building and disposing many caches
+    returns the WASM heap in use to its baseline, and reports what is left to the
+    finalizer path separately. This check is a release blocker, not a guidepost.
+
+**Measuring it** (review, #27–#30). The memory probe reports three separate quantities:
+bytes in use, allocation traffic, and physical reservation (linear memory's high-water mark,
+and RSS). A build that cannot report one says "unavailable", never zero. Allocation traffic
+is defined before it is compared with V8's: a `realloc` that moves counts its new size.
+Settling reports whether it converged, and a run that did not is invalid. Steady workloads
+run at two lengths, and the leak metric is bytes per operation across them, against a
+stated budget; a single finite run cannot show a plateau.
 
 **Memory guideposts**, like the speed ones, direct the work rather than gate it:
 - **E10:** the encoder allocates at most 5 % of Apollo's write allocation for the same
@@ -485,29 +629,29 @@ The [memory probe](../probes/cache-memory-probe.mjs) measures Apollo's `InMemory
 | All user code stays in JS | ADR 0001 boundary | **kept, narrowed** | only operation-level user code remains, and it already runs between cache calls |
 | Reader, memo, `CacheGroup` and `optimism` stay in JS (A4) | ADR 0001 | **reversed** | F14's ambient capture came from `read` functions and reactive variables; without them a read's dependencies are store fields only, and Rust can record them |
 | A Rust reader is parked | ADR 0001 considered options | **adopted** | the reason for parking it is gone |
-| Policy `storage` in JS (F16) | ADR 0001 | **dropped** | only functions used it |
+| Policy `storage` in JS (F16) | ADR 0001 | **kept**, for modifiers | modifiers receive `storage` with no policy function (review, #15) |
 | Values as JS slots (A2) | ADR 0001 | **narrowed** to leaf values without a selection set | F8 (Apollo's `StoreReader` keyed on stored arrays) is moot once the reader is Rust's; strings cross as ids |
 | Stored-value identity (contract 2) | ADR 0001 | **replaced** by contract 7 | nothing outside the engine keys on stored objects any more |
 | State model (contract 3) | ADR 0001 | **kept** | store semantics, independent of user code |
 | Dirty report per boundary return (contract 4) | ADR 0001 | **replaced** by contract 8 | JS holds no dependency graph to update |
-| Callout order and flushes (contract 5, F12) | ADR 0001 | **dropped** | no callouts; mid-write reads by user code cannot happen |
-| Resumable engine, continuations, exception origin (contract 6) | ADR 0001 | **dropped**, except panic-free and one instance | no callouts |
-| Hash-consing (A6) | ADR 0001 contract 7 | **kept for stored values**; results get stable nodes per memo entry instead | global hash-consing of results would alias objects Apollo keeps apart ([section 5](#5-where-javascript-objects-live-the-frontier)) |
+| Callout order and flushes (contract 5, F12) | ADR 0001 | **dropped** | no policy callouts; the one place application code can still run mid-write, slot comparison, is governed by contract 2 |
+| Resumable engine, continuations, exception origin (contract 6) | ADR 0001 | **dropped**, except panic-free, one instance, and traps told apart by a flag rather than a class (contract 12) | no callouts |
+| Hash-consing (A6) | ADR 0001 contract 7 | **kept for stored values**, with a representation id and an equivalence id (contract 10); results get stable nodes per memo entry instead | global hash-consing of results would alias objects Apollo keeps apart ([section 5](#5-where-javascript-objects-live-the-frontier)) |
 | Opaque JSON scalars keep JS `equal()` | ADR 0001 contract 7 | **kept, and extended to every JSON blob** | a slot keeps the written object's identity, costs nothing to cross, and `equal()` stops at the first difference |
 | `resultCaching` option | Apollo's config | **removed**; always on | a second read path for a debugging mode ([section 1](#1-the-declarative-profile)) |
 | No raw-bytes ingestion (F17) | ADR 0001 | **kept** | the cache never sees bytes; the encoder reads the parsed object |
-| Migration order and V0 | ADR 0001 A1, A8 | **replaced** | V0 measures a per-field `store.get` boundary that this design never ships |
+| Migration order and V0 | ADR 0001 A1, A8 | **replaced** (the maintainer, in the review) | V0 measures a per-field `store.get` boundary that this design never ships |
 | V0's gates | ADR 0001 | **replaced** | [new gates](#migration-order-and-gates), same correctness bar, same probe sections |
 | Worker-hosted store | ADR 0001 | **still rejected** | every API is synchronous |
 | Tier 1, the client contract | ADR 0002 | **kept** | Apollo Client depends on it |
 | Tier 2, the user-authored surface | ADR 0002 | **amended** | hard for the declarative profile, **unsupported** outside it ([below](#compatibility-amends-adr-0002)) |
 | Tier 3 and the drift register | ADR 0002 | **kept** | the candidates stay candidates; the Rust engine makes several cheap to keep |
-| `===` result stability is performance | ADR 0002 | **kept** | contract 7 delivers more than Apollo does |
+| `===` result stability is performance | ADR 0002 | **kept** | contract 7 matches Apollo at the entity level and keeps more below it |
 | The oracle is Apollo's `InMemoryCache` | ADR 0002 | **kept** | for the declarative profile; the probes run both caches with descriptor-equivalent configuration where needed |
 | Synchronous init from bundled bytes | ADR 0003 | **kept** | unaffected |
-| 1 MB gzipped budget | ADR 0003 | **kept**, now binding | more logic moves into Rust; formatting stays in JS partly to stay under it |
+| 1 MB budget | ADR 0003 | **kept**, now binding, and split into raw module size, transfer size and first-construction time | more logic moves into Rust; formatting stays in JS partly to stay under it. ADR 0001 calls the budget gzipped and ADR 0003 does not say; nothing enforces it in CI yet (review, #31) |
 | No public initializer | ADR 0003 | **kept** | unaffected |
-| Phase 2 delegates to Apollo's `EntityStore`, `Policies`, `StoreReader`, `StoreWriter` | AGENTS.md | **ends** at step 3 | the patch shrinks as each import goes (AGENTS.md import rule 2) |
+| Phase 2 delegates to Apollo's `EntityStore`, `Policies`, `StoreReader`, `StoreWriter` | AGENTS.md | **ends** at step 5 (v2) | the patch shrinks as each import goes (AGENTS.md import rule 2) and is gone before any release |
 
 ## Compatibility (amends ADR 0002)
 
@@ -519,22 +663,43 @@ The [memory probe](../probes/cache-memory-probe.mjs) measures Apollo's `InMemory
   descriptor semantics including how often they apply (W2–W5, F3), `possibleTypes` for
   exact names, `evict`/`gc`/`retain`, and `extract()`/`restore()` contents.
 - **Outside the profile is unsupported, not drift.** Custom `read`/`merge`/`keyFields`/
-  `keyArgs` functions, `dataIdFromObject`, fuzzy `possibleTypes`, `resultCaching: false`,
-  policy `storage`, and reactive variables *consumed by the cache* are rejected or have no
-  effect. `makeVar`
+  `keyArgs` functions, `dataIdFromObject`, `resultCaching: false`, and reactive variables
+  *consumed by the cache* are rejected or have no effect. (A cache only consumes a reactive
+  variable when a `read` function calls it, so this goes with `read` functions.) Fuzzy
+  `possibleTypes` entries are rejected too (section 1). Written values with getters,
+  Proxies or custom coercion are unsupported without being rejected (contract 2). `makeVar`
   itself still works with `useReactiveVar`, and `broadcastWatches` stays callable for it
   ([architecture §6.6](../architecture/06-reactivity.md#66-reactive-variables)).
   `resolvesClientField` returns `true` only for fields with a read descriptor. The register
   gets an **Unsupported** section next to **Adopted**, and a migration guide with a
   replacement for each rejected shape: a descriptor, local state written with `writeQuery`,
   or `useReactiveVar`.
-- **The oracle.** The 220 ported cases that use only declarative configuration keep
-  Apollo's assertions. The 46 that configure functions move, per case, to one of two
-  places. Where a descriptor expresses the same policy, they stay as a test whose
-  configuration uses the descriptor, with Apollo's assertions. Otherwise they become a test
-  that construction rejects the configuration. `probe:parity` runs sections 10 and 11 with
-  descriptor-equivalent configuration against both caches, and excludes the reactive
-  variable check.
+- **Registered drifts this design brings**, each entered with its pinning test in the PR
+  that implements it: modifier values frozen in production too (section 5), and a write
+  that throws during slot comparison committing nothing (contract 2).
+- **The oracle** (review, #15–#22).
+  - Apollo's tests are never rewritten or deleted. A test whose configuration the profile
+    rejects stays byte-for-byte, in a separate Jest project checked against a committed
+    list of test ids expected to fail with the profile error; any other failure, or a
+    listed test that starts passing, fails CI. The list holds ids and reasons, never
+    assertions.
+  - Where a descriptor expresses the policy, a twin runs the same scenario and assertions,
+    with Apollo's helper on the `InMemoryCache` side and the descriptor on ours.
+  - Every test is inventoried: the invariant it pins, the profile it needs, the backend it
+    actually reaches and the build it holds in. Changed and new tests carry the annotation
+    of [src/__tests__/README.md](../../src/__tests__/README.md).
+  - Reach is proved, not assumed: a static import inventory, a Jest project in which
+    Apollo's store, reader, writer and policies are replaced by throwing stubs, and
+    per-operation counters of Rust calls. The detector must first classify today's
+    delegating code as not reaching Rust.
+  - The suites run in production and development builds, which differ (review, #9).
+  - Apollo's client-level suites (`refetchQueries`, `ObservableQuery`, `watchFragment`,
+    optimistic mutations) run unmodified against `InMemoryCacheRs` through
+    `moduleNameMapper`, with every Apollo import mapped to the one installed build and a
+    startup check that it is one.
+  - Seeded, shrinkable sequences of operations run against both caches.
+  - `probe:parity` runs sections 10 and 11 with descriptor-equivalent configuration
+    against both caches, and excludes the reactive variable check.
 
 ## Migration order and gates
 
@@ -542,53 +707,106 @@ The experiments come first because they are cheap and they decide the design. Th
 below are **guideposts, not commitments**: they say how far off an approach is, so that a
 miss sends us to the alternatives (the `JSON.stringify` ingestion, the `WeakRef`
 frontier, a different op format) rather than into engine work on a weak boundary. The
-correctness bar is the one hard gate. The maintainer fixes numbers when there are
-measurements to fix them against.
+correctness bar is the one hard gate. The maintainer fixes the numbers after E10 and E11,
+before the vertical slice, together with the stop conditions below. Rust-WASM is a product
+constraint (maintainer), so no pure-JS engine is built as an alternative.
 
-0. **The profile.** Ship `InMemoryCacheRsConfig`'s declarative types, the runtime
-   validation and the migration guide on top of today's delegation, and convert the 46
-   tests. Performance does not change; adopters can test their configuration.
+Two milestones name the ends of the work. **v1** is correctness: the full engine passes the
+declarative oracle (step 4), and development may still delegate through the Apollo patch
+until then. **v2** is releasability: production code imports no patched symbol, caches can
+be disposed, and the packed package works in a clean project (step 5). Nothing is released
+for production use before v2.
+
+0. **Evidence first**, on today's code, with no engine work (review, A5–A7):
+   - the benchmark comparison fails, rather than passing with a note, when the base did not
+     build or a measurement is missing; a zero base is compared by absolute difference;
+     each side records a fingerprint of Node, lockfile, patch, `.wasm` and probe;
+   - a same-commit A/A calibration and injected-slowdown runs give the false-detection
+     rate and the smallest change a benchmark can see; a local 10-run pilot found the noise
+     band ranging from ±2.4 % to ±8.1 % between identical runs (#26);
+   - the memory probe's fixes of [section 7](#7-memory);
+   - the reach detector, the production-build run and the client-level suites of
+     [the oracle](#compatibility-amends-adr-0002);
+   - the synthetic workload is frozen before any implementation: polling first (cold write,
+     identical rewrite, one item changed, 1 % changed, full replacement; 0, 1 and 200
+     watchers, shared and separately parsed documents, batched and not), with pagination
+     and optimistic updates as regression cases; sizes 100 to 20 000; payload shape,
+     change rate and exclusions stated. Every result from it is labelled synthetic.
 1. **Boundary experiments**, with scripts and output recorded in the next ADR revision, as
-   E1–E9 were.
-   - **E10, the encoder.** Encode probe section 1's `N = 5 000` payload into an op buffer,
-     with strings interned by value. Also measure the alternative: `JSON.stringify` plus a
-     Rust parser, which loses contract 6 without a separate fresh-object pass. **Guidepost:**
-     ≤ 10 ms, about 12 % of Apollo's 83.41 ms cold write.
+   E1–E9 were. Each is measured inside real write, read-back and broadcast sequences of the
+   workload, not alone.
+   - **E10, the encoder.** Encode probe section 1's `N = 5 000` payload into an op buffer:
+     formatting and interning, typename-dependent field bindings (contract 5), both keys
+     of every stored value (contract 10), slot comparison in one pass against Apollo's
+     entity-by-entity order (contract 2), allocation, and repeated polls. Also measure the
+     alternative: `JSON.stringify` plus a Rust parser, which loses contract 6 without a
+     separate fresh-object pass. **Guidepost:** ≤ 10 ms, about 12 % of Apollo's 83.41 ms
+     cold write.
    - **E11, the materializer.** Materialize section 2's `N = 5 000` result from node
-     records, cold and after one dirty field, and measure the frontier's retained bytes
-     against Apollo's result objects (memory probe, section 1).
-     **Guideposts:** ≤ 25 ms cold (16 % of 155.23 ms),
+     records, cold and after one dirty field, with entity-level minting (contract 7),
+     pinning and the LRU, freezing, and the frontier's retained bytes against Apollo's
+     result objects (memory probe, section 1). Also the re-read after a leaf change at
+     depth 64 to 512 (contract 8). **Guideposts:** ≤ 25 ms cold (16 % of 155.23 ms),
      ≤ 1 ms after one dirty field.
-2. **The vertical slice.** Root store, write engine, reader, watch registry and the
-   `concat` descriptor, behind the full JS shell, with no layers. **Correctness is hard:**
-   every ported test the slice's features reach, and ADR 0001's oracle cases that still
-   apply (F3 with `concat`, F10, W1 and W2), pass. **Performance guideposts**, at `N = 5 000`,
-   end to end:
+
+   The maintainer then fixes thresholds and **stop conditions**: the codecs' share of
+   Apollo's end-to-end cost on the primary sequences, and any agreed oracle case that
+   could only pass by letting application code run inside a Rust call.
+2. **The profile.** `InMemoryCacheRsConfig`'s declarative types, the whole-argument runtime
+   validation and the migration guide, on top of today's delegation; the test inventory,
+   the excluded-test list and the descriptor twins of
+   [the oracle](#compatibility-amends-adr-0002). Performance does not change; adopters can
+   check their configuration.
+3. **The vertical slice.** Root store, write engine, reader, watch registry and the
+   `concat` descriptor, behind the full JS shell, with no layers, driven by a real
+   `ApolloClient` polling a query with watches and batches. The constructor initializes
+   the WASM as [ADR 0003](0003-wasm-initialization.md) decides, which is not implemented
+   today (review, #1). **Correctness is hard:** every ported test the slice's features
+   reach, and ADR 0001's oracle cases that still apply (F3 with `concat`, F10, W1 and
+   W2), pass. **Performance guideposts**, at `N = 5 000`, end to end:
    - at least 2× faster than Apollo on write cold, write identical and one field changed
      (probe section 1);
    - no section-2 read slower than Apollo's, and the warm read within 2× of 3.8 µs;
    - a broadcast to 200 watchers after a relevant write at least 2× faster (section 6);
    - the memory guideposts of [section 7](#7-memory).
 
-   The aim beyond them is 4× on writes.
-3. **The full engine.** Layers and replay orchestration, `modify`, `evict`, `gc`, `retain`,
-   `extract`/`restore`, missing trees, development warnings, the remaining descriptors.
-   Hard gate: the full declarative oracle and `probe:parity`. Guideposts: no performance
-   measurement slower than Apollo's beyond noise, no memory measurement larger, and every
-   memory check passing. Then remove the imports of
-   `EntityStore`, `Policies`, `StoreReader` and `StoreWriter`, and their patch symbols.
-4. **Beyond Apollo's model.** Each of these is measured and merged on its own:
+   The aim beyond them is 4× on writes. Whether the main thread comes back sooner in a
+   browser is measured there, as frame and long-task latency with their tails, before any
+   claim about interactivity.
+4. **The full engine: v1.** Layers and replay orchestration, `modify`, `evict`, `gc`,
+   `retain`, `extract`/`restore`, missing trees, development warnings, the remaining
+   descriptors. Hard gate: the full declarative oracle, the client-level suites and
+   `probe:parity`, in both builds. Guideposts: no performance measurement slower than
+   Apollo's beyond noise, no memory measurement larger, and every memory check passing.
+   Then remove the imports of `EntityStore`, `Policies`, `StoreReader` and `StoreWriter`.
+5. **Releasable: v2.**
+   - Production code imports no symbol that `patches/@apollo+client+4.2.11.patch`
+     exports, and the patch leaves the production path. Vendoring the Apollo modules is
+     not a way around it: `recallCache` and `forgetCache` act on a module-private
+     `WeakMap`, so a copy would never reach the application's `makeVar` variables.
+   - `cache[Symbol.dispose]()` and its deterministic memory check
+     ([section 7](#7-memory)). This is required, not optional: without it a
+     per-request cache on a server leaks.
+   - A clean project installs the packed tarball and constructs, writes, reads and watches
+     with no private setup, under Node, a browser and an SSR entry. (`npm run check:pack`
+     already checks that the tarball carries every file it loads.)
+6. **Beyond Apollo's model.** Each of these is measured and merged on its own:
    - plans deduplicated by structure, which removes the 128× document-fragmentation cliff
-     ([§4.5](../performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity));
+     ([§4.5](../performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
+     It is observable: after `addTypePolicies`, Apollo keeps a warmed document's old result
+     while a newly parsed identical document reads the new one (review, #17, #18). Sharing
+     one plan makes them agree, so it needs its own oracle case and a register entry;
    - result memory bounded by live results rather than a 50 000-entry LRU, which removes
      the cliff of [§4.3](../performance/04-dependency-graph-and-broadcast.md#43-the-memo-lru-cliff);
    - a first optimistic read with no layers active built from the root entries' content
      instead of a second cold read of the store, still with its own nodes
      ([§4.2](../performance/04-dependency-graph-and-broadcast.md#42-optimistic-reads-maintain-a-second-set-of-memo-entries)).
 
-Throughout: the `.wasm` stays under 1 MB gzipped (ADR 0003), and every PR labelled
+Throughout: the `.wasm` stays within its size budgets (ADR 0003), and every PR labelled
 `benchmark` runs the memory probe beside the performance probe, with the same noise
-control ([benchmarking.md](../benchmarking.md#memory)).
+control ([benchmarking.md](../benchmarking.md#memory)). The benchmark's required check
+certifies that a comparison ran, not that performance is acceptable; the workflow stays as
+it is for now (maintainer).
 
 ## Considered options
 
@@ -619,6 +837,8 @@ control ([benchmarking.md](../benchmarking.md#memory)).
   observable as an object.
 - **Global hash-consing of results.** Rejected for results, kept for stored values. See
   [section 5](#5-where-javascript-objects-live-the-frontier).
+- **A pure-JS engine under the same profile.** Rejected by the maintainer in the review:
+  Rust-WASM is a product constraint, so it is neither built nor measured as a control.
 - **JSON blobs interned in Rust.** Rejected. See
   [section 5](#5-where-javascript-objects-live-the-frontier), leaf slots.
 
@@ -633,9 +853,78 @@ control ([benchmarking.md](../benchmarking.md#memory)).
 - `extract()` becomes a materialization, `O(S · F)` against Apollo's `O(S)` shallow copy,
   and `restore()` stops adopting the caller's objects by reference (tier 3). SSR hydration
   pays this once per page.
+- Nothing is released before v2 ([step 5](#migration-order-and-gates)): until then the
+  package depends on a development-only patch of `@apollo/client`.
 - AGENTS.md's implementation-strategy section, ADR 0001 and ADR 0002 get "amended by ADR
   0004" notes, and the drift register gets its Unsupported section, when this record is
   accepted, not before.
+
+## Review of 2026-09-26
+
+`claude` and Codex reviewed the progress so far and this record adversarially, on a local
+brainstorm board (messages cited as `#n`; the board is not committed), with the maintainer
+moderating. Every finding was reproduced against `apollo-client-sm/src/` or Apollo 4.2.11
+itself, and the revision above folds them in.
+
+### Maintainer decisions
+
+- **`dataIdFromObject` is rejected**, as section 1 says.
+- **Fuzzy `possibleTypes` entries are rejected** (section 1). Apollo compiles any entry that
+  is not a plain type name into a `RegExp`, under a `TODO` saying it should not
+  (`cache/inmemory/policies.ts:633-636`). It consults the patterns only while writing,
+  when the result's shape suggests the fragment matches, prints a development warning when
+  it infers a subtype, and cannot cache a negative answer, so it tests the patterns again
+  for every non-matching check (`:770-800`). Reproducing that heuristic, and its
+  dependence on the order of `addPossibleTypes` and first use, costs more than a feature
+  Apollo does not document is worth. Listing the subtypes is the migration.
+- **Application code that runs while a write compares stored values** (contract 2):
+  impure values are unsupported, and a throw during the comparison commits nothing, as a
+  registered tier-3 drift of W1. Getters are not the tier-2 "callbacks that read".
+- **`addTypePolicies` and `addPossibleTypes` take the constructor's shapes and validation**,
+  applied to the whole argument before any of it takes effect.
+- **Rust-WASM is a product constraint.** No pure-JS engine is built or measured as an
+  alternative.
+- **E10 and E11 run before the profile ships** (step 2), and no ported test is converted
+  or deleted.
+- **Write-back semantics stay Apollo's** (contract 7, section 5 cases 4 and 5). Writing
+  back a result read *before* an `INVALIDATE` and a reread still runs its merges, and
+  writing back the reread result does not (`[1, 1]` against `[1]` with a concat merge,
+  #12). Keeping one node across the recompute would make those two inputs one object.
+- **Values handed to modifiers are frozen in every build** (section 5).
+- **Caches get `[Symbol.dispose]()` in v2** (contract 14, section 7, step 5): a finalizer
+  alone would leak WASM memory for caches built per request.
+- **ADR 0001's V0 is replaced** by this record's order once it is accepted.
+- **The Apollo patch stays until v2**, and nothing is released before v2 (step 5).
+- **WASM initialization (ADR 0003) is implemented in the vertical slice** (step 3).
+- **Tests added to or changed from the ported suites carry an annotation** that says where
+  they come from and whether the implementation or the behaviour changed
+  ([src/__tests__/README.md](../../src/__tests__/README.md)).
+- **The benchmark workflow is unchanged for now.**
+
+### What the review changed
+
+| Where | Finding | Board |
+| --- | --- | --- |
+| contract 6, case 7 | a fresh entity's subtree must still be walked: Apollo writes children before testing the parent's freshness | #40 |
+| contract 2 | application code can run inside a write: `equal()` calls the getters, `valueOf` and iterators of stored values, with no policy function anywhere | #5, #7–#10 |
+| contract 5 | a field's `storeFieldName` depends on the entity's typename policy, not only on (plan, variables) | #15–#17 |
+| contract 7, section 5 | stable nodes across a recompute and exact `isFresh` cannot both hold | #11–#14 |
+| contract 8 | the `O(D²)` cost is in the re-read, not the dirtying | #23, #24 |
+| contracts 9, 14 | node ids are never reused; every id holder is counted; slot and string ids carry generations | #13, #14, #27–#30 |
+| contract 10 | `-0` and `+0` are stored separately, so each value has a representation id and an equivalence id | #29, #30 |
+| contract 12 | whole-instance poisoning is a policy, and a trap is recognized by a flag, not a class | #31–#34 |
+| section 1 | policy inheritance snapshots at first use; validation is whole-argument | #15–#17 |
+| section 2 | `offsetLimitPagination` leaves holes, which reads skip and JSON round trips turn into `null` | #16 |
+| section 3, revisited decisions | modifiers receive policy `storage`, so it stays | #15–#17 |
+| section 5 | modifier values are cached per occurrence, and pins follow the cache's own record of each watch | #11–#14 |
+| section 7 | memory is reported as in-use, traffic and reservation; runs report convergence; disposal | #27–#30 |
+| context, compatibility, migration order | the oracle keeps Apollo's tests intact; reach is proved; both builds run; client suites run; evidence and a frozen workload come first; step 6's structural plan sharing is observable | #15–#26, #35–#38 |
+| revisited decisions | the size budget is ambiguous across ADRs and not enforced | #31–#33 |
+
+Outside this record, the review also found the published package unusable: the tarball
+left out `pkg/`, and `optimism` and `@wry/equality` were undeclared. Both are fixed
+(`files` names the `pkg/` files, `npm run check:pack` guards the tarball in CI, and both
+are `dependencies`).
 
 ## Open questions for the maintainer
 
@@ -645,13 +934,15 @@ Resolved on 2026-09-26:
 - the numbers are guideposts, not gates;
 - descriptors cover as many policies as possible, so the whole catalogue of section 2 is
   in scope;
-- the frontier's lifetime is pinned plus LRU.
+- the frontier's lifetime is pinned plus LRU;
+- after the review, the decisions in
+  [its section](#review-of-2026-09-26).
 
 1. **Descriptor spelling.** The catalogue fixes the semantics. The spelling is either
    plain objects (`merge: { list: "append" }`), or helper-style constructors named after
    Apollo's (`offsetLimitPagination()`), which make migration an import change. Helpers
    need either an export beyond the two AGENTS.md allows, or static methods on
-   `InMemoryCacheRs`.
+   `InMemoryCacheRs`. Settled at step 2.
 
 ## Provenance
 
@@ -659,5 +950,7 @@ Written by `claude` on 2026-09-26, from the maintainer's premise, and revised th
 with the maintainer's answers (validation throws, `resultCaching` removed, guideposts not
 gates) and the frontier design of section 5, after rereading the
 architecture and performance guides, ADRs 0001–0003, the ported test suites and both
-probes. No experiment has been run for this record. The test counts come from a pattern
-count over `src/__tests__` and should be confirmed case by case at step 0.
+probes. It was revised again after the adversarial review of 2026-09-26
+([its section](#review-of-2026-09-26)), whose reproductions are Apollo experiments; no
+experiment has been run for this design itself. The test counts come from a pattern
+count over `src/__tests__` and should be confirmed case by case at step 2.

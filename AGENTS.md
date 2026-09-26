@@ -33,7 +33,20 @@ stating it.
 - **Initialization**: none for users. The constructor initializes the WASM synchronously
   on first use, from bytes shipped inside the package, and stays under the size budget
   ([ADR 0003](docs/adr/0003-wasm-initialization.md)). An escape hatch, if one is ever
-  needed, is a static method on `InMemoryCacheRs`, never a new export.
+  needed, is a static method on `InMemoryCacheRs`, never a new export. Not implemented
+  yet: the built package throws on construction outside Jest and the probes, which
+  initialize privately.
+- **Disposal: no leaks.** JavaScript's garbage collector cannot see WASM memory, and a
+  `FinalizationRegistry` callback may run late or never, so a server that builds a cache
+  per request would leak with a finalizer alone. Every allocation a cache makes in Rust
+  belongs to that cache's handle, and `cache[Symbol.dispose]()` frees all of it
+  deterministically; the finalizer is only a fallback. The method and a memory check that
+  disposal returns the WASM heap to its baseline are required before any release (v2,
+  [ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md) contract 14).
+- **Release**: nothing ships for production use while production code imports a symbol
+  that only `patches/@apollo+client+4.2.11.patch` exports; `patch-package` never reaches
+  an installed package. The patch is for development until v1 (correctness) and goes in
+  v2. `npm run check:pack` checks that the tarball carries every file it loads.
 
 ## Compatibility with `InMemoryCache`
 
