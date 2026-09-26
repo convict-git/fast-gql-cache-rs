@@ -44,3 +44,6 @@ jobs:
       - run: npm run test:ci
       - run: npm run test:tooling
       - run: npm run probe:parity
+      # The tarball must carry every file dist/ and pkg/ load (test:ci built the
+      # release wasm, test:tooling built dist/).
+      - run: npm run check:pack

@@ -17,7 +17,10 @@
   },
   "files": [
     "dist",
-    "pkg"
+    "pkg/fast_gql_cache_rs.js",
+    "pkg/fast_gql_cache_rs.d.ts",
+    "pkg/fast_gql_cache_rs_bg.wasm",
+    "pkg/fast_gql_cache_rs_bg.wasm.d.ts"
   ],
   "engines": {
     "node": ">=22.21.0 <23 || >=24.7.0"
@@ -42,7 +45,8 @@
     "probe:compare": "npm run build:ts && node docs/probes/compare-caches.mjs",
     "probe:memory": "node --expose-gc docs/probes/cache-memory-probe.mjs",
     "test:tooling": "npm run build:ts && node --test docs/probes/probes.test.mjs docs/probes/memory-harness.test.mjs scripts/bench/*.test.mjs",
-    "bench:pr": "node scripts/bench/pr.mjs"
+    "bench:pr": "node scripts/bench/pr.mjs",
+    "check:pack": "node scripts/check-pack.mjs"
   },
   "repository": {
     "type": "git",
@@ -55,6 +59,10 @@
     "wasm",
     "rust"
   ],
+  "dependencies": {
+    "@wry/equality": "^0.5.6",
+    "optimism": "^0.18.0"
+  },
   "peerDependencies": {
     "@apollo/client": "4.2.11",
     "graphql": "^16.0.0 || ^17.0.0"
