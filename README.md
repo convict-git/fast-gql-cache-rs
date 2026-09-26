@@ -41,6 +41,10 @@ the target is `InMemoryCache`'s behaviour
 ([ADR 0002](docs/adr/0002-compatibility-target.md)), checked against Apollo's own test
 suite.
 
+Before you migrate, read [Unsupported features](docs/unsupported.md): what
+`InMemoryCacheRs` does not support and what to use instead. Where it behaves differently
+from `InMemoryCache`, the [drift register](docs/compatibility.md) says so.
+
 ## Research: findings so far
 
 The documents below capture the research into the cache this project replaces, Apollo

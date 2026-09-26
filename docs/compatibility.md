@@ -23,22 +23,9 @@ to **Adopted**, with its pinning test, in the PR that implements it.
 
 ## Unsupported
 
-Configuration and inputs outside ADR 0004's declarative profile. These are not drift.
-This section specifies the accepted profile; the checks arrive with ADR 0004's step 2.
-Until then today's delegating cache still accepts all of it. From step 2, the constructor,
-`addTypePolicies` and `addPossibleTypes` reject each configuration below, naming every
-offending path; input values stay documented as unsupported without being checked.
-
-| Unsupported | Rejected from step 2? | Migration |
-| --- | --- | --- |
-| custom `read` functions | yes | a read descriptor; `@client` fields with `LocalState` resolvers for computed fields; transform values in a link or the component |
-| custom `merge` functions | yes | a merge descriptor (`true`, `false`, list, offset, Relay, keep-existing); otherwise normalize in a link or on the server |
-| function-valued `keyFields` / `keyArgs` | yes | a `KeySpecifier` array, or `false` |
-| `dataIdFromObject` | yes | `keyFields` per type; the default `__typename:id` / `_id` is built in |
-| fuzzy `possibleTypes` (an entry that is not a plain type name, which Apollo compiles into a `RegExp`) | yes | list the subtypes by name |
-| `resultCaching: false` | yes | omit it; result caching is always on |
-| reactive variables read inside the cache (only possible from a `read` function) | with `read` functions | `useReactiveVar` in the component, or local state written with `writeQuery` |
-| written values with getters, Proxies, custom `valueOf`/`toString`, or class instances other than `Date` | no: documented only, since checking a Proxy runs its traps | write plain JSON data and `Date`s |
+Features that `InMemoryCacheRs` does not support at all, including configuration outside
+ADR 0004's declarative profile, are not drift. They are listed, each with what to use
+instead, in [Unsupported features](unsupported.md).
 
 ## Candidates
 

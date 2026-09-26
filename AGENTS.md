@@ -63,8 +63,12 @@ The target is close to `InMemoryCache`, not byte-identical
 - **Unsupported**: what the profile leaves out (custom `read`/`merge` functions,
   function-valued `keyFields`/`keyArgs`, `dataIdFromObject`, fuzzy `possibleTypes`,
   `resultCaching: false`, reactive variables consumed by the cache, and written values
-  that are not passive data). Each is listed with its migration in
-  [docs/compatibility.md](docs/compatibility.md#unsupported); it is not drift.
+  that are not passive data), and anything else we cannot or choose not to support. It is
+  not drift. Each feature goes into [docs/unsupported.md](docs/unsupported.md) in the PR
+  that decides it, as soon as it is decided, because migrating teams read it to weigh the
+  effort. An entry states what, how an application notices, and what to use instead; the
+  reason goes only in its collapsed **Why** block. The document's last section has the
+  rules.
 - **May drift**: incidental behaviour (tier 3 in ADR 0002), one entry at a time, each with
   a measured reason, a migration note and pinning tests, recorded in
   [docs/compatibility.md](docs/compatibility.md) in the same PR. Nothing drifts silently.

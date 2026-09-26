@@ -672,10 +672,10 @@ stated budget; a single finite run cannot show a plateau.
   Proxies or custom coercion are unsupported without being rejected (contract 2). `makeVar`
   itself still works with `useReactiveVar`, and `broadcastWatches` stays callable for it
   ([architecture §6.6](../architecture/06-reactivity.md#66-reactive-variables)).
-  `resolvesClientField` returns `true` only for fields with a read descriptor. The register
-  gets an **Unsupported** section next to **Adopted**, and a migration guide with a
-  replacement for each rejected shape: a descriptor, local state written with `writeQuery`,
-  or `useReactiveVar`.
+  `resolvesClientField` returns `true` only for fields with a read descriptor. Each
+  unsupported shape is an entry in [Unsupported features](../unsupported.md), with its
+  replacement: a descriptor, local state written with `writeQuery`, or `useReactiveVar`.
+  The migration guide expands on them.
 - **Registered drifts this design brings**, each entered with its pinning test in the PR
   that implements it: modifier values frozen in production too (section 5), and a write
   that throws during slot comparison committing nothing (contract 2).
@@ -862,8 +862,8 @@ it is for now (maintainer).
 - Nothing is released before v2 ([step 5](#migration-order-and-gates)): until then the
   package depends on a development-only patch of `@apollo/client`.
 - AGENTS.md's implementation-strategy section, ADR 0001 and ADR 0002 get "amended by ADR
-  0004" notes, and the drift register gets its Unsupported section, when this record is
-  accepted, not before.
+  0004" notes, and [Unsupported features](../unsupported.md) lists what the profile leaves
+  out, when this record is accepted, not before.
 
 ## Review of 2026-09-26
 
