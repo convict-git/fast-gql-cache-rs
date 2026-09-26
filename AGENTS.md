@@ -96,7 +96,8 @@ user code.
 - **Phase 2 (V0, the store)**: a Rust store replaces `EntityStore` behind a
   `NormalizedCache`-shaped adapter, with Apollo's `StoreReader`, `StoreWriter` and
   `Policies` unchanged on top. Root store first; layers, gc and extract/restore follow as
-  the tests need them.
+  the tests need them. The adapted suites that drive Apollo's reader and writer switch to
+  the Rust store through the store factories in `src/__tests__/helpers.ts`.
 - **Phase 3 (the write engine)**, only if Phase 2 passes ADR 0001's gates: the write moves
   into Rust beside the store, resumable at every user callout, dropping each patched
   symbol once nothing imports it.
