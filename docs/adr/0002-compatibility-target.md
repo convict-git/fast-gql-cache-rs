@@ -74,9 +74,10 @@ fields. Nothing in Apollo Client's API or production code depends on it. That is
 
 ## Consequences
 
-- The tests adapted from Apollo's `InMemoryCache` suite stay the oracle for tiers 1–2.
-  Porting more of that suite (`entityStore`, `writeToStore`, `readFromStore`, `policies`,
-  `optimistic`) becomes part of each phase, because tier 2 is only as strong as its tests.
+- The tests adapted from Apollo's `InMemoryCache` suite stay the oracle for tiers 1–2,
+  because tier 2 is only as strong as its tests. The suite is ported in full apart from two
+  files that do not exercise the cache ([src/__tests__/README.md](../../src/__tests__/README.md)).
+  A test changes only through a registered drift.
 - The biggest cost in ADR 0001, the resumable write engine that never calls user code,
   stays. Merge and key functions are tier 2, so the engine must run them in Apollo's order
   with the store visible as Apollo shows it.
