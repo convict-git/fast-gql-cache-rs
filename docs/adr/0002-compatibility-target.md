@@ -2,6 +2,11 @@
 status: accepted
 ---
 
+> **Amended by [ADR 0004](0004-declarative-policies-rust-engine.md).** Tier 2 holds for
+> the declarative profile; configuration outside it is unsupported, not drift, and is
+> listed in [the register](../compatibility.md#unsupported). Tiers 1 and 3 and the drift
+> rules are unchanged.
+
 # Compatibility target: close to `InMemoryCache`, not byte-identical
 
 `InMemoryCacheRs` guarantees two things without exception: the `ApolloCache` contract that

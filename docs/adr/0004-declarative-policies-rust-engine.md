@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Declarative policies, and a Rust engine that owns the store, the write, the read and invalidation
@@ -17,11 +17,12 @@ functions, watch callbacks), and two thin codecs that cross the boundary in bulk
 
 This record amends ADR 0001 (the boundary, contracts 2, 4–6, the migration order and V0)
 and [ADR 0002](0002-compatibility-target.md) (tier 2). It leaves
-[ADR 0003](0003-wasm-initialization.md) unchanged. It is proposed: nothing below has been
+[ADR 0003](0003-wasm-initialization.md) unchanged. Nothing below has been
 measured yet, and every performance statement is a hypothesis that the
 [experiments and gates](#migration-order-and-gates) decide. It was revised after an
-adversarial review on 2026-09-26; [that section](#review-of-2026-09-26) lists what the
-review changed and what the maintainer decided.
+adversarial review on 2026-09-26 and accepted on 2026-09-27;
+[that section](#review-of-2026-09-26) lists what the review changed, what the maintainer
+decided, and what acceptance does not establish.
 
 ## Context
 
@@ -336,8 +337,9 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    leaves `ROOT_QUERY.item` embedded (review, #40). Skipping the walk would lose that
    write, and marking the parent stale instead would turn the field into a reference.
    Skipping descendants is an optimization that needs its own proof that nothing
-   below can be written differently (for example, no policy epoch change since the read)
-   and this oracle case; E10 measures the walk.
+   below can be written differently. An unchanged policy epoch since the read is a
+   candidate condition, not a proof (#43). Until such a proof exists the encoder walks
+   every descendant, and this case stays in the oracle; E10 measures the walk.
 7. **Identity (R2, a performance target, ADR 0002).** The JS frontier maps each result
    node to one frozen object, so unchanged subtrees come back `===`. Below the entity
    level, a memo entry that recomputes to equal content keeps its node. An **entity-level**
@@ -698,6 +700,10 @@ stated budget; a single finite run cannot show a plateau.
     `moduleNameMapper`, with every Apollo import mapped to the one installed build and a
     startup check that it is one.
   - Seeded, shrinkable sequences of operations run against both caches.
+  - The review's reproductions join the oracle, among them: write-back after `INVALIDATE`
+    and a reread (#12), write-back after a policy change that normalizes a child (#40),
+    warmed versus newly parsed documents after `addTypePolicies` (#17), offset holes
+    through a JSON round trip (#16), `-0`/`+0` (#29), and the deep JSON blob (contract 2).
   - `probe:parity` runs sections 10 and 11 with descriptor-equivalent configuration
     against both caches, and excludes the reactive variable check.
 
@@ -866,6 +872,15 @@ brainstorm board (messages cited as `#n`; the board is not committed), with the 
 moderating. Every finding was reproduced against `apollo-client-sm/src/` or Apollo 4.2.11
 itself, and the revision above folds them in.
 
+### Acceptance
+
+The maintainer accepted this record on 2026-09-27, after Codex acknowledged the revision
+(#43). Acceptance fixes the direction, the contracts and the order of the work. It does not
+establish performance, descriptor coverage, the correctness of a Rust engine that does not
+exist yet, or release readiness: E10 and E11, the reach detector, differential and
+client-level coverage in both builds, and v2's clean-install and disposal gates each still
+need their own evidence.
+
 ### Maintainer decisions
 
 - **`dataIdFromObject` is rejected**, as section 1 says.
@@ -951,6 +966,7 @@ with the maintainer's answers (validation throws, `resultCaching` removed, guide
 gates) and the frontier design of section 5, after rereading the
 architecture and performance guides, ADRs 0001–0003, the ported test suites and both
 probes. It was revised again after the adversarial review of 2026-09-26
-([its section](#review-of-2026-09-26)), whose reproductions are Apollo experiments; no
-experiment has been run for this design itself. The test counts come from a pattern
+([its section](#review-of-2026-09-26)), whose reproductions are Apollo experiments, and
+accepted by the maintainer on 2026-09-27 after Codex's acknowledgement (#43). No experiment
+has been run for this design itself. The test counts come from a pattern
 count over `src/__tests__` and should be confirmed case by case at step 2.

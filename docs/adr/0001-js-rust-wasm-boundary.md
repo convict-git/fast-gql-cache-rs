@@ -2,6 +2,11 @@
 status: accepted
 ---
 
+> **Amended by [ADR 0004](0004-declarative-policies-rust-engine.md).** Policies are
+> declarative, so the reader, the memo and invalidation move into Rust. ADR 0004 replaces
+> this record's contracts 2 and 4–6, its migration order and V0; the rest stands as
+> restated there.
+
 # The JS ↔ Rust-WASM boundary of `InMemoryCacheRs`
 
 `InMemoryCacheRs` keeps **one authoritative normalized store** and keeps every piece of

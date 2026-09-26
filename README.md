@@ -25,8 +25,8 @@ has been measured in a browser yet.
 
 ## Not a drop-in replacement
 
-The planned design ([ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md), still
-proposed) accepts **declarative** cache configuration only:
+The design ([ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md), accepted, not
+yet built) accepts **declarative** cache configuration only:
 
 - `keyFields` and `keyArgs` as field lists, and `possibleTypes` as a map of type names;
 - `merge` and `read` behaviours chosen from a fixed set of descriptors that covers
