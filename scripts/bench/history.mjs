@@ -34,8 +34,15 @@ const kib = (bytes) => `${(bytes / 1024).toFixed(1)} KiB`;
 function readme(runs) {
   const latest = runs.at(-1);
   const rows = Object.entries(latest.measurements).map(
-    ([label, { apollo, rs }]) =>
-      `| ${label.replaceAll("|", "\\|")} | ${(rs / apollo).toFixed(2)}× |`
+    ([label, { apollo, rs, unit }]) =>
+      `| ${label.replaceAll("|", "\\|")} | ${unit === "B" ? "memory" : "time"} | ${(rs / apollo).toFixed(2)}× |`
+  );
+  const memory = (r) =>
+    r.memoryGeomeanVsApollo == null ?
+      "—"
+    : `${r.memoryGeomeanVsApollo.toFixed(2)}×`;
+  const failing = Object.entries(latest.checks ?? {}).filter(
+    ([, c]) => c.rs === false
   );
   return [
     "# fast-gql-cache-rs benchmark history",
@@ -46,21 +53,30 @@ function readme(runs) {
     "",
     `Latest: ${short(latest.sha)} (${day(latest.date)}): InMemoryCacheRs ÷ InMemoryCache = **${latest.geomeanVsApollo.toFixed(2)}×** (geometric mean of ${rows.length} measurements; below 1.00× is faster).`,
     "",
+    ...(latest.memoryGeomeanVsApollo == null ?
+      []
+    : [
+        `Memory: InMemoryCacheRs ÷ InMemoryCache = **${memory(latest)}** (geometric mean of the memory measurements; below 1.00× is smaller).` +
+          (failing.length ?
+            ` Failing memory checks: ${failing.map(([label]) => label).join("; ")}.`
+          : ""),
+        "",
+      ]),
     "## Runs",
     "",
-    "| Date | Commit | Rs ÷ Apollo | WASM size | Node |",
-    "| --- | --- | --: | --: | --- |",
+    "| Date | Commit | Rs ÷ Apollo | Memory Rs ÷ Apollo | WASM size | Node |",
+    "| --- | --- | --: | --: | --: | --- |",
     ...runs
       .toReversed()
       .map(
         (r) =>
-          `| ${day(r.date)} | ${short(r.sha)} | ${r.geomeanVsApollo.toFixed(2)}× | ${kib(r.wasmBytes)} | ${r.node} |`
+          `| ${day(r.date)} | ${short(r.sha)} | ${r.geomeanVsApollo.toFixed(2)}× | ${memory(r)} | ${kib(r.wasmBytes)} | ${r.node} |`
       ),
     "",
     `## Latest run, per measurement`,
     "",
-    "| Measurement | Rs ÷ Apollo |",
-    "| --- | --: |",
+    "| Measurement | Kind | Rs ÷ Apollo |",
+    "| --- | --- | --: |",
     ...rows,
     "",
   ].join("\n");

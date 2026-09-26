@@ -7,8 +7,10 @@
  *
  *   npm run bench:pr -- --base main                        # full precision, all sections
  *   npm run bench:pr -- --base main --quick --sections=1   # a quick look
+ *   npm run bench:pr -- --base main --probe=memory         # memory instead of time
  *
- * Options: --base REF (required), --sections=1,2, --runs=N (default 7), --quick,
+ * Options: --base REF (required), --probe=performance|memory, --sections=1,2,
+ * --runs=N (default 7), --quick,
  * --out result.json (raw samples; default: a temp file), --no-build (head is
  * already built). Prints the report unless --out is given. If the base cannot
  * be built, head is still measured and the report says why.
@@ -18,6 +20,8 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { ALL_PROBE_FILES } from "./run.mjs";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 const args = process.argv.slice(2);
@@ -86,10 +90,7 @@ if (sha.status !== 0) {
   } else {
     // Head's probe, so both sides are measured by the same code (run.mjs
     // checks). The base keeps its own build and node_modules.
-    for (const file of [
-      "docs/probes/cache-performance-probe.mjs",
-      "docs/probes/select-cache.mjs",
-    ]) {
+    for (const file of ALL_PROBE_FILES) {
       mkdirSync(dirname(join(baseDir, file)), { recursive: true });
       copyFileSync(join(REPO, file), join(baseDir, file));
     }

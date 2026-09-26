@@ -1,5 +1,7 @@
 use wasm_bindgen::prelude::*;
 
+mod heap_stats;
+
 /// Called from TypeScript to verify Rust-WASM interop.
 ///
 /// Returns a marker instead of logging it: a cache must not write to the

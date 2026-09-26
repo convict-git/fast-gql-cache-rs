@@ -100,6 +100,7 @@ flowchart TB
 | 7 | [Structural properties that stress the hot paths](07-structural-stress.md) | Which data shapes make the hot paths slow? |
 | 8 | [Worst-case shapes and a stress corpus](08-worst-case-shapes.md) | What should a benchmark suite contain? |
 | 9 | [Optimization playbook](09-optimization-playbook.md) | What should I change, and what should a re-implementation target? |
+| 10 | [Memory](10-memory.md) | What does the cache keep alive, and how much garbage does it make? |
 
 ## Conventions
 

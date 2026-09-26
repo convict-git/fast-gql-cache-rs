@@ -1,9 +1,10 @@
 # Benchmarking
 
 How this repository measures whether a change makes `InMemoryCacheRs` faster or slower,
-per PR and over time. The measurements come from the
-[performance probe](probes/cache-performance-probe.mjs) (200 measurements in 14 sections);
-everything below is about running it so the numbers can be trusted.
+and larger or smaller, per PR and over time. The measurements come from the
+[performance probe](probes/cache-performance-probe.mjs) (200 measurements in 14 sections)
+and the [memory probe](probes/cache-memory-probe.mjs) ([Memory](#memory)).
+Everything below is about running them so the numbers can be trusted.
 
 ## What makes a number trustworthy
 
@@ -89,10 +90,82 @@ options: `--runs=N`, `--sections=1,2,3`, `--quick` (7 repetitions instead of 25)
 `--out result.json` (keep the raw samples instead of printing). `npm run
 probe:compare` is the lighter tool for this checkout alone: both caches, no base.
 
+## Memory
+
+Speed is half the comparison. The [memory probe](probes/cache-memory-probe.mjs) measures
+what each cache holds and how much garbage it makes, and it runs through the same
+pipeline as the performance probe: the same fresh process per section, the same
+interleaving, and Apollo as the noise control. The PR comment has a Memory section
+after the Performance one. The nightly history records both, and its trend page plots
+either.
+
+```bash
+npm run probe:memory -- --runs=5                        # both reports, for Apollo
+npm run probe:memory -- --cache=rs --sections=1,3       # InMemoryCacheRs, two sections
+npm run probe:compare -- --probe=memory --runs=3        # side by side, with ratios
+npm run bench:pr -- --base main --probe=memory          # head vs base, like CI
+```
+
+**What it measures.** Three kinds of result:
+
+| Kind | Question | How |
+| --- | --- | --- |
+| **Retained bytes** | What does the cache keep alive: store, result memo, watches, layers? | the difference between two settled heaps: collect garbage until the heap stops shrinking, including finalizer turns |
+| **Allocated bytes** | How much garbage does an operation create, whether or not it survives? | the heap's growth over the operation, plus what every collection during it reclaimed, as reported by `v8.GCProfiler` |
+| **Checks** | Does memory come back: after eviction, after dropping a cache, under a steady workload? | pass or fail with a stated tolerance. A ratio cannot express these, because the healthy value is zero |
+
+The sections, each in its own process:
+
+1. Retained footprint against list size: store, the read memo, a watched query.
+2. Retained footprint by data shape.
+3. Allocation per operation: writes, reads, broadcasts, batches.
+4. Watches, distinct documents and optimistic layers.
+5. Steady workloads, which must plateau.
+6. Reclamation: evict plus `gc()`, dropping a cache, reusing WASM memory.
+
+**WASM is counted by what is in use.** A WASM module's linear memory only grows, and
+JavaScript cannot see inside it. The crate's global allocator counts bytes in use, the
+peak, and the total ever allocated (`wasm/src/heap_stats.rs`). The probe charges a cache
+for its bytes in use, and its allocation measurements include WASM allocations. A build
+that predates the counters falls back to the growth of linear memory.
+
+**Traps the harness avoids.** Each of these produced a wrong number during development:
+
+- **A cache in an async function's local variable.** V8 saves a suspended async
+  function's registers. A local read after one `await` stays reachable through that
+  saved state even after the code is done with it, so a leak check reads a leak. A local
+  never read after an `await` is not saved, so a retained measurement reads zero. The
+  harness holds measured objects in a registry by id, and touches them only inside
+  synchronous callbacks (`hold`, `use`, `drop` in
+  [`memory-harness.mjs`](probes/memory-harness.mjs)).
+- **Documents built with `gql`.** graphql-tag keeps every document it has parsed, so
+  per-document costs would never come back. Churned documents are built with `graphql`'s
+  `parse`.
+- **One-time costs.** Compiled code, parsed documents and module-level caches are paid
+  by an unmeasured warm-up run of each workload at a small size.
+- **Payload memory.** Payloads are built inside the measured step and dropped after it.
+  A retained measurement therefore counts what the cache keeps of them (Apollo stores
+  leaf values by reference), and nothing the probe keeps.
+
+**Reading a result.**
+- Retained measurements are deterministic to within a few KiB.
+- Allocation is the median of several repetitions and is almost as steady.
+- The report gives memory its own noise band, because memory is far less noisy than
+  timing, and says *smaller* and *larger* instead of *faster* and *slower*.
+- A check that fails for both caches describes Apollo's behaviour, not a regression. The
+  comment calls out checks that passed on the base and fail on the PR.
+
+The committed Apollo baseline is
+[`probes/cache-memory-probe.log`](probes/cache-memory-probe.log) (five runs, rendered
+from [`probes/cache-memory-probe.json`](probes/cache-memory-probe.json)). The
+[performance guide's Part 10](performance/10-memory.md) interprets it.
+
 ## Files
 
 | File | Role |
 | --- | --- |
+| [`docs/probes/cache-memory-probe.mjs`](probes/cache-memory-probe.mjs), [`memory-harness.mjs`](probes/memory-harness.mjs) | The memory probe and its measurement primitives |
+| [`wasm/src/heap_stats.rs`](../wasm/src/heap_stats.rs) | The WASM heap counters the memory probe reads |
 | [`scripts/bench/pr.mjs`](../scripts/bench/pr.mjs) | Builds head and base, runs the comparison |
 | [`scripts/bench/run.mjs`](../scripts/bench/run.mjs) | Runs the probe for every configuration, interleaved |
 | [`scripts/bench/stats.mjs`](../scripts/bench/stats.mjs) | Noise band and significance |

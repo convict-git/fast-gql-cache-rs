@@ -1,6 +1,6 @@
 # Part 9 — Optimization playbook
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 8](08-worst-case-shapes.md) · [Documentation home →](../README.md)
+[Documentation](../README.md) › [Performance guide](README.md) · [← Part 8](08-worst-case-shapes.md) · [Part 10 →](10-memory.md)
 
 ## 9.1 Decision tree
 
@@ -100,4 +100,4 @@ with the shape of the data:
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 8 — Worst-case shapes and a stress corpus](08-worst-case-shapes.md) | [Performance guide](README.md) | [Documentation home](../README.md) |
+| [Part 8 — Worst-case shapes and a stress corpus](08-worst-case-shapes.md) | [Performance guide](README.md) | [Part 10 — Memory](10-memory.md) |

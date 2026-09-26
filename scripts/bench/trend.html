@@ -38,10 +38,10 @@
 <main>
   <h1>fast-gql-cache-rs benchmarks</h1>
   <p>InMemoryCacheRs ÷ Apollo's InMemoryCache, measured in the same nightly job on <code>main</code>.
-     Below 1.00× means InMemoryCacheRs is faster. The ratio does not depend on the runner machine.</p>
+     Below 1.00× means InMemoryCacheRs is faster (timings) or smaller (memory). The ratio does not depend on the runner machine.</p>
   <div class="stats" id="stats"></div>
   <label>Measurement
-    <select id="measurement"><option value="">All measurements (geometric mean)</option></select>
+    <select id="measurement"><option value="">All timings (geometric mean)</option><option value="__memory">All memory measurements (geometric mean)</option></select>
   </label>
   <div id="chart"></div>
 </main>
@@ -64,6 +64,7 @@
   const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
   document.getElementById("stats").innerHTML = [
     stat(`${latest.geomeanVsApollo.toFixed(2)}×`, "Rs ÷ Apollo, latest"),
+    stat(latest.memoryGeomeanVsApollo == null ? "—" : `${latest.memoryGeomeanVsApollo.toFixed(2)}×`, "memory Rs ÷ Apollo, latest"),
     stat(`${(latest.wasmBytes / 1024).toFixed(1)} KiB`, "WASM size, latest"),
     stat(runs.length, "runs recorded"),
     stat(latest.sha.slice(0, 7), `latest commit, ${latest.date.slice(0, 10)}`),
@@ -71,7 +72,8 @@
 
   const select = document.getElementById("measurement");
   for (const label of Object.keys(latest.measurements)) {
-    select.add(new Option(label, label));
+    const unit = latest.measurements[label].unit;
+    select.add(new Option(unit === "B" ? `memory: ${label}` : label, label));
   }
 
   const svgNs = "http://www.w3.org/2000/svg";
@@ -85,6 +87,7 @@
   function draw(label) {
     const points = runs
       .map((r) => {
+        if (label === "__memory") return { run: r, value: r.memoryGeomeanVsApollo ?? null };
         const m = label ? r.measurements[label] : null;
         return { run: r, value: label ? (m ? m.rs / m.apollo : null) : r.geomeanVsApollo };
       })
