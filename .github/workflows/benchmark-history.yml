@@ -53,7 +53,8 @@ jobs:
           npm run wasm:build
           npm run build:ts
           node scripts/bench/run.mjs --out result.json --runs=3
-          node scripts/bench/report.mjs result.json --out report.md --summary summary.json --run-url "$RUN_URL"
+          node scripts/bench/run.mjs --probe=memory --out memory-result.json --runs=3
+          node scripts/bench/report.mjs result.json memory-result.json --out report.md --summary summary.json --run-url "$RUN_URL"
           cat report.md >> "$GITHUB_STEP_SUMMARY"
 
       - if: steps.check.outputs.skip != 'true'
@@ -63,6 +64,7 @@ jobs:
           node scripts/bench/history.mjs append history summary.json
           mkdir -p history/runs
           cp result.json "history/runs/$(date -u +%F)-${sha::7}.json"
+          cp memory-result.json "history/runs/$(date -u +%F)-${sha::7}-memory.json"
           cd history
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -74,4 +76,6 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-history-result
-          path: result.json
+          path: |
+            result.json
+            memory-result.json
