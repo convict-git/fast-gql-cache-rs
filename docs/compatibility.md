@@ -19,16 +19,17 @@ to **Adopted**, with its pinning test, in the PR that implements it.
 | Behaviour in `InMemoryCache` | In `InMemoryCacheRs` | Why | Migration |
 | --- | --- | --- | --- |
 | A write that throws while comparing stored values (a getter, or `equal()` overflowing on a JSON blob nested ~10 000 levels) has already committed the entities before it, in production builds | nothing from the write is committed; the original value is rethrown and watches still broadcast | the comparison runs in JS between Rust's staging and commit (ADR 0004 contract 2) | none needed for passive data; do not rely on partial writes |
-| Values handed to `modify` are frozen in development only; mutating one in production changes the store silently | frozen in every build, so mutating one throws | the store lives in Rust; a mutated JS copy would disagree with it (ADR 0004 section 5) | return a new value from the modifier instead of mutating the one received |
+| Stored lists, references and embedded objects handed to `modify` are frozen in development only; mutating one in production changes the store silently | frozen in every build, so mutating one throws; leaf values the application wrote (JSON blobs, `Date`s) are never frozen | the store lives in Rust; a mutated JS copy would disagree with it (ADR 0004 section 5) | return a new value from the modifier instead of mutating the one received |
 
 ## Unsupported
 
-Configuration and inputs outside ADR 0004's declarative profile. These are not drift:
-the cache rejects the configuration at construction (and in `addTypePolicies` /
-`addPossibleTypes`), naming each offending path, or, for input values, documents them as
-unsupported without checking.
+Configuration and inputs outside ADR 0004's declarative profile. These are not drift.
+This section specifies the accepted profile; the checks arrive with ADR 0004's step 2.
+Until then today's delegating cache still accepts all of it. From step 2, the constructor,
+`addTypePolicies` and `addPossibleTypes` reject each configuration below, naming every
+offending path; input values stay documented as unsupported without being checked.
 
-| Unsupported | Rejected? | Migration |
+| Unsupported | Rejected from step 2? | Migration |
 | --- | --- | --- |
 | custom `read` functions | yes | a read descriptor; `@client` fields with `LocalState` resolvers for computed fields; transform values in a link or the component |
 | custom `merge` functions | yes | a merge descriptor (`true`, `false`, list, offset, Relay, keep-existing); otherwise normalize in a link or on the server |
