@@ -1,12 +1,56 @@
-# fast-gql-cache-rs - A rust-wasm based InMemoryCache implementation for apollo-client
-Currently in the proof-of-concept phase, a drop-in replacement for [apollo-client’s `InMemoryCache`](https://www.apollographql.com/docs/react/v3/api/cache/InMemoryCache), intended to **improve client-side GraphQL caching performance** by moving performance-critical hot paths like read, write, and normalization to **Rust-WebAssembly** while minimizing JavaScript single-thread overhead, expecting smoother frame rates and near-zero loss of interactivity for applications with l**arge normalized stores and write-heavy workloads**.
+# fast-gql-cache-rs
 
-## Proof-of-concept research: findings so far
+A Rust-WebAssembly cache for [Apollo Client](https://www.apollographql.com/docs/react/),
+built as an alternative to its
+[`InMemoryCache`](https://www.apollographql.com/docs/react/caching/overview) for
+applications with large normalized stores and write-heavy workloads.
 
-This project is still a proof of concept. The documents below capture the research done so
-far into the cache it replaces, Apollo Client's `InMemoryCache` (`@apollo/client@4.2.11`):
-how every path works, what each one costs, and what a drop-in replacement has to preserve.
-They record the current findings and will change as the port progresses.
+> **Status: research and a development scaffold. Not usable yet, and not released.**
+> `InMemoryCacheRs` implements Apollo's `ApolloCache` API today by delegating to Apollo's
+> own store, reader and writer; the Rust core is still a stub. The package does not work
+> outside this repository yet: it depends on a development-only patch of `@apollo/client`,
+> and its WASM initialization is not built.
+
+## The goal
+
+In `InMemoryCache`, every write normalizes the result, re-reads the queries it touched and
+notifies their watchers, all synchronously on the main thread. For a large or frequently
+polled store that work shows up as blocked frames and delayed input. The aim is to do it in
+Rust-WebAssembly, so a write finishes sooner and hands the main thread back to rendering
+and input earlier than `InMemoryCache` does.
+
+That is the hypothesis the project exists to test, not a result. The
+[performance guide](docs/performance/README.md) measures Apollo's cache under Node; nothing
+has been measured in a browser yet.
+
+## Not a drop-in replacement
+
+The design ([ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md), accepted, not
+yet built) accepts **declarative** cache configuration only:
+
+- `keyFields` and `keyArgs` as field lists, and `possibleTypes` as a map of type names;
+- `merge` and `read` behaviours chosen from a fixed set of descriptors that covers
+  Apollo's pagination helpers and common policy idioms.
+
+Custom `read` and `merge` functions, function-valued `keyFields`/`keyArgs` and
+`dataIdFromObject` are rejected when the cache is constructed, with an error that names
+each one. In exchange, no policy function runs inside a cache read or write, and Rust never
+calls application code, which lets the store, the writer, the reader and invalidation all
+move into Rust. Within that profile
+the target is `InMemoryCache`'s behaviour
+([ADR 0002](docs/adr/0002-compatibility-target.md)), checked against Apollo's own test
+suite.
+
+Before you migrate, read [Unsupported features](docs/unsupported.md): what
+`InMemoryCacheRs` does not support and what to use instead. Where it behaves differently
+from `InMemoryCache`, the [drift register](docs/compatibility.md) says so.
+
+## Research: findings so far
+
+The documents below capture the research into the cache this project replaces, Apollo
+Client's `InMemoryCache` (`@apollo/client@4.2.11`): how every path works, what each one
+costs, and what a replacement has to preserve. They record the current findings and will
+change as the work progresses.
 
 Start at the [documentation home](docs/README.md) for reading paths and a section-level
 table of contents.

@@ -28,8 +28,51 @@ stating it.
   other classes stay internal.
 - **Apollo version**: `@apollo/client@4.2.11`, both dev dependency and peer dependency.
 - **Config type**: `InMemoryCacheRsConfig` is our own interface, not an extension of
-  Apollo's `InMemoryCacheConfig`. It mirrors Apollo's option shapes for drop-in migration
-  and will grow Rust-WASM-specific options.
+  Apollo's `InMemoryCacheConfig`. It mirrors Apollo's option shapes, so migrating costs
+  little, and will grow Rust-WASM-specific options.
+- **Initialization**: none for users. The constructor initializes the WASM synchronously
+  on first use, from bytes shipped inside the package, and stays under the size budget
+  ([ADR 0003](docs/adr/0003-wasm-initialization.md)). An escape hatch, if one is ever
+  needed, is a static method on `InMemoryCacheRs`, never a new export. Not implemented
+  yet: the built package throws on construction outside Jest and the probes, which
+  initialize privately.
+- **Disposal: no leaks.** JavaScript's garbage collector cannot see WASM memory, and a
+  `FinalizationRegistry` callback may run late or never, so a server that builds a cache
+  per request would leak with a finalizer alone. Every allocation a cache makes in Rust
+  belongs to that cache's handle, and `cache[Symbol.dispose]()` frees all of it
+  deterministically; the finalizer is only a fallback. The method and a memory check that
+  disposal returns the WASM heap to its baseline are required before any release (v2,
+  [ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md) contract 14).
+- **Release**: nothing ships for production use while production code imports a symbol
+  that only `patches/@apollo+client+4.2.11.patch` exports; `patch-package` never reaches
+  an installed package. The patch is for development until v1 (correctness) and goes in
+  v2. `npm run check:pack` checks that the tarball carries every file it loads.
+
+## Compatibility with `InMemoryCache`
+
+The target is close to `InMemoryCache`, not byte-identical
+([ADR 0002](docs/adr/0002-compatibility-target.md)):
+
+- **Always holds**: the `ApolloCache` contract Apollo Client relies on
+  ([architecture §9.3](docs/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements),
+  synchronous read-your-writes), and, for the declarative profile of
+  [ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md), the user-authored surface:
+  config shapes, identity, descriptor and modifier semantics including how often they
+  apply, write-back (`isFresh`) semantics, `possibleTypes` for exact type names, and
+  `extract`/`restore` contents.
+- **Unsupported**: what the profile leaves out (custom `read`/`merge` functions,
+  function-valued `keyFields`/`keyArgs`, `dataIdFromObject`, fuzzy `possibleTypes`,
+  `resultCaching: false`, reactive variables consumed by the cache, written values that
+  are not passive data, and `cache.policies` beyond `addTypePolicies`, `addPossibleTypes`,
+  `identify` and `fragmentMatches`), and anything else we cannot or choose not to support. It is
+  not drift. Each feature goes into [docs/unsupported.md](docs/unsupported.md) in the PR
+  that decides it, as soon as it is decided, because migrating teams read it to weigh the
+  effort. An entry states what, how an application notices, and what to use instead; the
+  reason goes only in its collapsed **Why** block. The document's last section has the
+  rules.
+- **May drift**: incidental behaviour (tier 3 in ADR 0002), one entry at a time, each with
+  a measured reason, a migration note and pinning tests, recorded in
+  [docs/compatibility.md](docs/compatibility.md) in the same PR. Nothing drifts silently.
 
 ## Import rules (production code)
 
@@ -49,8 +92,8 @@ Resolve an Apollo symbol by the first option that works, in order:
 
 Apollo implementation lives in exactly one place. The allowed copies are
 `InMemoryCacheRs.ts` (our implementation), `InMemoryCacheRsConfig.ts`, `src/internal/*`
-per rule 3, and tests adapted from Apollo's `InMemoryCache` suite. `ApolloCache` and
-`EntityStore` are imported from `@apollo/client/cache`.
+per rule 3, and tests adapted from Apollo's `InMemoryCache` suite. `ApolloCache` is
+imported from `@apollo/client/cache`, as is `EntityStore` until Phase 2 replaces it.
 
 ## Dev tooling
 
@@ -65,17 +108,36 @@ Reuse `apollo-client-sm` config so ours cannot drift from Apollo's:
 
 ## Implementation strategy
 
-- **Phase 1 (current)**: `InMemoryCacheRs` implements the `ApolloCache` abstract API
-  (`apollo-client-sm/src/cache/core/cache.ts`): required methods first, optional
-  overrides only where `InMemoryCache` behaviour needs them. It delegates to Apollo's
-  `EntityStore`, `Policies`, `StoreReader`, `StoreWriter`, and is the sole TypeScript ↔
-  WASM interop surface.
-- **Phase 2**: replace `StoreReader`, `StoreWriter` and `src/internal/` modules with
-  Rust-WASM, dropping each patched symbol once nothing imports it.
+The boundary, its contracts and the order of the work are decided in
+[ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md), which amends
+[ADR 0001](docs/adr/0001-js-rust-wasm-boundary.md). In short: one authoritative store in
+Rust; policies are declarative, so no policy code runs inside a read or a write; the
+store, the write engine, the reader, the result memo and invalidation are Rust's; JS keeps
+the `ApolloCache` surface, operation-level user code (modifiers, `update` functions, watch
+callbacks) and two bulk codecs; Rust never calls JavaScript.
+
+- **Phase 1 (done)**: `InMemoryCacheRs` implements the `ApolloCache` abstract API
+  (`apollo-client-sm/src/cache/core/cache.ts`), delegating to Apollo's `EntityStore`,
+  `Policies`, `StoreReader`, `StoreWriter`. It is the sole TypeScript ↔ WASM interop
+  surface. It is a development scaffold: the Rust core is a stub.
+- **Next**, in ADR 0004's order (its "Migration order and gates"):
+  0. evidence first: benchmark and memory-probe fixes, a reach detector, production-build
+     and client-level test runs, and a frozen synthetic workload (polling first);
+  1. boundary experiments E10 (encoder) and E11 (materializer), after which the maintainer
+     fixes thresholds and stop conditions;
+  2. the declarative profile: types, validation, migration guide, test inventory;
+  3. a vertical slice driven by a real `ApolloClient`, with ADR 0003's initialization;
+  4. the full engine: **v1**, correctness;
+  5. patch removal, `[Symbol.dispose]` and a clean-install check: **v2**, the first
+     release;
+  6. measured improvements beyond Apollo's model.
+- Apollo's tests are never rewritten to fit: they stay as the oracle, changed or new tests
+  carry the annotation in `src/__tests__/README.md`, and a green run counts only for tests
+  proved to reach Rust.
 - `npm test` (the `InMemoryCache` parity suite) and `npm run probe:parity` (the behaviour
-  probe's output, byte for byte against Apollo's) pass before advancing a phase.
-  Performance per PR and over time: `docs/benchmarking.md` (the `benchmark` PR label,
-  the nightly history, `npm run bench:pr -- --base main` locally).
+  probe's output against Apollo's, byte for byte except registered drifts) pass before a
+  step is done. Performance per PR and over time: `docs/benchmarking.md` (the `benchmark`
+  PR label, the nightly history, `npm run bench:pr -- --base main` locally).
 
 ## Skills
 

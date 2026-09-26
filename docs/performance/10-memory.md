@@ -169,8 +169,9 @@ part to keep:
    should be expressed in bytes.
 4. **One memo for optimistic and root reads when no layer shadows the data.**
 
-The memory probe is the oracle for all four: each corresponds to one of its rows or
-checks, measured against `InMemoryCacheRs` on every benchmarked PR.
+[ADR 0004](../adr/0004-declarative-policies-rust-engine.md) turns these into measured
+targets for `InMemoryCacheRs`. This probe is the oracle: each item above corresponds to
+one of its rows or checks.
 
 <!-- nav:bottom -->
 

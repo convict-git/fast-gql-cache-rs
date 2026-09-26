@@ -2,9 +2,11 @@
 
 These suites are Apollo Client's own `InMemoryCache` tests
 (`apollo-client-sm/src/cache/`, `@apollo/client@4.2.11`), run against
-`InMemoryCacheRs`. They are the compatibility oracle (the client contract and the
-user-authored surface in ADR 0002, `docs/adr/`), so test bodies stay Apollo's: a port
-changes imports and wiring, never assertions.
+`InMemoryCacheRs`. They are the compatibility oracle for tiers 1 and 2 of
+[ADR 0002](../../docs/adr/0002-compatibility-target.md), so test bodies stay Apollo's: a
+port changes imports and wiring, never assertions. An assertion changes only through an
+entry in the [drift register](../../docs/compatibility.md), and every changed or new test
+is [annotated](#annotating-a-changed-or-new-test).
 
 | Here | Apollo's source |
 | --- | --- |
@@ -38,10 +40,36 @@ tests.
 5. Snapshots are written by the first run and must match Apollo's `__snapshots__` value
    for value; the snapshot names differ only by rule 1.
 
+## Annotating a changed or new test
+
+A test that differs from Apollo's beyond rules 1–5, or that has no Apollo original, starts
+with an annotation, so a reader can tell what still comes from `InMemoryCache` and what we
+changed. Mechanical porting under rules 1–5 needs none.
+
+```ts
+// fast-gql-cache-rs: implementation
+//   from: cache/inmemory/__tests__/policies.ts, "runs nested merge functions as well as ancestors" (line 4473)
+//   changed: the two concat merge functions are written as `{ list: "append" }` descriptors
+//   behaviour: unchanged, Apollo's assertions are kept
+it("runs nested merge functions as well as ancestors (descriptors)", function () {
+```
+
+| Line | Holds |
+| --- | --- |
+| `fast-gql-cache-rs:` | the kind: **`implementation`** (the setup or wiring changed, every assertion is Apollo's), **`behaviour`** (an assertion changed: what the cache does differs from `InMemoryCache`) or **`new`** (no Apollo original) |
+| `from:` | Apollo's file, test name and line at `@apollo/client@4.2.11`, for `implementation` and `behaviour`; for `new`, the invariant, ADR or finding the test pins |
+| `changed:` | what differs from the original, concretely |
+| `behaviour:` | `unchanged` for `implementation`. For `behaviour`, the old and the new behaviour, and the [drift register](../../docs/compatibility.md) entry that records it; a behaviour change without an entry is not allowed |
+
+Keep Apollo's original test next to a changed copy whenever it still runs, so the oracle
+never shrinks to our own expectations. A configuration the cache rejects is not deleted:
+its original test stays, listed with the reason it fails.
+
 `helpers.ts` exports `StoreReader` and `StoreWriter` subclasses that accept an
 `InMemoryCacheRs`, so suites that drive Apollo's reader and writer directly keep their
 bodies. Its `defaultNormalizedCacheFactory` and `writeQueryToStore` build today's
-`EntityStore`; when Rust-WASM replaces the store (ADR 0001, Phase 2), switching them to
+`EntityStore`; when Rust-WASM replaces the store
+([ADR 0001](../../docs/adr/0001-js-rust-wasm-boundary.md), Phase 2), switching them to
 the Rust store turns `diffAgainstStore`, `readFromStore`, `writeToStore`, `roundtrip`
 and `recordingCache` into its oracle.
 

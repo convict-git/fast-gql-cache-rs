@@ -10,6 +10,7 @@ two executable probes pin the claims that can be observed or measured.
 | **Architecture guide** | What every path *does*: the store, policies, writer, reader, reactivity, every public method, and the client pipeline around the cache | [architecture/](architecture/README.md) |
 | **Performance guide** | What every path *costs*, which data shapes stress it, and what to optimize | [performance/](performance/README.md) |
 | **Probes** | A behaviour oracle (78 assertions), a performance probe and a memory probe | [Probes](#probes) |
+| **Migrating** | What `InMemoryCacheRs` does not support, and where it behaves differently | [Unsupported features](unsupported.md), [drift register](compatibility.md) |
 
 ## Reading paths
 
