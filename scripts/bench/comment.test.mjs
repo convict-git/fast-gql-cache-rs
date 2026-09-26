@@ -11,14 +11,14 @@ const report = `${MARKER}\n### Performance: \`aaaaaaa\` vs base \`0000000\`\n\nr
 test("a PR without results gets a not-benchmarked notice", () => {
   const body = nextBody(null, { kind: "status", headSha: A });
   assert.ok(body.startsWith(MARKER));
-  assert.match(body, /Not benchmarked yet/);
+  assert.match(body, /Not benchmarked\./);
 });
 
 test("results replace the comment and record the benchmarked commit", () => {
   const first = nextBody(null, { kind: "status", headSha: A });
   const body = nextBody(first, { kind: "results", headSha: A, report });
   assert.match(body, /results table/);
-  assert.doesNotMatch(body, /Not benchmarked yet/);
+  assert.doesNotMatch(body, /Not benchmarked\./);
   // The same commit again: nothing to update.
   assert.equal(nextBody(body, { kind: "status", headSha: A }), null);
 });

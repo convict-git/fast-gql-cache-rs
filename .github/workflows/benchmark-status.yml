@@ -1,11 +1,11 @@
-# On every PR push, lets benchmark-comment.yml say whether the PR has been
-# benchmarked at its current commit ("not benchmarked yet" / "results are stale").
-# Runs no PR code.
+# On every PR push and label change, lets benchmark-comment.yml update the PR's
+# benchmark comment ("not benchmarked" / "results are stale") and its
+# `Benchmark gate` status. Runs no PR code.
 name: Benchmark status
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions: {}
 
