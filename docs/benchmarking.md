@@ -41,9 +41,9 @@ about 2.6× slower than a recent laptop.
 The label stays on: every push re-runs the benchmark (a new push cancels the running
 one), and **merging waits for it**. The `Benchmark gate` check, required on `main`,
 passes on a PR without the label, and on a labelled PR only once a benchmark of its
-current commit has succeeded ([`gate.mjs`](../scripts/bench/gate.mjs)). It is evaluated
-when the benchmark starts (failing with "the benchmark of this commit is running") and
-again when it ends; the newest result counts. Removing the label opts out and
+current commit has succeeded ([`gate.mjs`](../scripts/bench/gate.mjs)). It is a commit
+status, set by `benchmark-comment.yml` after every push, label change and benchmark:
+pending while the benchmark runs, then success or failure. Removing the label opts out and
 releases the gate. Changing other labels neither cancels a running benchmark nor passes
 the gate. `Lint and typecheck` and `Tests and behaviour parity` are required too, and
 every required check must have run against the latest `main` (the branch must be up to

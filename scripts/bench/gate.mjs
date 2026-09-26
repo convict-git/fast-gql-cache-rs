@@ -1,20 +1,19 @@
 /**
- * The `Benchmark gate` check (benchmark.yml), required on main. Every Benchmark
- * run evaluates it once at the start, and a run that measures evaluates it
- * again at the end; the newest check of that name is the one that counts.
+ * The `Benchmark gate` commit status, required on main. Set by
+ * benchmark-comment.yml (default branch, write token) after every Benchmark
+ * status run (PR opened, pushed, labelled or unlabelled) and every Benchmark
+ * run. A commit status, unlike a job's check, is replaced by the next one with
+ * the same context, so the gate always shows its latest verdict:
  *
- * - the PR has no `benchmark` label (read now, not from the event) -> pass
- * - labelled -> look at the run that benchmarks the PR's current commit (this
- *   run, or one in flight when this run does not measure): pass when its
- *   report succeeded; fail while it is running (its final check will pass)
- *   and when it failed or no run of this commit measures
+ * - the PR has no `benchmark` label (read now, not from the event) -> success
+ * - labelled -> look at the newest run benchmarking the commit: success when
+ *   its report succeeded, pending while it is running, failure when it failed
+ *   or no run of this commit measures
  *
- * It never waits: a job holding a runner for the length of a benchmark was
- * cancelled from outside after 47 minutes, leaving the PR blocked. Any API
- * error fails the check: the gate never passes by accident.
+ * Any API error fails the job without setting a status: a required status
+ * that is missing blocks merging, so the gate never passes by accident.
  *
- * Environment: GH_TOKEN, REPO, PR, SHA (the PR head), RUN_ID (this run),
- * MEASURES ("true" when this run benchmarks the commit).
+ * Environment: GH_TOKEN, REPO, PR, SHA (the PR head commit), TARGET_URL.
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -24,7 +23,12 @@ import { fileURLToPath } from "node:url";
  * measures (its `Measure sections` jobs were not skipped) and its `report` job
  * ({status, conclusion}), null while that job does not exist yet.
  */
-export function assess({ labelled, currentRunId, currentMeasures, runs }) {
+export function assess({
+  labelled,
+  currentRunId = null,
+  currentMeasures = false,
+  runs,
+}) {
   if (!labelled) return { action: "pass", message: "No benchmark requested." };
   const follow =
     currentMeasures ?
@@ -59,13 +63,28 @@ export function assess({ labelled, currentRunId, currentMeasures, runs }) {
       };
 }
 
+/** A verdict as a commit status (descriptions are capped at 140 characters). */
+export function toStatus(verdict) {
+  const description =
+    verdict.action === "wait" ?
+      `The benchmark of this commit is running (run ${verdict.runId}).`
+    : verdict.message;
+  return {
+    state: { pass: "success", wait: "pending", fail: "failure" }[
+      verdict.action
+    ],
+    description:
+      description.length > 140 ? `${description.slice(0, 139)}…` : description,
+  };
+}
+
 function api(path) {
   const child = spawnSync("gh", ["api", path], { encoding: "utf8" });
   if (child.status !== 0) throw new Error(`gh api ${path}:\n${child.stderr}`);
   return JSON.parse(child.stdout);
 }
 
-export function state({ REPO, PR, SHA, RUN_ID, MEASURES }) {
+export function state({ REPO, PR, SHA }) {
   const labelled = api(`repos/${REPO}/issues/${PR}/labels?per_page=100`).some(
     (l) => l.name === "benchmark"
   );
@@ -88,26 +107,31 @@ export function state({ REPO, PR, SHA, RUN_ID, MEASURES }) {
         };
       })
     : [];
-  return {
-    labelled,
-    currentRunId: Number(RUN_ID),
-    currentMeasures: MEASURES === "true",
-    runs,
-  };
+  return { labelled, runs };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const verdict = assess(state(process.env));
-  if (verdict.action === "pass") {
-    console.log(verdict.message);
-  } else {
-    console.log(
-      `::error::${
-        verdict.action === "wait" ?
-          `The benchmark of this commit is running (run ${verdict.runId}); this check passes when it finishes.`
-        : verdict.message
-      }`
-    );
-    process.exit(1);
+  const { REPO, SHA, TARGET_URL } = process.env;
+  const { state: status, description } = toStatus(assess(state(process.env)));
+  const child = spawnSync(
+    "gh",
+    [
+      "api",
+      `repos/${REPO}/statuses/${SHA}`,
+      "-f",
+      `state=${status}`,
+      "-f",
+      "context=Benchmark gate",
+      "-f",
+      `description=${description}`,
+      ...(TARGET_URL ? ["-f", `target_url=${TARGET_URL}`] : []),
+    ],
+    { encoding: "utf8" }
+  );
+  if (child.status !== 0) {
+    throw new Error(`Setting the status failed:\n${child.stderr}`);
   }
+  console.log(
+    `Benchmark gate on ${SHA.slice(0, 7)}: ${status} (${description})`
+  );
 }
