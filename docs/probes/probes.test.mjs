@@ -145,3 +145,43 @@ test("a saved run only re-renders against the cache it measured", (t) => {
     /was measured with --cache=rs; pass the same flag/
   );
 });
+
+test("the memory probe measures the same bytes and checks against both caches", () => {
+  const measure = (cache) => {
+    const child = runNode([
+      "--expose-gc",
+      probe("cache-memory-probe.mjs"),
+      "--json",
+      "--quick",
+      "--sections=6",
+      `--cache=${cache}`,
+    ]);
+    assert.equal(child.status, 0, child.stderr);
+    return JSON.parse(child.stdout);
+  };
+  const apollo = measure("apollo");
+  const rs = measure("rs");
+  assert.equal(apollo.meta.wasm, null);
+  assert.ok(
+    rs.meta.wasm.linearBytes > 0,
+    "InMemoryCacheRs reports its WASM heap"
+  );
+  assert.deepEqual(
+    rs.results.map((r) => r.label),
+    apollo.results.map((r) => r.label)
+  );
+  assert.deepEqual(
+    rs.checks.map((c) => c.label),
+    apollo.checks.map((c) => c.label)
+  );
+  for (const r of [...apollo.results, ...rs.results]) {
+    assert.equal(r.unit, "B");
+    assert.ok(r.value > 0, `${r.label}: ${r.value}`);
+  }
+});
+
+test("the memory probe refuses to run without --expose-gc", () => {
+  const child = runNode([probe("cache-memory-probe.mjs"), "--sections=6"]);
+  assert.equal(child.status, 2);
+  assert.match(child.stderr, /needs --expose-gc/);
+});

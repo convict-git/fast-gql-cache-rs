@@ -15,7 +15,12 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
-const PROBE_FILES = ["cache-performance-probe.mjs", "select-cache.mjs"];
+const PROBE_FILES = [
+  "cache-performance-probe.mjs",
+  "cache-memory-probe.mjs",
+  "memory-harness.mjs",
+  "select-cache.mjs",
+];
 
 /**
  * A base checkout the way pr.mjs prepares one: this build (optionally made
@@ -46,7 +51,7 @@ function makeBase(dir, { noisy = false, probe = (source) => source } = {}) {
   return base;
 }
 
-function runBench(dir, base) {
+function runBench(dir, base, extra = ["--sections=10"]) {
   const out = join(dir, "result.json");
   const child = spawnSync(
     process.execPath,
@@ -56,7 +61,7 @@ function runBench(dir, base) {
       out,
       "--base-root",
       base,
-      "--sections=10",
+      ...extra,
       "--runs=1",
       "--quick",
     ],
@@ -97,4 +102,49 @@ test("a base checkout must run the same probe as head", (t) => {
     child.stderr,
     /docs\/probes\/cache-performance-probe\.mjs differs from head's/
   );
+});
+
+test("the memory probe runs through the same pipeline, with units and checks", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "bench-memory-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { child, out } = runBench(dir, makeBase(dir), [
+    "--probe=memory",
+    "--sections=6",
+  ]);
+  assert.equal(child.status, 0, child.stderr);
+  const { meta, samples, checks } = JSON.parse(readFileSync(out, "utf8"));
+  assert.equal(meta.probe, "memory");
+  const labels = Object.keys(samples);
+  assert.ok(labels.length > 0);
+  for (const label of labels) {
+    assert.equal(meta.units[label], "B");
+    assert.deepEqual(Object.keys(samples[label]).sort(), [
+      "apollo@base",
+      "apollo@head",
+      "rs@base",
+      "rs@head",
+    ]);
+  }
+  const checkLabels = Object.keys(checks);
+  assert.ok(checkLabels.length > 0);
+  for (const label of checkLabels) {
+    for (const runs of Object.values(checks[label])) {
+      assert.ok(runs.every((pass) => typeof pass === "boolean"));
+    }
+  }
+});
+
+test("an unknown --probe is rejected with the accepted values", () => {
+  const child = spawnSync(
+    process.execPath,
+    [
+      join(REPO, "scripts/bench/run.mjs"),
+      "--out",
+      "unused.json",
+      "--probe=bogus",
+    ],
+    { encoding: "utf8" }
+  );
+  assert.equal(child.status, 2);
+  assert.match(child.stderr, /use --probe=performance or --probe=memory/);
 });

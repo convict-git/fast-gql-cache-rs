@@ -139,8 +139,8 @@ rustup toolchain install
 
 ### Test / lint notes
 
-- Tests are adapted copies of Apollo's own `InMemoryCache` suite; `eslint.config.mjs`
-  relaxes preset style rules for `src/**/__tests__/**` while keeping the library sources
-  strict.
+- Tests are adapted copies of Apollo's own `InMemoryCache` suite; the porting rules and
+  what is not ported are in `src/__tests__/README.md`. `eslint.config.mjs` relaxes preset
+  style rules for `src/**/__tests__/**` while keeping the library sources strict.
 - `tsconfig.tests.json` downlevels `target` so ts-jest transforms `using` (explicit
   resource management), which Node's runtime parser does not accept natively.

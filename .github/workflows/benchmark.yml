@@ -44,14 +44,21 @@ jobs:
       || (contains(github.event.pull_request.labels.*.name, 'benchmark')
           && (contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
               || (github.event.action == 'labeled' && github.event.label.name == 'benchmark')))
-    name: Measure sections ${{ matrix.sections }}
+    name: Measure sections ${{ matrix.sections }} (${{ matrix.probe }})
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     strategy:
       # Balanced by measured time. Each job measures all four configurations of
       # its sections on its own runner, so every comparison stays on one machine.
+      # The memory probe is one job: all six sections take about 45 s per pass
+      # on a laptop.
       matrix:
-        sections: ["7", "6", "5,12,3,4,8,13", "1,2,9,10,11,14"]
+        include:
+          - { probe: performance, sections: "7" }
+          - { probe: performance, sections: "6" }
+          - { probe: performance, sections: "5,12,3,4,8,13" }
+          - { probe: performance, sections: "1,2,9,10,11,14" }
+          - { probe: memory, sections: "1,2,3,4,5,6" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,10 +72,11 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || inputs.base }}
           SECTIONS: ${{ matrix.sections }}
+          PROBE: ${{ matrix.probe }}
         run: |
           base_commit=$(git rev-parse --verify --quiet "origin/$BASE^{commit}" || git rev-parse --verify "$BASE^{commit}")
           node scripts/bench/pr.mjs --base "$(git merge-base "$base_commit" HEAD)" \
-            --sections="$SECTIONS" --runs=7 --out bench-result.json
+            --probe="$PROBE" --sections="$SECTIONS" --runs=7 --out bench-result.json
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

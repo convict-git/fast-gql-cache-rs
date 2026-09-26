@@ -97,3 +97,90 @@ test("without a base it reports only InMemoryCacheRs vs InMemoryCache", () => {
   assert.match(md, /Base not measured: the base build failed/);
   assert.match(md, /0\.80×/);
 });
+
+const memoryResult = {
+  meta: {
+    ...meta(true),
+    probe: "memory",
+    units: { "retained N=10": "B", "allocated N=10": "B" },
+  },
+  samples: {
+    "retained N=10": {
+      "apollo@base": [1000, 1000, 1000],
+      "apollo@head": [1000, 1000, 1000],
+      "rs@base": [2000, 2000, 2000],
+      "rs@head": [1000, 1001, 999],
+    },
+    "allocated N=10": {
+      "apollo@base": [4096, 4096, 4096],
+      "apollo@head": [4096, 4096, 4096],
+      "rs@base": [4096, 4096, 4096],
+      "rs@head": [8192, 8193, 8191],
+    },
+  },
+  checks: {
+    "memory plateaus": {
+      "apollo@base": [false],
+      "apollo@head": [false],
+      "rs@base": [true],
+      "rs@head": [false],
+    },
+    "drop returns memory": {
+      "apollo@base": [true],
+      "apollo@head": [true],
+      "rs@base": [true],
+      "rs@head": [true],
+    },
+  },
+};
+
+test("memory results get their own family, noise band, verdicts and checks", () => {
+  const a = analyze([result, memoryResult]);
+  // Timings keep their own summary; memory is summarized separately.
+  assert.ok(Math.abs(a.geomeanVsApollo - Math.cbrt(1 * 1.5 * 1.01)) < 1e-12);
+  assert.ok(Math.abs(a.memoryGeomeanVsApollo - Math.sqrt(1 * 2)) < 1e-3);
+  assert.deepEqual(
+    a.families.B.rows.map((r) => [r.label, r.verdict]),
+    [
+      ["retained N=10", "faster"],
+      ["allocated N=10", "slower"],
+    ]
+  );
+  assert.deepEqual(
+    a.checks.map((c) => [c.label, c.rs, c.regressed]),
+    [
+      ["memory plateaus", false, true],
+      ["drop returns memory", true, false],
+    ]
+  );
+
+  const md = render(a);
+  assert.match(md, /### Performance: `bbbbbbb` vs base `aaaaaaa`/);
+  assert.match(md, /### Memory: `bbbbbbb` vs base `aaaaaaa`/);
+  assert.match(md, /1 smaller · 1 larger/);
+  assert.match(
+    md,
+    /\| retained N=10 \| 2\.0 KiB \| 1000 B \| −50\.0% smaller \|/
+  );
+  assert.match(md, /#### Memory checks/);
+  assert.match(md, /1 check\(s\) passed on the base and fail on this PR/);
+  assert.match(
+    md,
+    /memory plateaus \(\*\*regressed\*\*\) \| \*\*fail\*\* \| pass \| \*\*fail\*\*/
+  );
+  // Timings still come first, then memory, then the checks.
+  assert.ok(md.indexOf("### Performance") < md.indexOf("### Memory"));
+  assert.ok(md.indexOf("### Memory") < md.indexOf("#### Memory checks"));
+});
+
+test("a zero memory value has no ratio instead of breaking the geometric mean", () => {
+  const zero = structuredClone(memoryResult);
+  zero.samples["retained N=10"]["rs@head"] = [0, 0, 0];
+  const a = analyze([zero]);
+  const row = a.families.B.rows.find((r) => r.label === "retained N=10");
+  assert.equal(row.vsApollo, null);
+  assert.equal(row.verdict, "noise");
+  assert.ok(Number.isFinite(a.memoryGeomeanVsApollo));
+  assert.equal(a.geomeanVsApollo, null);
+  assert.doesNotMatch(render(a), /NaN|Infinity/);
+});

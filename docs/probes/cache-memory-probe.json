@@ -1,0 +1,1479 @@
+{
+  "meta": {
+    "probe": "memory",
+    "cache": "apollo",
+    "node": "v24.21.0",
+    "platform": "darwin/arm64",
+    "quick": false,
+    "repsPerMeasurement": 7,
+    "runs": 5
+  },
+  "results": [
+    {
+      "label": "breadth N=1000: store after write",
+      "unit": "B",
+      "median": 540624,
+      "min": 531320,
+      "max": 540696,
+      "runs": [
+        540624,
+        531320,
+        540696,
+        540696,
+        540536
+      ],
+      "detail": {
+        "total": 540624,
+        "jsHeap": 540584,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=1000: + read (optimistic: false)",
+      "unit": "B",
+      "median": 4898888,
+      "min": 4880088,
+      "max": 4899008,
+      "runs": [
+        4898816,
+        4880088,
+        4898888,
+        4898888,
+        4899008
+      ],
+      "detail": {
+        "total": 4898888,
+        "jsHeap": 4898848,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=1000: + watch (optimistic: true)",
+      "unit": "B",
+      "median": 9486656,
+      "min": 9486600,
+      "max": 9501928,
+      "runs": [
+        9486600,
+        9501928,
+        9486624,
+        9486656,
+        9486824
+      ],
+      "detail": {
+        "total": 9486656,
+        "jsHeap": 9486616,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=5000: store after write",
+      "unit": "B",
+      "median": 3157104,
+      "min": 3156928,
+      "max": 3157144,
+      "runs": [
+        3156928,
+        3157104,
+        3157144,
+        3157128,
+        3156976
+      ],
+      "detail": {
+        "total": 3157104,
+        "jsHeap": 3157104,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=5000: + read (optimistic: false)",
+      "unit": "B",
+      "median": 24860328,
+      "min": 24853488,
+      "max": 24860752,
+      "runs": [
+        24853488,
+        24860752,
+        24860336,
+        24860328,
+        24859976
+      ],
+      "detail": {
+        "total": 24860328,
+        "jsHeap": 24860328,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=5000: + watch (optimistic: true)",
+      "unit": "B",
+      "median": 48477472,
+      "min": 48476128,
+      "max": 48477928,
+      "runs": [
+        48476968,
+        48476128,
+        48477928,
+        48477920,
+        48477472
+      ],
+      "detail": {
+        "total": 48477472,
+        "jsHeap": 48477472,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=20000: store after write",
+      "unit": "B",
+      "median": 13119624,
+      "min": 13119456,
+      "max": 13121624,
+      "runs": [
+        13119624,
+        13121624,
+        13119456,
+        13121624,
+        13119456
+      ],
+      "detail": {
+        "total": 13119624,
+        "jsHeap": 13119624,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=20000: + read (optimistic: false)",
+      "unit": "B",
+      "median": 100427536,
+      "min": 100423840,
+      "max": 100434192,
+      "runs": [
+        100431168,
+        100434192,
+        100427536,
+        100423840,
+        100427384
+      ],
+      "detail": {
+        "total": 100427536,
+        "jsHeap": 100427536,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "breadth N=20000: + watch (optimistic: true)",
+      "unit": "B",
+      "median": 195715712,
+      "min": 195707600,
+      "max": 195718048,
+      "runs": [
+        195715824,
+        195718048,
+        195715712,
+        195707600,
+        195715464
+      ],
+      "detail": {
+        "total": 195715712,
+        "jsHeap": 195715712,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape normalized list (2 000 entities): store after write",
+      "unit": "B",
+      "median": 1247368,
+      "min": 1236656,
+      "max": 1268360,
+      "runs": [
+        1267216,
+        1247368,
+        1268360,
+        1247368,
+        1236656
+      ],
+      "detail": {
+        "total": 1247368,
+        "jsHeap": 1247328,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape normalized list (2 000 entities): + read",
+      "unit": "B",
+      "median": 10000136,
+      "min": 9993792,
+      "max": 10041552,
+      "runs": [
+        10000136,
+        9993904,
+        10000368,
+        9993792,
+        10041552
+      ],
+      "detail": {
+        "total": 10000136,
+        "jsHeap": 10000096,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape embedded list (2 000 objects): store after write",
+      "unit": "B",
+      "median": 843224,
+      "min": 842920,
+      "max": 861264,
+      "runs": [
+        843288,
+        843224,
+        843216,
+        842920,
+        861264
+      ],
+      "detail": {
+        "total": 843224,
+        "jsHeap": 843224,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape embedded list (2 000 objects): + read",
+      "unit": "B",
+      "median": 4555616,
+      "min": 4553448,
+      "max": 4566720,
+      "runs": [
+        4553448,
+        4555616,
+        4555728,
+        4555360,
+        4566720
+      ],
+      "detail": {
+        "total": 4555616,
+        "jsHeap": 4555616,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape deep chain (D = 256): store after write",
+      "unit": "B",
+      "median": 111736,
+      "min": 111736,
+      "max": 114056,
+      "runs": [
+        114056,
+        111736,
+        111736,
+        111736,
+        111736
+      ],
+      "detail": {
+        "total": 111736,
+        "jsHeap": 111736,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape deep chain (D = 256): + read",
+      "unit": "B",
+      "median": 1085240,
+      "min": 1082424,
+      "max": 1091480,
+      "runs": [
+        1091480,
+        1089384,
+        1082424,
+        1085240,
+        1082424
+      ],
+      "detail": {
+        "total": 1085240,
+        "jsHeap": 1085240,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape nested lists (50 groups x 40 rows): store after write",
+      "unit": "B",
+      "median": 487608,
+      "min": 481744,
+      "max": 488016,
+      "runs": [
+        481744,
+        487608,
+        488016,
+        487608,
+        487664
+      ],
+      "detail": {
+        "total": 487608,
+        "jsHeap": 487608,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape nested lists (50 groups x 40 rows): + read",
+      "unit": "B",
+      "median": 6542368,
+      "min": 6542056,
+      "max": 6548960,
+      "runs": [
+        6542056,
+        6542368,
+        6548960,
+        6542336,
+        6548920
+      ],
+      "detail": {
+        "total": 6542368,
+        "jsHeap": 6542368,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape scalar matrix (100 x 1 000 strings): store after write",
+      "unit": "B",
+      "median": 3233624,
+      "min": 3233624,
+      "max": 3233624,
+      "runs": [
+        3233624,
+        3233624,
+        3233624,
+        3233624,
+        3233624
+      ],
+      "detail": {
+        "total": 3233624,
+        "jsHeap": 3233624,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape scalar matrix (100 x 1 000 strings): + read",
+      "unit": "B",
+      "median": 4226000,
+      "min": 4226000,
+      "max": 4226000,
+      "runs": [
+        4226000,
+        4226000,
+        4226000,
+        4226000,
+        4226000
+      ],
+      "detail": {
+        "total": 4226000,
+        "jsHeap": 4226000,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape JSON blob field (5 000 objects): store after write",
+      "unit": "B",
+      "median": 987240,
+      "min": 987240,
+      "max": 987240,
+      "runs": [
+        987240,
+        987240,
+        987240,
+        987240,
+        987240
+      ],
+      "detail": {
+        "total": 987240,
+        "jsHeap": 987240,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape JSON blob field (5 000 objects): + read",
+      "unit": "B",
+      "median": 1042360,
+      "min": 1036976,
+      "max": 1042376,
+      "runs": [
+        1036976,
+        1036976,
+        1042360,
+        1042360,
+        1042376
+      ],
+      "detail": {
+        "total": 1042360,
+        "jsHeap": 1042360,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape argument-heavy field (2 000 items): store after write",
+      "unit": "B",
+      "median": 506984,
+      "min": 506920,
+      "max": 509560,
+      "runs": [
+        509560,
+        506984,
+        506984,
+        506920,
+        506984
+      ],
+      "detail": {
+        "total": 506984,
+        "jsHeap": 506984,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "shape argument-heavy field (2 000 items): + read",
+      "unit": "B",
+      "median": 6932320,
+      "min": 6932224,
+      "max": 6935760,
+      "runs": [
+        6935760,
+        6932320,
+        6932896,
+        6932224,
+        6932320
+      ],
+      "detail": {
+        "total": 6932320,
+        "jsHeap": 6932320,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "write cold N=5000",
+      "unit": "B",
+      "median": 96383440,
+      "min": 96320776,
+      "max": 96509072,
+      "runs": [
+        96366904,
+        96383440,
+        96506344,
+        96509072,
+        96320776
+      ],
+      "detail": {
+        "total": 96383440,
+        "js": 96383440,
+        "wasm": 0,
+        "gcCount": 2,
+        "gcPauseUs": 1093.458,
+        "jsPeakAboveStart": 40958328
+      }
+    },
+    {
+      "label": "write cold N=20000",
+      "unit": "B",
+      "median": 384985464,
+      "min": 382834304,
+      "max": 385001640,
+      "runs": [
+        384985464,
+        384971800,
+        384987784,
+        382834304,
+        385001640
+      ],
+      "detail": {
+        "total": 384985464,
+        "js": 384985464,
+        "wasm": 0,
+        "gcCount": 5,
+        "gcPauseUs": 4717.0779999999995,
+        "jsPeakAboveStart": 111092648
+      }
+    },
+    {
+      "label": "write identical N=5000",
+      "unit": "B",
+      "median": 92712472,
+      "min": 92701560,
+      "max": 92717480,
+      "runs": [
+        92717216,
+        92712472,
+        92717480,
+        92711160,
+        92701560
+      ],
+      "detail": {
+        "total": 92712472,
+        "js": 92712472,
+        "wasm": 0,
+        "gcCount": 1,
+        "gcPauseUs": 915.875,
+        "jsPeakAboveStart": 74505736
+      }
+    },
+    {
+      "label": "write 1-changed N=5000",
+      "unit": "B",
+      "median": 92704248,
+      "min": 92685456,
+      "max": 92717632,
+      "runs": [
+        92713968,
+        92699928,
+        92685456,
+        92704248,
+        92717632
+      ],
+      "detail": {
+        "total": 92704248,
+        "js": 92704248,
+        "wasm": 0,
+        "gcCount": 1,
+        "gcPauseUs": 974.959,
+        "jsPeakAboveStart": 74504240
+      }
+    },
+    {
+      "label": "read cold N=5000",
+      "unit": "B",
+      "median": 99863800,
+      "min": 99861680,
+      "max": 99867080,
+      "runs": [
+        99862304,
+        99863800,
+        99861680,
+        99863816,
+        99867080
+      ],
+      "detail": {
+        "total": 99863800,
+        "js": 99863800,
+        "wasm": 0,
+        "gcCount": 1,
+        "gcPauseUs": 3287.67,
+        "jsPeakAboveStart": 72233800
+      }
+    },
+    {
+      "label": "read warm N=5000",
+      "unit": "B",
+      "median": 7104,
+      "min": 7104,
+      "max": 7104,
+      "runs": [
+        7104,
+        7104,
+        7104,
+        7104,
+        7104
+      ],
+      "detail": {
+        "total": 7104,
+        "js": 7104,
+        "wasm": 0,
+        "gcCount": 0,
+        "gcPauseUs": 0,
+        "jsPeakAboveStart": 7104
+      }
+    },
+    {
+      "label": "read after 1 dirty N=5000",
+      "unit": "B",
+      "median": 7572936,
+      "min": 7572544,
+      "max": 7573432,
+      "runs": [
+        7572544,
+        7573432,
+        7572912,
+        7572936,
+        7573240
+      ],
+      "detail": {
+        "total": 7572936,
+        "js": 7572936,
+        "wasm": 0,
+        "gcCount": 0,
+        "gcPauseUs": 0,
+        "jsPeakAboveStart": 7572936
+      }
+    },
+    {
+      "label": "broadcast to 50 watches after a 1-changed write N=5000",
+      "unit": "B",
+      "median": 140652752,
+      "min": 140631032,
+      "max": 140669592,
+      "runs": [
+        140643328,
+        140652752,
+        140669592,
+        140668192,
+        140631032
+      ],
+      "detail": {
+        "total": 140652752,
+        "js": 140652752,
+        "wasm": 0,
+        "gcCount": 1,
+        "gcPauseUs": 1403.58,
+        "jsPeakAboveStart": 76012152
+      }
+    },
+    {
+      "label": "100 single-field writes in one batch, 1 watch, N=5000",
+      "unit": "B",
+      "median": 16473456,
+      "min": 16470920,
+      "max": 16474816,
+      "runs": [
+        16471144,
+        16473456,
+        16474800,
+        16470920,
+        16474816
+      ],
+      "detail": {
+        "total": 16473456,
+        "js": 16473456,
+        "wasm": 0,
+        "gcCount": 0,
+        "gcPauseUs": 0,
+        "jsPeakAboveStart": 16473456
+      }
+    },
+    {
+      "label": "watches N=2000: store + read",
+      "unit": "B",
+      "median": 10073568,
+      "min": 10073024,
+      "max": 10073736,
+      "runs": [
+        10073696,
+        10073240,
+        10073736,
+        10073024,
+        10073568
+      ],
+      "detail": {
+        "total": 10073568,
+        "jsHeap": 10073528,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "watches N=2000: + 200 watches of one document",
+      "unit": "B",
+      "median": 19793840,
+      "min": 19793200,
+      "max": 19794224,
+      "runs": [
+        19794224,
+        19793768,
+        19793840,
+        19793200,
+        19794128
+      ],
+      "detail": {
+        "total": 19793840,
+        "jsHeap": 19793800,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "watches N=2000: + 50 watches of distinct documents",
+      "unit": "B",
+      "median": 224718784,
+      "min": 224712552,
+      "max": 224719672,
+      "runs": [
+        224718952,
+        224719672,
+        224712552,
+        224713112,
+        224718784
+      ],
+      "detail": {
+        "total": 224718784,
+        "jsHeap": 224718744,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "layers N=2000: store + read + 1 watch",
+      "unit": "B",
+      "median": 19042736,
+      "min": 19041584,
+      "max": 19043312,
+      "runs": [
+        19043240,
+        19043312,
+        19042736,
+        19041584,
+        19042216
+      ],
+      "detail": {
+        "total": 19042736,
+        "jsHeap": 19042736,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "layers N=2000: + 16 optimistic layers",
+      "unit": "B",
+      "median": 19288504,
+      "min": 19287384,
+      "max": 19288592,
+      "runs": [
+        19288504,
+        19288576,
+        19288592,
+        19287384,
+        19287480
+      ],
+      "detail": {
+        "total": 19288504,
+        "jsHeap": 19288504,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "layers N=2000: after removing the 16 layers",
+      "unit": "B",
+      "median": 19258096,
+      "min": 19256928,
+      "max": 19258136,
+      "runs": [
+        19258096,
+        19258120,
+        19258136,
+        19256928,
+        19257072
+      ],
+      "detail": {
+        "total": 19258096,
+        "jsHeap": 19258096,
+        "externalOther": 0,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "rolling window: 5 live pages of 100, write + read + evict + gc per page",
+      "unit": "B",
+      "median": 32410296,
+      "min": 32390960,
+      "max": 32426928,
+      "runs": [
+        32410296,
+        32426928,
+        32408320,
+        32390960,
+        32411384
+      ],
+      "detail": {
+        "points": [
+          [
+            10,
+            3423200
+          ],
+          [
+            20,
+            4490696
+          ],
+          [
+            30,
+            5539136
+          ],
+          [
+            40,
+            6462456
+          ],
+          [
+            50,
+            7539528
+          ],
+          [
+            60,
+            8579864
+          ],
+          [
+            70,
+            9523880
+          ],
+          [
+            80,
+            10433352
+          ],
+          [
+            90,
+            11656664
+          ],
+          [
+            100,
+            12556896
+          ],
+          [
+            110,
+            13786144
+          ],
+          [
+            120,
+            14691352
+          ],
+          [
+            130,
+            15660328
+          ],
+          [
+            140,
+            16572760
+          ],
+          [
+            150,
+            17510360
+          ],
+          [
+            160,
+            18410024
+          ],
+          [
+            170,
+            19811192
+          ],
+          [
+            180,
+            20729536
+          ],
+          [
+            190,
+            21701544
+          ],
+          [
+            200,
+            22601808
+          ],
+          [
+            210,
+            23559104
+          ],
+          [
+            220,
+            24985200
+          ],
+          [
+            230,
+            25915328
+          ],
+          [
+            240,
+            26849144
+          ],
+          [
+            250,
+            27777224
+          ],
+          [
+            260,
+            28687272
+          ],
+          [
+            270,
+            29632152
+          ],
+          [
+            280,
+            30559424
+          ],
+          [
+            290,
+            31512128
+          ],
+          [
+            300,
+            32410296
+          ]
+        ]
+      }
+    },
+    {
+      "label": "watch churn: subscribe + unsubscribe over 1 000 entities",
+      "unit": "B",
+      "median": 7458064,
+      "min": 7451024,
+      "max": 7465456,
+      "runs": [
+        7451024,
+        7458216,
+        7458064,
+        7456280,
+        7465456
+      ],
+      "detail": {
+        "points": [
+          [
+            50,
+            7397696
+          ],
+          [
+            100,
+            7379632
+          ],
+          [
+            150,
+            7381568
+          ],
+          [
+            200,
+            7390264
+          ],
+          [
+            250,
+            7394528
+          ],
+          [
+            300,
+            7395744
+          ],
+          [
+            350,
+            7397120
+          ],
+          [
+            400,
+            7397184
+          ],
+          [
+            450,
+            7397248
+          ],
+          [
+            500,
+            7409720
+          ],
+          [
+            550,
+            7427232
+          ],
+          [
+            600,
+            7442440
+          ],
+          [
+            650,
+            7437936
+          ],
+          [
+            700,
+            7438000
+          ],
+          [
+            750,
+            7441976
+          ],
+          [
+            800,
+            7444504
+          ],
+          [
+            850,
+            7444584
+          ],
+          [
+            900,
+            7450344
+          ],
+          [
+            950,
+            7450320
+          ],
+          [
+            1000,
+            7450384
+          ],
+          [
+            1050,
+            7450448
+          ],
+          [
+            1100,
+            7453248
+          ],
+          [
+            1150,
+            7453312
+          ],
+          [
+            1200,
+            7453376
+          ],
+          [
+            1250,
+            7454472
+          ],
+          [
+            1300,
+            7456408
+          ],
+          [
+            1350,
+            7456472
+          ],
+          [
+            1400,
+            7457936
+          ],
+          [
+            1450,
+            7458000
+          ],
+          [
+            1500,
+            7458064
+          ]
+        ]
+      }
+    },
+    {
+      "label": "optimistic churn: add + remove a layer over 1 000 entities",
+      "unit": "B",
+      "median": 7358824,
+      "min": 7354464,
+      "max": 7359600,
+      "runs": [
+        7354464,
+        7358824,
+        7359600,
+        7355760,
+        7359552
+      ],
+      "detail": {
+        "points": [
+          [
+            20,
+            7293624
+          ],
+          [
+            40,
+            7287528
+          ],
+          [
+            60,
+            7299120
+          ],
+          [
+            80,
+            7300752
+          ],
+          [
+            100,
+            7301104
+          ],
+          [
+            120,
+            7299000
+          ],
+          [
+            140,
+            7299016
+          ],
+          [
+            160,
+            7303952
+          ],
+          [
+            180,
+            7303968
+          ],
+          [
+            200,
+            7306800
+          ],
+          [
+            220,
+            7306864
+          ],
+          [
+            240,
+            7313752
+          ],
+          [
+            260,
+            7313928
+          ],
+          [
+            280,
+            7313944
+          ],
+          [
+            300,
+            7317640
+          ],
+          [
+            320,
+            7317704
+          ],
+          [
+            340,
+            7317768
+          ],
+          [
+            360,
+            7317832
+          ],
+          [
+            380,
+            7318104
+          ],
+          [
+            400,
+            7321504
+          ],
+          [
+            420,
+            7321568
+          ],
+          [
+            440,
+            7321632
+          ],
+          [
+            460,
+            7327976
+          ],
+          [
+            480,
+            7343392
+          ],
+          [
+            500,
+            7347200
+          ],
+          [
+            520,
+            7358832
+          ],
+          [
+            540,
+            7358896
+          ],
+          [
+            560,
+            7362488
+          ],
+          [
+            580,
+            7362552
+          ],
+          [
+            600,
+            7358824
+          ]
+        ]
+      }
+    },
+    {
+      "label": "document churn: a freshly parsed document per read over 1 000 entities",
+      "unit": "B",
+      "median": 556161192,
+      "min": 556155504,
+      "max": 556167080,
+      "runs": [
+        556160760,
+        556162872,
+        556167080,
+        556155504,
+        556161192
+      ],
+      "detail": {
+        "points": [
+          [
+            20,
+            50370664
+          ],
+          [
+            40,
+            98705176
+          ],
+          [
+            60,
+            127150808
+          ],
+          [
+            80,
+            155983056
+          ],
+          [
+            100,
+            172312456
+          ],
+          [
+            120,
+            186544440
+          ],
+          [
+            140,
+            205899480
+          ],
+          [
+            160,
+            220131320
+          ],
+          [
+            180,
+            238561200
+          ],
+          [
+            200,
+            252793040
+          ],
+          [
+            220,
+            267033944
+          ],
+          [
+            240,
+            281265784
+          ],
+          [
+            260,
+            295504648
+          ],
+          [
+            280,
+            309736072
+          ],
+          [
+            300,
+            334218192
+          ],
+          [
+            320,
+            348450032
+          ],
+          [
+            340,
+            362687000
+          ],
+          [
+            360,
+            385307504
+          ],
+          [
+            380,
+            399540832
+          ],
+          [
+            400,
+            413773944
+          ],
+          [
+            420,
+            428011728
+          ],
+          [
+            440,
+            442243568
+          ],
+          [
+            460,
+            456479208
+          ],
+          [
+            480,
+            470769976
+          ],
+          [
+            500,
+            484959296
+          ],
+          [
+            520,
+            499207232
+          ],
+          [
+            540,
+            513439072
+          ],
+          [
+            560,
+            527687296
+          ],
+          [
+            580,
+            541919136
+          ],
+          [
+            600,
+            556161192
+          ]
+        ]
+      }
+    },
+    {
+      "label": "reclaim N=5000: store + read + watch",
+      "unit": "B",
+      "median": 48699736,
+      "min": 48644536,
+      "max": 48706440,
+      "runs": [
+        48705672,
+        48644536,
+        48706440,
+        48699736,
+        48698744
+      ],
+      "detail": {
+        "total": 48699736,
+        "jsHeap": 48699696,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    },
+    {
+      "label": "reclaim N=5000: after unwatch + evict + gc",
+      "unit": "B",
+      "median": 22310776,
+      "min": 22302976,
+      "max": 22316048,
+      "runs": [
+        22313840,
+        22302976,
+        22316048,
+        22310776,
+        22309528
+      ],
+      "detail": {
+        "total": 22310776,
+        "jsHeap": 22310736,
+        "externalOther": 40,
+        "wasmInUse": null,
+        "wasmLinear": 0
+      }
+    }
+  ],
+  "checks": [
+    {
+      "label": "removing every optimistic layer returns the memory the layers took",
+      "pass": true,
+      "passedRuns": 5,
+      "runs": 5,
+      "detail": "after removal 18.37 MiB vs 18.16 MiB before the layers (tolerance 371.9 KiB)"
+    },
+    {
+      "label": "rolling window: retained memory plateaus",
+      "pass": false,
+      "passedRuns": 0,
+      "runs": 5,
+      "detail": "second-half growth 14.18 MiB (96.8 KiB per cycle), tolerance 3.09 MiB, final 30.91 MiB"
+    },
+    {
+      "label": "watch churn: retained memory plateaus",
+      "pass": true,
+      "passedRuns": 5,
+      "runs": 5,
+      "detail": "second-half growth 13.9 KiB (19 B per cycle), tolerance 727.6 KiB, final 7.11 MiB"
+    },
+    {
+      "label": "optimistic churn: retained memory plateaus",
+      "pass": true,
+      "passedRuns": 5,
+      "runs": 5,
+      "detail": "second-half growth 59.0 KiB (201 B per cycle), tolerance 718.2 KiB, final 7.01 MiB"
+    },
+    {
+      "label": "document churn: retained memory plateaus",
+      "pass": false,
+      "passedRuns": 0,
+      "runs": 5,
+      "detail": "second-half growth 209.24 MiB (714.2 KiB per cycle), tolerance 53.04 MiB, final 530.40 MiB"
+    },
+    {
+      "label": "evict + gc returns the memory of an evicted list",
+      "pass": false,
+      "passedRuns": 0,
+      "runs": 5,
+      "detail": "21.28 MiB left of 46.45 MiB"
+    },
+    {
+      "label": "dropping a cache returns its JS heap",
+      "pass": true,
+      "passedRuns": 5,
+      "runs": 5,
+      "detail": "JS heap -1.44 MiB above the pre-cache baseline"
+    },
+    {
+      "label": "dropping a cache returns its WASM heap",
+      "pass": true,
+      "passedRuns": 5,
+      "runs": 5,
+      "detail": "no WASM heap (InMemoryCache)"
+    },
+    {
+      "label": "a second cache reuses WASM linear memory instead of growing it",
+      "pass": true,
+      "passedRuns": 5,
+      "runs": 5,
+      "detail": "no WASM heap (InMemoryCache)"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ two executable probes pin the claims that can be observed or measured.
 | --- | --- | --- |
 | **Architecture guide** | What every path *does*: the store, policies, writer, reader, reactivity, every public method, and the client pipeline around the cache | [architecture/](architecture/README.md) |
 | **Performance guide** | What every path *costs*, which data shapes stress it, and what to optimize | [performance/](performance/README.md) |
-| **Probes** | A behaviour oracle (78 assertions) and a performance probe | [Probes](#probes) |
+| **Probes** | A behaviour oracle (78 assertions), a performance probe and a memory probe | [Probes](#probes) |
 
 ## Reading paths
 
@@ -191,6 +191,13 @@ Pick the path that matches your goal. Each step is one chapter or section.
   - [9.2 Diagnostics](performance/09-optimization-playbook.md#92-diagnostics)
   - [9.3 Tuning knobs the cache actually exposes](performance/09-optimization-playbook.md#93-tuning-knobs-the-cache-actually-exposes)
   - [9.4 What a Rust/WASM re-implementation should target](performance/09-optimization-playbook.md#94-what-a-rustwasm-re-implementation-should-target)
+- **[Part 10 — Memory](performance/10-memory.md)**
+  - [10.1 The memo is where the memory is](performance/10-memory.md#101-the-memo-is-where-the-memory-is)
+  - [10.2 By shape](performance/10-memory.md#102-by-shape)
+  - [10.3 Allocation: what an operation throws away](performance/10-memory.md#103-allocation-what-an-operation-throws-away)
+  - [10.4 Bounded is not small](performance/10-memory.md#104-bounded-is-not-small)
+  - [10.5 Reclamation](performance/10-memory.md#105-reclamation)
+  - [10.6 What a re-implementation should target](performance/10-memory.md#106-what-a-re-implementation-should-target)
 
 <!-- toc:end -->
 
@@ -226,6 +233,19 @@ run-to-run spread. The raw aggregated data is committed next to it as
 [`probes/cache-performance-probe.json`](probes/cache-performance-probe.json). `--quick`
 gives a coarser run, and `--json` gives machine-readable output.
 
+**Memory probe:** [`probes/cache-memory-probe.mjs`](probes/cache-memory-probe.mjs). It
+measures retained and allocated bytes and checks that memory comes back, and it produces
+every table in [Part 10](performance/10-memory.md) of the performance guide. The committed
+output is [`probes/cache-memory-probe.log`](probes/cache-memory-probe.log), with its data in
+[`probes/cache-memory-probe.json`](probes/cache-memory-probe.json).
+
+```bash
+node --expose-gc docs/probes/cache-memory-probe.mjs --runs=5
+```
+
+It takes the performance probe's flags. How it measures is in
+[benchmarking.md](benchmarking.md#memory).
+
 **Against `InMemoryCacheRs`.** Both probes take `--cache=apollo` (the default) or
 `--cache=rs`, which runs them against this repository's cache, loaded from the built
 `dist/` (see [`probes/select-cache.mjs`](probes/select-cache.mjs)). Two scripts build
@@ -234,6 +254,7 @@ gives a coarser run, and `--json` gives machine-readable output.
 ```bash
 npm run probe:parity             # behaviour probe output must match Apollo's byte for byte
 npm run probe:compare -- --runs=5  # every performance measurement side by side, with ratios
+npm run probe:compare -- --probe=memory --runs=3  # the same for memory
 ```
 
 Use `--runs=5` for comparisons you act on: a single `--quick` run swings microsecond

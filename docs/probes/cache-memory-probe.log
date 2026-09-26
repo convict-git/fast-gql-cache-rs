@@ -1,0 +1,120 @@
+Memory probe: InMemoryCache (--cache=apollo), Node v24.21.0, darwin/arm64, median of 5 run(s), each section in a fresh process
+
+======================================================================================
+1. Retained footprint vs list breadth: store, read memo, watched query
+======================================================================================
+
+  Retained bytes, cumulative (F = 8 fields per entity)
+  N       payload JSON      store     + read     + watch  per entity
+  ------------------------------------------------------------------
+  1 000      149.6 KiB  528.0 KiB   4.67 MiB    9.05 MiB      9487 B
+  5 000      778.6 KiB   3.01 MiB  23.71 MiB   46.23 MiB      9695 B
+  20 000      3.13 MiB  12.51 MiB  95.78 MiB  186.65 MiB      9786 B
+
+  Marginal cost per entity (N = 1 000 → 20 000): store 662 B, root read memo 4366 B, optimistic watch 4774 B.
+  The watch adds a second memo set because optimistic reads never share the root's
+  entries (performance §4.2), plus the watch's last result.
+
+======================================================================================
+2. Retained footprint by data shape: store after write, then + read
+======================================================================================
+
+  Retained bytes, cumulative
+  shape                                payload JSON      store      + read
+  ------------------------------------------------------------------------
+  normalized list (2 000 entities)        306.9 KiB   1.19 MiB    9.54 MiB
+  embedded list (2 000 objects)           290.4 KiB  823.5 KiB    4.34 MiB
+  deep chain (D = 256)                     19.1 KiB  109.1 KiB    1.03 MiB
+  nested lists (50 groups x 40 rows)      101.9 KiB  476.2 KiB    6.24 MiB
+  scalar matrix (100 x 1 000 strings)     858.6 KiB   3.08 MiB    4.03 MiB
+  JSON blob field (5 000 objects)         232.7 KiB  964.1 KiB  1017.9 KiB
+  argument-heavy field (2 000 items)       99.8 KiB  495.1 KiB    6.61 MiB
+
+  The scalar matrix is stored by reference in production (performance §7.5), so its
+  store is the caller's arrays; the read then copies every array.
+
+======================================================================================
+3. Allocation per operation (N = 5 000 unless stated)
+======================================================================================
+
+  Bytes allocated (JS heap + WASM heap), median of repetitions
+  operation                                                allocated  GCs   JS peak ≥
+  -----------------------------------------------------------------------------------
+  write cold N=5000                                        91.92 MiB    2   39.06 MiB
+  write cold N=20000                                      367.15 MiB    5  105.95 MiB
+  write identical N=5000                                   88.42 MiB    1   71.05 MiB
+  write 1-changed N=5000                                   88.41 MiB    1   71.05 MiB
+  read cold N=5000                                         95.24 MiB    1   68.89 MiB
+  read warm N=5000                                           6.9 KiB    0     6.9 KiB
+  read after 1 dirty N=5000                                 7.22 MiB    0    7.22 MiB
+  broadcast to 50 watches after a 1-changed write N=5000  134.14 MiB    1   72.49 MiB
+  100 single-field writes in one batch, 1 watch, N=5000    15.71 MiB    0   15.71 MiB
+
+  'JS peak ≥' is the highest JS heap seen during the operation above its start,
+  sampled at each collection and at the end: a lower bound on the true peak.
+
+======================================================================================
+4. Retained by watches, distinct documents and optimistic layers (2 000 entities)
+======================================================================================
+
+  Retained bytes, cumulative, and each stage's increment
+  stage                                 retained   increment
+  ----------------------------------------------------------
+  store + read                          9.61 MiB           -
+  + 200 watches of one document        18.88 MiB    9.27 MiB
+  + 50 watches of distinct documents  214.31 MiB  195.43 MiB
+  store + read + 1 watch               18.16 MiB           -
+  + 16 optimistic layers               18.39 MiB   240.0 KiB
+  after removing the 16 layers         18.37 MiB   -29.7 KiB
+
+  Watches of one document share the memo; each distinct document builds its own
+  (performance §4.5), up to the memo's LRU limits.
+
+======================================================================================
+5. Steady workloads: memory must plateau, not grow
+======================================================================================
+
+  Retained at the end of each workload
+  workload                                                                   retained     trend
+  ---------------------------------------------------------------------------------------------
+  rolling window: 5 live pages of 100, write + read + evict + gc per page   30.91 MiB     GROWS
+  watch churn: subscribe + unsubscribe over 1 000 entities                   7.11 MiB  plateaus
+  optimistic churn: add + remove a layer over 1 000 entities                 7.02 MiB  plateaus
+  document churn: a freshly parsed document per read over 1 000 entities   530.40 MiB     GROWS
+
+  A workload plateaus when its retained memory stops growing: the check projects the
+  least-squares slope of the second half over that half, and allows 10 % of the final
+  value or 256 KiB. Bounded caches that fill up slowly (Apollo's memo LRUs) can grow
+  for longer than the run; the checkpoints in --json show the curve.
+
+======================================================================================
+6. Reclamation: evict + gc, dropping a cache, reusing WASM memory
+======================================================================================
+
+  Retained bytes
+  stage                        retained
+  -------------------------------------
+  store + read + watch        46.44 MiB
+  after unwatch + evict + gc  21.28 MiB
+
+======================================================================================
+Checks
+======================================================================================
+  [PASS] removing every optimistic layer returns the memory the layers took
+         after removal 18.37 MiB vs 18.16 MiB before the layers (tolerance 371.9 KiB)
+  [FAIL] rolling window: retained memory plateaus
+         second-half growth 14.18 MiB (96.8 KiB per cycle), tolerance 3.09 MiB, final 30.91 MiB
+  [PASS] watch churn: retained memory plateaus
+         second-half growth 13.9 KiB (19 B per cycle), tolerance 727.6 KiB, final 7.11 MiB
+  [PASS] optimistic churn: retained memory plateaus
+         second-half growth 59.0 KiB (201 B per cycle), tolerance 718.2 KiB, final 7.01 MiB
+  [FAIL] document churn: retained memory plateaus
+         second-half growth 209.24 MiB (714.2 KiB per cycle), tolerance 53.04 MiB, final 530.40 MiB
+  [FAIL] evict + gc returns the memory of an evicted list
+         21.28 MiB left of 46.45 MiB
+  [PASS] dropping a cache returns its JS heap
+         JS heap -1.44 MiB above the pre-cache baseline
+  [PASS] dropping a cache returns its WASM heap
+         no WASM heap (InMemoryCache)
+  [PASS] a second cache reuses WASM linear memory instead of growing it
+         no WASM heap (InMemoryCache)
