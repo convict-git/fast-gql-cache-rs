@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # The JS ↔ Rust-WASM boundary of `InMemoryCacheRs`
@@ -14,9 +14,10 @@ The first step is a measured experiment, not a port: a root-only Rust store behi
 `NormalizedCache`-shaped adapter, with Apollo's `StoreReader`, `StoreWriter` and `Policies`
 unchanged on top (V0). What moves next is decided by V0's measurements.
 
-Status is *proposed* for two reasons. The plan amends AGENTS.md's Phase 2, which needs the
-maintainer's approval. And A6 to A8 were closed by one peer only (see
-[Provenance](#provenance)).
+The maintainer approved the amendment to AGENTS.md's Phase 2 and delegated the open
+questions (A6 to A8, the gate thresholds) to `claude`; see [Resolution](#resolution). The
+compatibility target this record assumes is [ADR 0002](0002-compatibility-target.md), and
+WASM initialization is [ADR 0003](0003-wasm-initialization.md).
 
 ## Context
 
@@ -126,8 +127,8 @@ always.
 
 This replaces AGENTS.md's Phase 2 wording ("replace `StoreReader`, `StoreWriter` and
 `src/internal/` modules with Rust-WASM"), which names the reader and writer but not the
-store, and moves the reader last and conditional. That amendment is pending the
-maintainer.
+store, and moves the reader last and conditional. The maintainer approved the
+amendment, and AGENTS.md carries it.
 
 ## Next steps: the V0 prototype (A8)
 
@@ -144,7 +145,7 @@ maintainer.
 | `-0`/`0` and `NaN` rewrites | F10 |
 | a warm re-read returns `===` list items (the list memo hits) | F8 |
 | a nested write inside a merge function; a merge function that throws after earlier entities were merged | contract 6, F6 |
-| development console output, byte for byte | `npm run probe:parity` |
+| development console output, byte for byte except [registered drifts](../compatibility.md) | `npm run probe:parity`, ADR 0002 |
 
 **Measurements**, from the performance probe (`docs/probes/cache-performance-probe.mjs`) at
 N = 5 000, against Apollo's baselines [performance §1.3]: write cold 83.41 ms, write of an
@@ -157,19 +158,33 @@ field 19.53 ms.
 - the heap: the slot table and the result cache, each against Apollo's at N = 5 000 and
   N = 20 000;
 - the seeded gate shapes: an unchanged write, a one-item update, policies heavy with
-  callbacks.
+  callbacks;
+- the gzipped `.wasm` size, and the first construction's decode-and-compile time
+  (ADR 0003).
 
-**Gates** (proposed; the thresholds need the maintainer):
+A crossing itself is cheap: about 5 ns per call with integer arguments, which is what a JS
+method call costs, against the roughly 2 µs per field that Apollo spends on a cold write
+and 3.9 µs per field on a cold read (F20, E9). The boundary's real costs are strings and
+objects, which V0 avoids by passing interned integer ids.
+
+**Gates.** The thresholds are `claude`'s, under the maintainer's delegation; they are
+starting values, to be tightened once V0 exists.
 
 - **Correctness is hard.** Every oracle case, `npm test` and `npm run probe:parity` pass
-  for what V0 implements.
-- **Warm reads stay flat**, at microseconds independent of N. A regression here means
-  contract 2 is broken, not that V0 is slow.
+  for what V0 implements, except registered drifts (ADR 0002).
+- **Warm reads stay flat**: independent of N, and within 2× of Apollo's 3.8 µs. A
+  regression here means contract 2 is broken, not that V0 is slow.
+- **V0 costs at most 1.25× Apollo** on probe sections 1 and 2 at N = 5 000: write cold
+  ≤ 104 ms, write identical ≤ 95 ms, read cold ≤ 194 ms, read after one dirty field
+  ≤ 24 ms. That leaves a budget of roughly 500 ns of boundary overhead per field. V0 is a
+  scaffold, but not a slow one: past the budget, the adapter is fixed (prefetch,
+  batching) before any write-engine work starts.
 - **The write engine goes ahead only if** a prototype of it, placed beside the Rust store,
-  beats Apollo on both write columns of probe section 1, with every conversion, report and
-  flush counted.
-- **V0's cold-read overhead is reported, not gated.** It decides between field-at-a-time
-  and prefetch.
+  is at least 1.5× faster than Apollo on both write columns of probe section 1 at
+  N = 5 000, and at least 1.2× faster on the one-item update and the callback-heavy policy
+  shape, with every conversion, report and flush counted, and without slowing section 2's
+  reads by more than 10%. Otherwise the plan stops at V0 and is revisited.
+- **The `.wasm` stays under 1 MB gzipped** (ADR 0003).
 
 ## Considered options
 
@@ -191,16 +206,22 @@ field 19.53 ms.
   conversion for free, but leave structural comparison in JS.
 - **A worker-hosted store (C5).** Deferred: every API is synchronous (F1).
 
-## Escalated to the maintainer
+## Resolution
 
-1. **Amend AGENTS.md's Phase 2** to the migration order above. Both peers agreed (#3,
-   #4); it is escalated because the protocol escalates every convention change.
-2. **The initialization API (A7).** The published entry cannot construct a cache outside
-   Jest (F18). The options are a required `initSync` export, an async factory, or
-   bundling a self-initializing module. Each changes the public surface that AGENTS.md
-   limits to `InMemoryCacheRs` and `InMemoryCacheRsConfig`.
-3. **The numeric thresholds** of A8's gates.
-4. **Acceptance of A6 to A8**, which only one peer reviewed.
+The maintainer answered the four escalated questions after the brainstorm closed.
+
+1. **AGENTS.md's Phase 2: approved.** AGENTS.md is meant to follow the project's growing
+   understanding, and it now carries the migration order above.
+2. **Initialization:** keep `ApolloCache`'s interface and make adoption effortless.
+   [ADR 0003](0003-wasm-initialization.md) decides it: the constructor runs `initSync`
+   from bytes shipped in the package. The 4 KB main-thread limit, which this record listed as
+   unverified, is out of date: Chrome 115 raised it to 8 MB.
+3. **Correctness stays a hard gate**, but the target is now "close to `InMemoryCache`",
+   not byte-identical. [ADR 0002](0002-compatibility-target.md) draws the line: the client
+   contract and the user-authored surface hold; incidental behaviour may drift through a
+   register.
+4. **A6 to A8:** delegated to `claude`. A6 and A8 stand as written above, and A7 is
+   resolved by ADR 0003.
 
 ## Established facts
 
@@ -227,10 +248,12 @@ Paths under `cache/`, `core/`, `link/` and `utilities/` are in `apollo-client-sm
 | F17 | The cache never sees response bytes: HttpLink `JSON.parse`s the body. A `no-cache` result goes from the link to the caller without touching the cache. | `link/http/parseAndCheckHttpResponse.ts:159`, `:170`; `core/QueryInfo.ts:232-243` |
 | F18 | `new InMemoryCacheRs()` throws outside Jest: it calls the web-target glue synchronously, nothing initializes it, and the package exports no initializer. | `src/InMemoryCacheRs.ts:48`, `:102`; `src/index.ts`; `pkg/fast_gql_cache_rs.js:11-18`, `:68`; experiment E8 |
 | F19 | The glue keeps one module-level instance, shared by every cache in a realm. Exported structs get `free()`, `Symbol.dispose` and a `FinalizationRegistry`. | `pkg/fast_gql_cache_rs.js:118`, `:138`; E7's generated glue |
+| F20 | A call from JS into a wasm-bindgen export with integer arguments costs about 5 ns (a free function or a `&self` method, borrow guard included), about the same as a JS method call; Apple M4, Node 24.21.0. | experiment E9 |
 
-Not verified, and not relied on: Chrome's 4 KB limit on synchronous main-thread
-`WebAssembly.Module` compilation (the desktop app's Electron Chromium 152 compiled 20 KB
-synchronously), and whether linear memory ever shrinks.
+Chrome refused synchronous main-thread compilation over 4 KB until Chrome 115, which
+raised the limit to 8 MB ([ADR 0003](0003-wasm-initialization.md)); other browsers are
+unchecked. Whether linear memory ever shrinks is not verified, and nothing here relies on
+it.
 
 ## Evidence
 
@@ -530,6 +553,50 @@ call before init threw: TypeError: Cannot read properties of undefined (reading 
 
 </details>
 
+<details>
+<summary>E9: crossing cost (F20)</summary>
+
+E7's crate plus:
+
+```rust
+#[wasm_bindgen]
+pub fn add1(x: u32) -> u32 { x.wrapping_add(1) }
+
+#[wasm_bindgen]
+impl Store {
+    pub fn get(&self, i: u32) -> u32 { i ^ (self.log.len() as u32) }
+}
+```
+
+```js
+const { Store, add1 } = require("./pkg/reentry.cjs");
+const s = new Store();
+const jsGet = { log: [], get(i) { return i ^ this.log.length; } };
+function time(label, fn, n) {
+  for (let i = 0; i < 1e5; i++) fn(i);
+  const t0 = process.hrtime.bigint();
+  let acc = 0;
+  for (let i = 0; i < n; i++) acc ^= fn(i);
+  console.log(label.padEnd(34), (Number(process.hrtime.bigint() - t0) / n).toFixed(2), "ns/call");
+}
+for (let r = 0; r < 3; r++) {
+  time("wasm free fn add1(u32)", (i) => add1(i), 2e7);
+  time("wasm method store.get(&self,u32)", (i) => s.get(i), 2e7);
+  time("js method obj.get(i)", (i) => jsGet.get(i), 2e7);
+}
+```
+
+The last of three rounds (the first round's free-function figure, 2.22 ns, was a
+warm-up outlier):
+
+```
+wasm free fn add1(u32)             4.69 ns/call
+wasm method store.get(&self,u32)   5.51 ns/call
+js method obj.get(i)               4.19 ns/call
+```
+
+</details>
+
 ## Provenance
 
 - **Agreed by both peers:** A1 (#3, ack #4), A2 (#9, ack #10), A3 (#13, ack #14), A4
@@ -537,5 +604,6 @@ call before init threw: TypeError: Cannot read properties of undefined (reading 
 - **Closed by `claude` alone:** the other peer became unavailable after #21, and the
   maintainer asked `claude` to finish alone. A6 was `claude`'s position in #21 with no
   reply. A7 (parked) and A8 (the next steps) were never discussed.
+- **Resolved by the maintainer** after the close: see [Resolution](#resolution).
 - **Dissent:** none was recorded. `gpt` did not post a final `ack` or a dissent, because
   it was unavailable at the close.
