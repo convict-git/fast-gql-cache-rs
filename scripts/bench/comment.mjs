@@ -44,8 +44,9 @@ export function nextBody(existing, event) {
         [
           MARKER,
           "> [!NOTE]",
-          "> Not benchmarked yet. Add the `benchmark` label to compare this PR's",
-          "> performance against its base (takes about 75 minutes).",
+          "> Not benchmarked. Add the `benchmark` label to compare this PR's performance",
+          "> with its base: it runs on every push while the label is on (about 1 h 45 min),",
+          "> and merging waits for it.",
           "",
         ].join("\n")
       );
@@ -56,7 +57,7 @@ export function nextBody(existing, event) {
     `<!-- benchmarked: ${benchmarked} -->`,
     "> [!WARNING]",
     `> These results are for ${short(benchmarked)}; the PR is now at ${short(event.headSha)}.`,
-    "> Add the `benchmark` label again to refresh them.",
+    "> While the `benchmark` label is on, a new run is on its way; merging waits for it.",
     RESULTS,
     results,
   ].join("\n");
@@ -136,15 +137,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   } else {
     gh(["api", `repos/${REPO}/issues/${pr}/comments`, "-F", "body=@-"], body);
     console.log(`Posted the benchmark comment on #${pr}.`);
-  }
-
-  // The label is the trigger: remove it so adding it again re-runs.
-  if (meta.kind === "results") {
-    spawnSync("gh", [
-      "api",
-      "-X",
-      "DELETE",
-      `repos/${REPO}/issues/${pr}/labels/benchmark`,
-    ]);
   }
 }

@@ -4,11 +4,13 @@
  * records every per-run median.
  *
  *   node scripts/bench/run.mjs --out result.json [--base-root DIR] [--head-root DIR]
- *        [--sections=1,2] [--runs=5] [--quick] [--base-note TEXT]
+ *        [--sections=1,2] [--runs=7] [--quick] [--base-note TEXT]
  *
- * The probe is always this checkout's, so base and head are measured by the
- * same code; `--*-root` only chooses whose built `dist/` and `pkg/` supply
- * `InMemoryCacheRs` (via FAST_GQL_CACHE_RS_ROOT, see docs/probes/select-cache.mjs).
+ * Each side runs the probe inside its own checkout, against that checkout's
+ * build and `node_modules`: a process never mixes two copies of Apollo Client
+ * or graphql (the probe's queries and `cacheSizes` settings would otherwise
+ * reach only one of them). Both sides run the same probe: the base checkout
+ * must hold head's probe files (pr.mjs copies them), which is checked here.
  * Apollo's cache is measured once per side as the noise control: it is the
  * same code on both sides, so any difference between them is noise.
  *
@@ -30,9 +32,12 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
-const PROBE = fileURLToPath(
-  new URL("../../docs/probes/cache-performance-probe.mjs", import.meta.url)
-);
+/** The probe and the module it loads the cache through: identical on both sides. */
+const PROBE_FILES = [
+  "docs/probes/cache-performance-probe.mjs",
+  "docs/probes/select-cache.mjs",
+];
+const probeOf = (root) => join(root, PROBE_FILES[0]);
 
 const arg = (name) => {
   const i = process.argv.findIndex(
@@ -50,10 +55,12 @@ if (!out) {
 }
 const headRoot = resolve(arg("--head-root") ?? REPO);
 const baseRoot = arg("--base-root") && resolve(arg("--base-root"));
-const runs = Number(arg("--runs") ?? 5);
+const runs = Number(arg("--runs") ?? 7);
 const quick = process.argv.includes("--quick");
 const sectionCount = Number(
-  /const SECTION_COUNT = (\d+);/.exec(readFileSync(PROBE, "utf8"))?.[1]
+  /const SECTION_COUNT = (\d+);/.exec(
+    readFileSync(probeOf(headRoot), "utf8")
+  )?.[1]
 );
 const sections =
   arg("--sections") ?
@@ -83,9 +90,28 @@ const sides = {
   head: describe(headRoot),
   ...(baseRoot && { base: describe(baseRoot) }),
 };
+if (sides.base) {
+  for (const file of PROBE_FILES) {
+    const theirs = join(baseRoot, file);
+    if (
+      !existsSync(theirs) ||
+      readFileSync(theirs, "utf8") !==
+        readFileSync(join(headRoot, file), "utf8")
+    ) {
+      console.error(
+        `${theirs} differs from head's: both sides must run the same probe ` +
+          "(scripts/bench/pr.mjs copies head's probe into the base checkout)."
+      );
+      process.exit(2);
+    }
+  }
+}
 const configs = Object.keys(sides).flatMap((side) =>
   ["apollo", "rs"].map((cache) => ({ side, cache, key: `${cache}@${side}` }))
 );
+
+const withoutRsRoot = { ...process.env };
+delete withoutRsRoot.FAST_GQL_CACHE_RS_ROOT;
 
 /** label -> config key -> per-run medians (ns) */
 const samples = {};
@@ -106,7 +132,7 @@ for (let r = 0; r < runs; r++) {
         process.execPath,
         [
           "--expose-gc",
-          PROBE,
+          probeOf(sides[side].root),
           `--json-out=${childJson}`,
           `--sections=${section}`,
           `--cache=${cache}`,
@@ -115,7 +141,8 @@ for (let r = 0; r < runs; r++) {
         {
           encoding: "utf8",
           maxBuffer: 64 * 1024 * 1024,
-          env: { ...process.env, FAST_GQL_CACHE_RS_ROOT: sides[side].root },
+          // The probe loads InMemoryCacheRs from its own checkout.
+          env: withoutRsRoot,
         }
       );
       if (child.status !== 0) {
