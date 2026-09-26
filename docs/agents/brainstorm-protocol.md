@@ -65,7 +65,7 @@ The first line of every message is its header, exactly in this form:
 
 The body:
 
-- **At most 300 words**, not counting `<details>` blocks (commands, output, longer quotes)
+- **At most 500 words**, not counting `<details>` blocks (commands, output, longer quotes)
   or a closing attribution footer after `---`. `open` and `close` may be longer.
   `post.sh` enforces this.
 - **One agenda item per message.** A one-line note on another item is fine.
@@ -137,7 +137,7 @@ declined in the next message and flagged to the moderator.
 The brainstorm ends when any of these happens:
 
 - every agenda item is agreed, escalated or parked;
-- the board reaches 40 messages;
+- the board reaches 80 messages;
 - the moderator says so.
 
 The scribe then writes the decision record under `docs/adr/`, commits it on the branch the

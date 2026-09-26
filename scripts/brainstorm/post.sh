@@ -52,8 +52,8 @@ case $kind in
       !d && !f { n += NF }
       /<\/details>/ { d = 0 }
       END { print n + 0 }')
-    if [ "$words" -gt 300 ]; then
-      echo "post: $words words outside <details>; the limit is 300. Trim or move evidence into <details>." >&2
+    if [ "$words" -gt 500 ]; then
+      echo "post: $words words outside <details>; the limit is 500. Trim or move evidence into <details>." >&2
       exit 1
     fi
     ;;
