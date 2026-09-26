@@ -62,8 +62,9 @@ The target is close to `InMemoryCache`, not byte-identical
   `extract`/`restore` contents.
 - **Unsupported**: what the profile leaves out (custom `read`/`merge` functions,
   function-valued `keyFields`/`keyArgs`, `dataIdFromObject`, fuzzy `possibleTypes`,
-  `resultCaching: false`, reactive variables consumed by the cache, and written values
-  that are not passive data), and anything else we cannot or choose not to support. It is
+  `resultCaching: false`, reactive variables consumed by the cache, written values that
+  are not passive data, and `cache.policies` beyond `addTypePolicies`, `addPossibleTypes`,
+  `identify` and `fragmentMatches`), and anything else we cannot or choose not to support. It is
   not drift. Each feature goes into [docs/unsupported.md](docs/unsupported.md) in the PR
   that decides it, as soon as it is decided, because migrating teams read it to weigh the
   effort. An entry states what, how an application notices, and what to use instead; the

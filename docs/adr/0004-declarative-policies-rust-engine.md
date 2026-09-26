@@ -88,6 +88,7 @@ unchanged.
 | `fragments` (fragment registry) | as Apollo | — |
 | `resultCaching` | `true`, which is Apollo's default and the only mode | `false`: result caching is always on, and the option is not in `InMemoryCacheRsConfig` |
 | `cache.policies.addTypePolicies` / `addPossibleTypes` | the same accepted shapes, validated the same way, the whole argument before any of it applies | the same rejected shapes; nothing from a rejected call is applied |
+| the rest of `cache.policies` | `identify` (Apollo's signature and its `[id, keyObject]` result) and `fragmentMatches(fragment, typename)` | every other member: Apollo's reader, writer and store call them, and applications use `cache.identify()`, `cache.fragmentMatches()`, `cache.evict()` and `cache.modify()` instead (decided by the maintainer, 2026-09-27) |
 | values written into the cache | passive data: JSON values and plain `Date`s | nothing is rejected, since checking a Proxy runs its traps; class instances other than `Date`, getters, Proxies and custom coercion are documented as unsupported ([contract 2](#4-the-contracts)) |
 
 `InMemoryCacheRsConfig` is our own type, so the rejected shapes are compile errors for
@@ -915,6 +916,13 @@ need their own evidence.
   they come from and whether the implementation or the behaviour changed
   ([src/__tests__/README.md](../../src/__tests__/README.md)).
 - **The benchmark workflow is unchanged for now.**
+- **`cache.policies` keeps four methods** (2026-09-27): `addTypePolicies`,
+  `addPossibleTypes`, `identify` with Apollo's signature and `[id, keyObject]` result, and
+  `fragmentMatches(fragment, typename)`. Apollo Client never reads `cache.policies`; the
+  other public members of Apollo's `Policies` exist for its reader, writer and store,
+  which step 4 removes. `fragmentMatches` ignores Apollo's `result` and `variables`
+  arguments, which only feed fuzzy matching. This narrows ADR 0002's tier-2 row
+  "`cache.policies`' public methods" to these four.
 
 ### What the review changed
 

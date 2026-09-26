@@ -40,6 +40,7 @@ below. The configuration checks arrive with ADR 0004's step 2.
 | [U11](#u11-content-security-policies-without-wasm-unsafe-eval) | a Content Security Policy without `'wasm-unsafe-eval'` | Decided | allow `'wasm-unsafe-eval'` |
 | [U12](#u12-instanceof-inmemorycache) | `cache instanceof InMemoryCache` | Decided | check for `ApolloCache` |
 | [U13](#u13-inmemorycache-internals) | `InMemoryCache` internals (`cache["data"]`, …) | Decided | the public `ApolloCache` API |
+| [U14](#u14-cachepolicies-beyond-four-methods) | `cache.policies` beyond four methods | Decided | the cache's own methods |
 
 ## Cache configuration
 
@@ -425,6 +426,50 @@ The store moves into Rust. What JavaScript holds there is no longer the store, s
 `InMemoryCache`'s internal objects have nothing to point at
 ([ADR 0004, step 4](adr/0004-declarative-policies-rust-engine.md#migration-order-and-gates)
 removes them). Apollo Client itself never reads them (ADR 0002).
+
+</details>
+
+### U14. `cache.policies` beyond four methods
+
+**Status:** Decided ([ADR 0004](adr/0004-declarative-policies-rust-engine.md#maintainer-decisions)), from its step 4
+
+**Still supported:** `cache.policies.addTypePolicies()` and `addPossibleTypes()`, validated
+as the constructor validates (U1–U7); `identify()`, with Apollo's signature and its
+`[id, keyObject]` result; and `fragmentMatches(fragment, typename)`.
+
+**Unsupported:** every other member of Apollo's `Policies`: `readField`, `getStoreFieldName`,
+`hasKeyArgs`, `getReadFunction`, `getMergeFunction`, `runMergeFunction`,
+`rootIdsByTypename`, `rootTypenamesById`, `usingPossibleTypes` and `cache`. Also the
+`result` and `variables` arguments of `fragmentMatches`, which are ignored. `cache.policies`
+is not an instance of Apollo's `Policies` class.
+
+**You will notice:** those members are `undefined`, and TypeScript reports them at compile
+time.
+
+**Instead:**
+
+| You call | Use |
+| --- | --- |
+| `cache.policies.readField(…)` | the `readField` that `modify` passes to each modifier |
+| `cache.policies.getStoreFieldName(…)` | `cache.evict({ id, fieldName, args })` and `cache.modify()`, which build field keys themselves |
+| `cache.policies.rootIdsByTypename` and the other root maps | `"ROOT_QUERY"`, `"ROOT_MUTATION"` and `"ROOT_SUBSCRIPTION"` |
+
+<details>
+<summary>Why</summary>
+
+`cache.policies` is not part of the `ApolloCache` interface, and Apollo Client never reads
+it (`apollo-client-sm/src/`, outside `cache/inmemory/` and tests). Apollo documents only
+`addTypePolicies`, for type policies that code-split modules add after the cache exists
+(`docs/source/caching/cache-configuration.mdx`); `addPossibleTypes` serves the same purpose
+(`cache/inmemory/inMemoryCache.ts:66-68`). `identify` and `fragmentMatches` stay because
+they cost nothing and spare a rename.
+
+The other members are public because Apollo's own reader, writer and store call them
+across classes (`readFromStore.ts`, `writeToStore.ts`, `entityStore.ts`). They need
+Apollo's internal read and write context to mean anything, and three of them exist only to find and run
+`read` and `merge` functions (U1, U2). Step 4 of ADR 0004 removes Apollo's `Policies`
+together with those classes. `fragmentMatches`' `result` and `variables` arguments only
+feed the fuzzy matching that U6 removes (`cache/inmemory/policies.ts:770-800`).
 
 </details>
 

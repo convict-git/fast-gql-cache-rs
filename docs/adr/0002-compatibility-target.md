@@ -4,8 +4,9 @@ status: accepted
 
 > **Amended by [ADR 0004](0004-declarative-policies-rust-engine.md).** Tier 2 holds for
 > the declarative profile; configuration outside it is unsupported, not drift, and is
-> listed in [Unsupported features](../unsupported.md). Tiers 1 and 3 and the drift
-> rules are unchanged.
+> listed in [Unsupported features](../unsupported.md). Tier 2's "`cache.policies`' public
+> methods" narrows to `addTypePolicies`, `addPossibleTypes`, `identify` and
+> `fragmentMatches`. Tiers 1 and 3 and the drift rules are unchanged.
 
 # Compatibility target: close to `InMemoryCache`, not byte-identical
 
