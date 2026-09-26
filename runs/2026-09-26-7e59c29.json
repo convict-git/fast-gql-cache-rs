@@ -1,0 +1,2435 @@
+{
+  "meta": {
+    "schema": 1,
+    "date": "2026-09-26T10:00:12.793Z",
+    "node": "v24.21.0",
+    "platform": "linux/x64",
+    "runs": 3,
+    "quick": false,
+    "sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "head": {
+      "root": "/home/runner/work/fast-gql-cache-rs/fast-gql-cache-rs",
+      "sha": "7e59c294a5c4f04c5fd526a17df083ca196760dc",
+      "wasmBytes": 14230
+    },
+    "base": null,
+    "baseNote": null
+  },
+  "samples": {
+    "write cold N=100": {
+      "rs@head": [
+        3352959,
+        3095370,
+        3064034
+      ],
+      "apollo@head": [
+        2334480,
+        2324541,
+        2393010
+      ]
+    },
+    "write identical N=100": {
+      "rs@head": [
+        1303731,
+        1334572,
+        1358217
+      ],
+      "apollo@head": [
+        1342928,
+        1328511,
+        1339031
+      ]
+    },
+    "write 1-changed N=100": {
+      "rs@head": [
+        1303530,
+        1715995,
+        1409784
+      ],
+      "apollo@head": [
+        1561196,
+        1357104,
+        1596983
+      ]
+    },
+    "write cold N=1000": {
+      "rs@head": [
+        14684115,
+        14412458,
+        14841163
+      ],
+      "apollo@head": [
+        14427329,
+        14320765,
+        14130215
+      ]
+    },
+    "write identical N=1000": {
+      "rs@head": [
+        12679181,
+        12622936,
+        12840465
+      ],
+      "apollo@head": [
+        12785372,
+        12540110,
+        12850154
+      ]
+    },
+    "write 1-changed N=1000": {
+      "rs@head": [
+        12425426,
+        12416730,
+        12331084
+      ],
+      "apollo@head": [
+        12635091,
+        12550109,
+        12441199
+      ]
+    },
+    "write cold N=5000": {
+      "rs@head": [
+        67820450,
+        67162087,
+        68011770
+      ],
+      "apollo@head": [
+        67046285,
+        67775819,
+        67811288
+      ]
+    },
+    "write identical N=5000": {
+      "rs@head": [
+        62273402,
+        62037585,
+        61801179
+      ],
+      "apollo@head": [
+        62247692,
+        62006400,
+        63068679
+      ]
+    },
+    "write 1-changed N=5000": {
+      "rs@head": [
+        61980245,
+        61943551,
+        63153653
+      ],
+      "apollo@head": [
+        61864422,
+        62399431,
+        62166160
+      ]
+    },
+    "write cold N=20000": {
+      "rs@head": [
+        284771392,
+        290620507,
+        290541414
+      ],
+      "apollo@head": [
+        288710877,
+        286297463,
+        289896475
+      ]
+    },
+    "write identical N=20000": {
+      "rs@head": [
+        266661447,
+        271393140,
+        265788619
+      ],
+      "apollo@head": [
+        266269613,
+        265109034,
+        271529041
+      ]
+    },
+    "write 1-changed N=20000": {
+      "rs@head": [
+        275249225,
+        275795386,
+        266746672
+      ],
+      "apollo@head": [
+        269895842,
+        275047065,
+        273039394
+      ]
+    },
+    "write 100 into a brand-new cache": {
+      "rs@head": [
+        1797918,
+        1842991,
+        1843815
+      ],
+      "apollo@head": [
+        1910428,
+        1916068,
+        1922742
+      ]
+    },
+    "write 100 into a primed EMPTY cache": {
+      "rs@head": [
+        1464846,
+        1597853,
+        1442535
+      ],
+      "apollo@head": [
+        1592434,
+        1554454,
+        1615126
+      ]
+    },
+    "overwrite 100 existing entities": {
+      "rs@head": [
+        1443797,
+        1386489,
+        1307873
+      ],
+      "apollo@head": [
+        1672925,
+        1435632,
+        1300930
+      ]
+    },
+    "read cold N=100": {
+      "apollo@head": [
+        2711966,
+        2640623,
+        2555353
+      ],
+      "rs@head": [
+        3259168,
+        3567281,
+        3550092
+      ]
+    },
+    "read warm N=100": {
+      "apollo@head": [
+        7214,
+        7354,
+        7174
+      ],
+      "rs@head": [
+        7404,
+        7695,
+        7584
+      ]
+    },
+    "read after 1 dirty N=100": {
+      "apollo@head": [
+        375802,
+        317513,
+        370081
+      ],
+      "rs@head": [
+        362577,
+        362888,
+        345445
+      ]
+    },
+    "read cold N=1000": {
+      "apollo@head": [
+        26292604,
+        26290953,
+        24720496
+      ],
+      "rs@head": [
+        23748850,
+        23853119,
+        24317913
+      ]
+    },
+    "read warm N=1000": {
+      "apollo@head": [
+        6192,
+        6222,
+        6251
+      ],
+      "rs@head": [
+        6351,
+        6302,
+        6271
+      ]
+    },
+    "read after 1 dirty N=1000": {
+      "apollo@head": [
+        2915586,
+        2652936,
+        2739186
+      ],
+      "rs@head": [
+        2917660,
+        2970960,
+        2953487
+      ]
+    },
+    "read cold N=5000": {
+      "apollo@head": [
+        124452090,
+        123382343,
+        127105744
+      ],
+      "rs@head": [
+        127124558,
+        122516454,
+        128246043
+      ]
+    },
+    "read warm N=5000": {
+      "apollo@head": [
+        3457,
+        3637,
+        3577
+      ],
+      "rs@head": [
+        3637,
+        3536,
+        3537
+      ]
+    },
+    "read after 1 dirty N=5000": {
+      "apollo@head": [
+        15079338,
+        15164228,
+        16339731
+      ],
+      "rs@head": [
+        14734353,
+        14031258,
+        14802640
+      ]
+    },
+    "read cold N=20000": {
+      "apollo@head": [
+        527707883,
+        536359633,
+        538177452
+      ],
+      "rs@head": [
+        535245203,
+        528871548,
+        539686783
+      ]
+    },
+    "read warm N=20000": {
+      "apollo@head": [
+        5140,
+        5189,
+        5260
+      ],
+      "rs@head": [
+        6673,
+        6121,
+        6402
+      ]
+    },
+    "read after 1 dirty N=20000": {
+      "apollo@head": [
+        72759358,
+        75647531,
+        74772108
+      ],
+      "rs@head": [
+        72513027,
+        72994849,
+        74155907
+      ]
+    },
+    "write normalized N=100": {
+      "rs@head": [
+        3335891,
+        2972913,
+        3230875
+      ],
+      "apollo@head": [
+        2312429,
+        2425210,
+        2450257
+      ]
+    },
+    "write untyped N=100": {
+      "rs@head": [
+        1044461,
+        1052226,
+        1036817
+      ],
+      "apollo@head": [
+        1179633,
+        1174544,
+        1242601
+      ]
+    },
+    "rewrite identical normalized N=100": {
+      "rs@head": [
+        1359740,
+        1358708,
+        1465016
+      ],
+      "apollo@head": [
+        1364609,
+        1320026,
+        1394645
+      ]
+    },
+    "rewrite identical untyped N=100": {
+      "rs@head": [
+        1459787,
+        1453184,
+        1495433
+      ],
+      "apollo@head": [
+        1446472,
+        1455107,
+        1476337
+      ]
+    },
+    "read warm normalized N=100": {
+      "rs@head": [
+        8867,
+        8826,
+        8576
+      ],
+      "apollo@head": [
+        8436,
+        8746,
+        8646
+      ]
+    },
+    "read warm untyped N=100": {
+      "rs@head": [
+        8505,
+        8566,
+        8547
+      ],
+      "apollo@head": [
+        9197,
+        8416,
+        8676
+      ]
+    },
+    "write normalized N=1000": {
+      "rs@head": [
+        14530552,
+        14292858,
+        15597274
+      ],
+      "apollo@head": [
+        15983368,
+        14792550,
+        15063628
+      ]
+    },
+    "write untyped N=1000": {
+      "rs@head": [
+        9381915,
+        9326842,
+        9683358
+      ],
+      "apollo@head": [
+        9259598,
+        9486570,
+        9653552
+      ]
+    },
+    "rewrite identical normalized N=1000": {
+      "rs@head": [
+        12786795,
+        12483108,
+        13343685
+      ],
+      "apollo@head": [
+        12965801,
+        12665187,
+        13250010
+      ]
+    },
+    "rewrite identical untyped N=1000": {
+      "rs@head": [
+        9694519,
+        9687435,
+        10119041
+      ],
+      "apollo@head": [
+        9778147,
+        9890174,
+        10065943
+      ]
+    },
+    "read warm normalized N=1000": {
+      "rs@head": [
+        7704,
+        7845,
+        7864
+      ],
+      "apollo@head": [
+        7774,
+        7805,
+        7584
+      ]
+    },
+    "read warm untyped N=1000": {
+      "rs@head": [
+        6832,
+        6803,
+        6953
+      ],
+      "apollo@head": [
+        6993,
+        6993,
+        6843
+      ]
+    },
+    "write normalized N=5000": {
+      "rs@head": [
+        70049888,
+        68688412,
+        73655933
+      ],
+      "apollo@head": [
+        72274066,
+        72524078,
+        71806635
+      ]
+    },
+    "write untyped N=5000": {
+      "rs@head": [
+        46202303,
+        45745471,
+        46859290
+      ],
+      "apollo@head": [
+        46358805,
+        46998298,
+        46450968
+      ]
+    },
+    "rewrite identical normalized N=5000": {
+      "rs@head": [
+        63301813,
+        61588886,
+        64145911
+      ],
+      "apollo@head": [
+        62539239,
+        64106054,
+        64774916
+      ]
+    },
+    "rewrite identical untyped N=5000": {
+      "rs@head": [
+        50909102,
+        50268380,
+        50852219
+      ],
+      "apollo@head": [
+        50301961,
+        51354805,
+        50649069
+      ]
+    },
+    "read warm normalized N=5000": {
+      "rs@head": [
+        6953,
+        6833,
+        6793
+      ],
+      "apollo@head": [
+        6872,
+        6803,
+        6221
+      ]
+    },
+    "read warm untyped N=5000": {
+      "rs@head": [
+        6532,
+        6472,
+        6272
+      ],
+      "apollo@head": [
+        6432,
+        6302,
+        5800
+      ]
+    },
+    "write deep normalized d=4": {
+      "apollo@head": [
+        168274,
+        182371,
+        170839
+      ],
+      "rs@head": [
+        225732,
+        238545,
+        250638
+      ]
+    },
+    "write deep untyped d=4": {
+      "apollo@head": [
+        84939,
+        84057,
+        88976
+      ],
+      "rs@head": [
+        95790,
+        139591,
+        140262
+      ]
+    },
+    "read cold deep d=4": {
+      "apollo@head": [
+        191487,
+        177872,
+        178904
+      ],
+      "rs@head": [
+        245599,
+        274012,
+        261779
+      ]
+    },
+    "read warm deep d=4": {
+      "apollo@head": [
+        7925,
+        7755,
+        7795
+      ],
+      "rs@head": [
+        7845,
+        7965,
+        9187
+      ]
+    },
+    "read after deepest dirty d=4": {
+      "apollo@head": [
+        140252,
+        151673,
+        139260
+      ],
+      "rs@head": [
+        144330,
+        169307,
+        179085
+      ]
+    },
+    "write deep normalized d=16": {
+      "apollo@head": [
+        352850,
+        347669,
+        349112
+      ],
+      "rs@head": [
+        367527,
+        592317,
+        587297
+      ]
+    },
+    "write deep untyped d=16": {
+      "apollo@head": [
+        272519,
+        275384,
+        269875
+      ],
+      "rs@head": [
+        276967,
+        417630,
+        397964
+      ]
+    },
+    "read cold deep d=16": {
+      "apollo@head": [
+        598788,
+        591394,
+        591024
+      ],
+      "rs@head": [
+        748168,
+        737407,
+        743859
+      ]
+    },
+    "read warm deep d=16": {
+      "apollo@head": [
+        8015,
+        7795,
+        8125
+      ],
+      "rs@head": [
+        7995,
+        8235,
+        8035
+      ]
+    },
+    "read after deepest dirty d=16": {
+      "apollo@head": [
+        475628,
+        490376,
+        480989
+      ],
+      "rs@head": [
+        533055,
+        508169,
+        492790
+      ]
+    },
+    "write deep normalized d=64": {
+      "apollo@head": [
+        1213386,
+        1183271,
+        1202175
+      ],
+      "rs@head": [
+        1260274,
+        1175697,
+        1267518
+      ]
+    },
+    "write deep untyped d=64": {
+      "apollo@head": [
+        965334,
+        940507,
+        932261
+      ],
+      "rs@head": [
+        888409,
+        933283,
+        840370
+      ]
+    },
+    "read cold deep d=64": {
+      "apollo@head": [
+        1515351,
+        1540238,
+        1525249
+      ],
+      "rs@head": [
+        1539986,
+        1512305,
+        1502527
+      ]
+    },
+    "read warm deep d=64": {
+      "apollo@head": [
+        6602,
+        6582,
+        6843
+      ],
+      "rs@head": [
+        6623,
+        6662,
+        6672
+      ]
+    },
+    "read after deepest dirty d=64": {
+      "apollo@head": [
+        2370899,
+        2416976,
+        2401886
+      ],
+      "rs@head": [
+        2394613,
+        2450678,
+        2400463
+      ]
+    },
+    "write deep normalized d=256": {
+      "apollo@head": [
+        3988130,
+        4125708,
+        4094659
+      ],
+      "rs@head": [
+        4398006,
+        4017374,
+        4128592
+      ]
+    },
+    "write deep untyped d=256": {
+      "apollo@head": [
+        3346341,
+        3258577,
+        3376177
+      ],
+      "rs@head": [
+        3303220,
+        3183887,
+        3273274
+      ]
+    },
+    "read cold deep d=256": {
+      "apollo@head": [
+        5468645,
+        5951458,
+        6264332
+      ],
+      "rs@head": [
+        5868050,
+        5734703,
+        5700789
+      ]
+    },
+    "read warm deep d=256": {
+      "apollo@head": [
+        5951,
+        5801,
+        5781
+      ],
+      "rs@head": [
+        5651,
+        5931,
+        5921
+      ]
+    },
+    "read after deepest dirty d=256": {
+      "apollo@head": [
+        17437813,
+        17888738,
+        18266291
+      ],
+      "rs@head": [
+        18069613,
+        17464443,
+        18056128
+      ]
+    },
+    "write deep normalized d=512": {
+      "apollo@head": [
+        9178445,
+        9331402,
+        9510255
+      ],
+      "rs@head": [
+        9329286,
+        9328917,
+        9628555
+      ]
+    },
+    "write deep untyped d=512": {
+      "apollo@head": [
+        7224094,
+        6760910,
+        6565374
+      ],
+      "rs@head": [
+        6561146,
+        5896584,
+        6245607
+      ]
+    },
+    "read cold deep d=512": {
+      "apollo@head": [
+        9649144,
+        10157235,
+        9862934
+      ],
+      "rs@head": [
+        10098202,
+        9894954,
+        10049001
+      ]
+    },
+    "read warm deep d=512": {
+      "apollo@head": [
+        5961,
+        5831,
+        6201
+      ],
+      "rs@head": [
+        5891,
+        5991,
+        5941
+      ]
+    },
+    "read after deepest dirty d=512": {
+      "apollo@head": [
+        63877950,
+        65070710,
+        63837254
+      ],
+      "rs@head": [
+        64248172,
+        64202079,
+        64043900
+      ]
+    },
+    "write matrix 10x10": {
+      "rs@head": [
+        2041182,
+        2015535,
+        1991099
+      ],
+      "apollo@head": [
+        1348699,
+        1413370,
+        1416425
+      ]
+    },
+    "read cold matrix 10x10": {
+      "rs@head": [
+        1730112,
+        1749438,
+        1826492
+      ],
+      "apollo@head": [
+        1687843,
+        1838024,
+        1677003
+      ]
+    },
+    "read warm matrix 10x10": {
+      "rs@head": [
+        7103,
+        7314,
+        6973
+      ],
+      "apollo@head": [
+        7163,
+        7073,
+        7344
+      ]
+    },
+    "read after 1 row dirty 10x10": {
+      "rs@head": [
+        160159,
+        166251,
+        164407
+      ],
+      "apollo@head": [
+        158175,
+        158476,
+        169116
+      ]
+    },
+    "write matrix 10x100": {
+      "rs@head": [
+        7524836,
+        7216650,
+        7603132
+      ],
+      "apollo@head": [
+        7392368,
+        7141942,
+        7544683
+      ]
+    },
+    "read cold matrix 10x100": {
+      "rs@head": [
+        13604252,
+        13912307,
+        14457535
+      ],
+      "apollo@head": [
+        13467337,
+        14945269,
+        14313446
+      ]
+    },
+    "read warm matrix 10x100": {
+      "rs@head": [
+        7353,
+        6773,
+        6913
+      ],
+      "apollo@head": [
+        6893,
+        6723,
+        7464
+      ]
+    },
+    "read after 1 row dirty 10x100": {
+      "rs@head": [
+        484184,
+        514671,
+        500545
+      ],
+      "apollo@head": [
+        476199,
+        504483,
+        506276
+      ]
+    },
+    "write matrix 100x100": {
+      "rs@head": [
+        74642175,
+        73598587,
+        73844827
+      ],
+      "apollo@head": [
+        72830144,
+        74241331,
+        73090704
+      ]
+    },
+    "read cold matrix 100x100": {
+      "rs@head": [
+        139021974,
+        137232221,
+        135264134
+      ],
+      "apollo@head": [
+        138369213,
+        136672240,
+        141200474
+      ]
+    },
+    "read warm matrix 100x100": {
+      "rs@head": [
+        7094,
+        7644,
+        7114
+      ],
+      "apollo@head": [
+        7033,
+        3887,
+        7384
+      ]
+    },
+    "read after 1 row dirty 100x100": {
+      "rs@head": [
+        885193,
+        888049,
+        890002
+      ],
+      "apollo@head": [
+        877929,
+        871758,
+        905411
+      ]
+    },
+    "write matrix 100x500": {
+      "rs@head": [
+        401779371,
+        393114060,
+        412823397
+      ],
+      "apollo@head": [
+        390875872,
+        402896903,
+        393914677
+      ]
+    },
+    "read cold matrix 100x500": {
+      "rs@head": [
+        735488402,
+        724656630,
+        752898716
+      ],
+      "apollo@head": [
+        760153844,
+        737603741,
+        745661156
+      ]
+    },
+    "read warm matrix 100x500": {
+      "rs@head": [
+        3394080,
+        3182054,
+        3966790
+      ],
+      "apollo@head": [
+        3557044,
+        3523482,
+        3427162
+      ]
+    },
+    "read after 1 row dirty 100x500": {
+      "rs@head": [
+        3417815,
+        3346582,
+        3384612
+      ],
+      "apollo@head": [
+        3430438,
+        3535294,
+        3439364
+      ]
+    },
+    "write scalar matrix 10x100": {
+      "rs@head": [
+        32892,
+        38793,
+        20278
+      ],
+      "apollo@head": [
+        34936,
+        43110,
+        28313
+      ]
+    },
+    "rewrite equal scalar matrix 10x100": {
+      "rs@head": [
+        143919,
+        106008,
+        147125
+      ],
+      "apollo@head": [
+        138619,
+        109385,
+        197739
+      ]
+    },
+    "read cold scalar matrix 10x100": {
+      "rs@head": [
+        201957,
+        202008,
+        218918
+      ],
+      "apollo@head": [
+        126757,
+        206185,
+        166891
+      ]
+    },
+    "read warm scalar matrix 10x100": {
+      "rs@head": [
+        7253,
+        6712,
+        6302
+      ],
+      "apollo@head": [
+        6362,
+        6212,
+        7113
+      ]
+    },
+    "write scalar matrix 100x100": {
+      "rs@head": [
+        19256,
+        22052,
+        32009
+      ],
+      "apollo@head": [
+        30096,
+        18254,
+        23844
+      ]
+    },
+    "rewrite equal scalar matrix 100x100": {
+      "rs@head": [
+        825311,
+        853935,
+        824390
+      ],
+      "apollo@head": [
+        823358,
+        836783,
+        822156
+      ]
+    },
+    "read cold scalar matrix 100x100": {
+      "rs@head": [
+        710767,
+        632882,
+        721728
+      ],
+      "apollo@head": [
+        659693,
+        625037,
+        616171
+      ]
+    },
+    "read warm scalar matrix 100x100": {
+      "rs@head": [
+        7043,
+        6572,
+        6683
+      ],
+      "apollo@head": [
+        6893,
+        6713,
+        6221
+      ]
+    },
+    "write scalar matrix 100x1000": {
+      "rs@head": [
+        44543,
+        42560,
+        42750
+      ],
+      "apollo@head": [
+        39975,
+        50033,
+        40395
+      ]
+    },
+    "rewrite equal scalar matrix 100x1000": {
+      "rs@head": [
+        7808626,
+        8009330,
+        8166324
+      ],
+      "apollo@head": [
+        7841769,
+        7780002,
+        7871633
+      ]
+    },
+    "read cold scalar matrix 100x1000": {
+      "rs@head": [
+        2485964,
+        2411424,
+        2446560
+      ],
+      "apollo@head": [
+        2449276,
+        2418448,
+        2435219
+      ]
+    },
+    "read warm scalar matrix 100x1000": {
+      "rs@head": [
+        5971,
+        5851,
+        5931
+      ],
+      "apollo@head": [
+        5771,
+        5931,
+        6121
+      ]
+    },
+    "broadcast 1 watchers, relevant write": {
+      "apollo@head": [
+        40542029,
+        39394166,
+        40567898
+      ],
+      "rs@head": [
+        40365078,
+        39221864,
+        40167111
+      ]
+    },
+    "broadcast 1 watchers, unrelated write": {
+      "apollo@head": [
+        123761,
+        114243,
+        118772
+      ],
+      "rs@head": [
+        112520,
+        116879,
+        116007
+      ]
+    },
+    "broadcast 10 watchers, relevant write": {
+      "apollo@head": [
+        42706171,
+        41481184,
+        41509118
+      ],
+      "rs@head": [
+        41275839,
+        42168648,
+        41311418
+      ]
+    },
+    "broadcast 10 watchers, unrelated write": {
+      "apollo@head": [
+        97482,
+        95759,
+        99306
+      ],
+      "rs@head": [
+        101429,
+        107220,
+        106659
+      ]
+    },
+    "broadcast 50 watchers, relevant write": {
+      "apollo@head": [
+        49056245,
+        48446874,
+        48370452
+      ],
+      "rs@head": [
+        49196615,
+        50365831,
+        50327810
+      ]
+    },
+    "broadcast 50 watchers, unrelated write": {
+      "apollo@head": [
+        168605,
+        172072,
+        170348
+      ],
+      "rs@head": [
+        179095,
+        180988,
+        176961
+      ]
+    },
+    "broadcast 200 watchers, relevant write": {
+      "apollo@head": [
+        78730444,
+        79454224,
+        80143882
+      ],
+      "rs@head": [
+        81907770,
+        79808288,
+        82278852
+      ]
+    },
+    "broadcast 200 watchers, unrelated write": {
+      "apollo@head": [
+        446804,
+        464447,
+        447887
+      ],
+      "rs@head": [
+        485196,
+        468976,
+        456032
+      ]
+    },
+    "broadcast 50 identical watches": {
+      "apollo@head": [
+        48450504,
+        48682855,
+        49001040
+      ],
+      "rs@head": [
+        48962076,
+        49528426,
+        49235990
+      ]
+    },
+    "broadcast 50 distinct-document watches": {
+      "apollo@head": [
+        5388093845,
+        5344105174,
+        5422197715
+      ],
+      "rs@head": [
+        5350316583,
+        5343879273,
+        5391611045
+      ]
+    },
+    "broadcast 50 distinct-document watches, limit 200 000": {
+      "apollo@head": [
+        541363904,
+        538406380,
+        553231902
+      ],
+      "rs@head": [
+        529570476,
+        520170717,
+        533065650
+      ]
+    },
+    "add+remove 1 layers": {
+      "rs@head": [
+        171280,
+        161852,
+        169276
+      ],
+      "apollo@head": [
+        164507,
+        176129,
+        187731
+      ]
+    },
+    "optimistic cold read through 1 layers": {
+      "rs@head": [
+        111387414,
+        112998196,
+        111739626
+      ],
+      "apollo@head": [
+        114208747,
+        111053299,
+        112592998
+      ]
+    },
+    "optimistic read through 1 layers": {
+      "rs@head": [
+        53039,
+        48922,
+        49011
+      ],
+      "apollo@head": [
+        50675,
+        51957,
+        50845
+      ]
+    },
+    "remove BOTTOM of 1 layers": {
+      "rs@head": [
+        12744,
+        11872,
+        11922
+      ],
+      "apollo@head": [
+        12954,
+        11682,
+        13345
+      ]
+    },
+    "unwind 1 layers LIFO": {
+      "rs@head": [
+        15920,
+        13485,
+        16241
+      ],
+      "apollo@head": [
+        15379,
+        15088,
+        15048
+      ]
+    },
+    "unwind 1 layers FIFO": {
+      "rs@head": [
+        16561,
+        16480,
+        17713
+      ],
+      "apollo@head": [
+        15489,
+        16170,
+        14628
+      ]
+    },
+    "add+remove 4 layers": {
+      "rs@head": [
+        307203,
+        285684,
+        313736
+      ],
+      "apollo@head": [
+        296193,
+        317614,
+        313135
+      ]
+    },
+    "optimistic cold read through 4 layers": {
+      "rs@head": [
+        185366559,
+        188545811,
+        190849218
+      ],
+      "apollo@head": [
+        182731854,
+        189214827,
+        190028415
+      ]
+    },
+    "optimistic read through 4 layers": {
+      "rs@head": [
+        42249,
+        44273,
+        43701
+      ],
+      "apollo@head": [
+        43672,
+        44142,
+        44814
+      ]
+    },
+    "remove BOTTOM of 4 layers": {
+      "rs@head": [
+        52649,
+        50755,
+        50515
+      ],
+      "apollo@head": [
+        51566,
+        55203,
+        53450
+      ]
+    },
+    "unwind 4 layers LIFO": {
+      "rs@head": [
+        26680,
+        25648,
+        25347
+      ],
+      "apollo@head": [
+        27131,
+        30738,
+        27722
+      ]
+    },
+    "unwind 4 layers FIFO": {
+      "rs@head": [
+        98034,
+        102972,
+        98995
+      ],
+      "apollo@head": [
+        106008,
+        98253,
+        105837
+      ]
+    },
+    "add+remove 16 layers": {
+      "rs@head": [
+        1738929,
+        1747584,
+        1693213
+      ],
+      "apollo@head": [
+        1730112,
+        1681862,
+        1776408
+      ]
+    },
+    "optimistic cold read through 16 layers": {
+      "rs@head": [
+        467515754,
+        475646466,
+        485923951
+      ],
+      "apollo@head": [
+        461819364,
+        478616125,
+        477750511
+      ]
+    },
+    "optimistic read through 16 layers": {
+      "rs@head": [
+        38693,
+        41217,
+        42349
+      ],
+      "apollo@head": [
+        39073,
+        39344,
+        41478
+      ]
+    },
+    "remove BOTTOM of 16 layers": {
+      "rs@head": [
+        167363,
+        171971,
+        168865
+      ],
+      "apollo@head": [
+        170499,
+        172041,
+        169536
+      ]
+    },
+    "unwind 16 layers LIFO": {
+      "rs@head": [
+        61435,
+        64721,
+        68507
+      ],
+      "apollo@head": [
+        62556,
+        62517,
+        61996
+      ]
+    },
+    "unwind 16 layers FIFO": {
+      "rs@head": [
+        1426965,
+        1380158,
+        1419772
+      ],
+      "apollo@head": [
+        1416867,
+        1418310,
+        1451842
+      ]
+    },
+    "add+remove 64 layers": {
+      "rs@head": [
+        18671486,
+        18772827,
+        19372898
+      ],
+      "apollo@head": [
+        20976252,
+        20550978,
+        21022577
+      ]
+    },
+    "optimistic cold read through 64 layers": {
+      "rs@head": [
+        1579745221,
+        1617677014,
+        1659568536
+      ],
+      "apollo@head": [
+        1559243660,
+        1625226055,
+        1610424521
+      ]
+    },
+    "optimistic read through 64 layers": {
+      "rs@head": [
+        40907,
+        41778,
+        43091
+      ],
+      "apollo@head": [
+        41939,
+        41298,
+        44373
+      ]
+    },
+    "remove BOTTOM of 64 layers": {
+      "rs@head": [
+        581937,
+        585955,
+        570295
+      ],
+      "apollo@head": [
+        594100,
+        594381,
+        587988
+      ]
+    },
+    "unwind 64 layers LIFO": {
+      "rs@head": [
+        165139,
+        184244,
+        146303
+      ],
+      "apollo@head": [
+        174176,
+        156112,
+        176109
+      ]
+    },
+    "unwind 64 layers FIFO": {
+      "rs@head": [
+        17834073,
+        19051317,
+        17552817
+      ],
+      "apollo@head": [
+        18199093,
+        19157035,
+        18561522
+      ]
+    },
+    "100 separate writes (100 broadcasts)": {
+      "rs@head": [
+        759129047,
+        773253131,
+        778162798
+      ],
+      "apollo@head": [
+        761139303,
+        768849524,
+        770701351
+      ]
+    },
+    "100 writes in one batch (1 broadcast)": {
+      "rs@head": [
+        14091292,
+        13728885,
+        15673176
+      ],
+      "apollo@head": [
+        14514622,
+        14306103,
+        15454597
+      ]
+    },
+    "first optimistic diff (root read warm)": {
+      "apollo@head": [
+        83282078,
+        84126327,
+        82686383
+      ],
+      "rs@head": [
+        83041959,
+        82049102,
+        87971455
+      ]
+    },
+    "warm optimistic diff": {
+      "apollo@head": [
+        6162,
+        6222,
+        6132
+      ],
+      "rs@head": [
+        6502,
+        6152,
+        6211
+      ]
+    },
+    "warm read, 10101 entities": {
+      "rs@head": [
+        12033,
+        10870,
+        9117
+      ],
+      "apollo@head": [
+        9748,
+        9627,
+        10089
+      ]
+    },
+    "warm read, 40101 entities": {
+      "rs@head": [
+        6021,
+        5801,
+        5931
+      ],
+      "apollo@head": [
+        5801,
+        5841,
+        5911
+      ]
+    },
+    "warm read, 49101 entities": {
+      "rs@head": [
+        6463,
+        6442,
+        6162
+      ],
+      "apollo@head": [
+        6382,
+        6282,
+        6381
+      ]
+    },
+    "warm read, 50101 entities": {
+      "rs@head": [
+        3648179,
+        3654346,
+        3696325
+      ],
+      "apollo@head": [
+        3815247,
+        3589886,
+        4001605
+      ]
+    },
+    "warm read, 60101 entities": {
+      "rs@head": [
+        189368399,
+        184939598,
+        184614489
+      ],
+      "apollo@head": [
+        183415446,
+        184110576,
+        182271824
+      ]
+    },
+    "write with 0 args": {
+      "apollo@head": [
+        690369,
+        664681,
+        670653
+      ],
+      "rs@head": [
+        732368,
+        900122,
+        843475
+      ]
+    },
+    "read cold with 0 args": {
+      "apollo@head": [
+        974390,
+        998625,
+        996352
+      ],
+      "rs@head": [
+        1562910,
+        1341897,
+        1388413
+      ]
+    },
+    "write with 2 args": {
+      "apollo@head": [
+        525421,
+        531012,
+        806887
+      ],
+      "rs@head": [
+        876096,
+        809683,
+        526995
+      ]
+    },
+    "read cold with 2 args": {
+      "apollo@head": [
+        910571,
+        959432,
+        941208
+      ],
+      "rs@head": [
+        931881,
+        941589,
+        952149
+      ]
+    },
+    "write with 8 args": {
+      "apollo@head": [
+        477742,
+        483553,
+        499954
+      ],
+      "rs@head": [
+        473695,
+        483122,
+        482341
+      ]
+    },
+    "read cold with 8 args": {
+      "apollo@head": [
+        1020196,
+        1021438,
+        1011069
+      ],
+      "rs@head": [
+        1019004,
+        1010768,
+        1059560
+      ]
+    },
+    "write with 24 args": {
+      "apollo@head": [
+        619067,
+        627041,
+        627562
+      ],
+      "rs@head": [
+        620339,
+        623665,
+        630157
+      ]
+    },
+    "read cold with 24 args": {
+      "apollo@head": [
+        1006350,
+        969732,
+        983568
+      ],
+      "rs@head": [
+        971505,
+        988036,
+        974631
+      ]
+    },
+    "write nested arg depth=1": {
+      "apollo@head": [
+        56546,
+        89337,
+        76172
+      ],
+      "rs@head": [
+        83145,
+        80992,
+        78085
+      ]
+    },
+    "write nested arg depth=1, fresh vars": {
+      "apollo@head": [
+        79117,
+        87072,
+        47288
+      ],
+      "rs@head": [
+        48240,
+        47960,
+        87493
+      ]
+    },
+    "write nested arg depth=8": {
+      "apollo@head": [
+        65673,
+        61385,
+        63759
+      ],
+      "rs@head": [
+        62628,
+        107481,
+        107421
+      ]
+    },
+    "write nested arg depth=8, fresh vars": {
+      "apollo@head": [
+        60052,
+        60313,
+        52939
+      ],
+      "rs@head": [
+        60263,
+        56966,
+        60263
+      ]
+    },
+    "write nested arg depth=32": {
+      "apollo@head": [
+        184514,
+        151954,
+        153106
+      ],
+      "rs@head": [
+        136805,
+        158817,
+        140532
+      ]
+    },
+    "write nested arg depth=32, fresh vars": {
+      "apollo@head": [
+        108302,
+        101059,
+        108001
+      ],
+      "rs@head": [
+        112100,
+        191117,
+        107080
+      ]
+    },
+    "write nested arg depth=128": {
+      "apollo@head": [
+        341428,
+        309278,
+        356847
+      ],
+      "rs@head": [
+        311642,
+        271778,
+        319877
+      ]
+    },
+    "write nested arg depth=128, fresh vars": {
+      "apollo@head": [
+        261659,
+        304669,
+        252531
+      ],
+      "rs@head": [
+        246309,
+        248113,
+        291655
+      ]
+    },
+    "write default (__typename + id)": {
+      "rs@head": [
+        46278521,
+        46145224,
+        45559532
+      ],
+      "apollo@head": [
+        44873015,
+        45314718,
+        46644258
+      ]
+    },
+    "rewrite identical default (__typename + id)": {
+      "rs@head": [
+        42277577,
+        42568662,
+        43778595
+      ],
+      "apollo@head": [
+        43691927,
+        41383810,
+        42430768
+      ]
+    },
+    "write keyFields: ['isbn']": {
+      "rs@head": [
+        46227517,
+        45282612,
+        46512221
+      ],
+      "apollo@head": [
+        46194350,
+        44664759,
+        45940313
+      ]
+    },
+    "rewrite identical keyFields: ['isbn']": {
+      "rs@head": [
+        45618458,
+        45805220,
+        46071968
+      ],
+      "apollo@head": [
+        45137586,
+        45034559,
+        45489812
+      ]
+    },
+    "write keyFields: ['isbn', 'title']": {
+      "rs@head": [
+        48597002,
+        49017749,
+        50070839
+      ],
+      "apollo@head": [
+        48860961,
+        47876948,
+        49322221
+      ]
+    },
+    "rewrite identical keyFields: ['isbn', 'title']": {
+      "rs@head": [
+        48624845,
+        47821595,
+        48781972
+      ],
+      "apollo@head": [
+        47613561,
+        47308853,
+        47909543
+      ]
+    },
+    "write keyFields: isbn + author.name": {
+      "rs@head": [
+        50344086,
+        50096255,
+        50674367
+      ],
+      "apollo@head": [
+        51045156,
+        49583731,
+        51251806
+      ]
+    },
+    "rewrite identical keyFields: isbn + author.name": {
+      "rs@head": [
+        48907980,
+        49724982,
+        50954530
+      ],
+      "apollo@head": [
+        49310095,
+        49085741,
+        50398642
+      ]
+    },
+    "write keyFields: false (embedded)": {
+      "rs@head": [
+        35388537,
+        35335533,
+        35926219
+      ],
+      "apollo@head": [
+        35055026,
+        35544278,
+        36002310
+      ]
+    },
+    "rewrite identical keyFields: false (embedded)": {
+      "rs@head": [
+        38277742,
+        38477893,
+        38988015
+      ],
+      "apollo@head": [
+        38556809,
+        38503627,
+        39288539
+      ]
+    },
+    "evict 1 of 1000": {
+      "apollo@head": [
+        26699,
+        37720,
+        33072
+      ],
+      "rs@head": [
+        32190,
+        34715,
+        36018
+      ]
+    },
+    "evict 1 field of 1000": {
+      "apollo@head": [
+        18344,
+        24065,
+        25468
+      ],
+      "rs@head": [
+        22101,
+        18775,
+        21650
+      ]
+    },
+    "gc with nothing to collect (1000)": {
+      "apollo@head": [
+        1243683,
+        1226572,
+        1246378
+      ],
+      "rs@head": [
+        1094925,
+        1160127,
+        1066733
+      ]
+    },
+    "gc again with nothing to collect (1000)": {
+      "apollo@head": [
+        190545,
+        206205,
+        179996
+      ],
+      "rs@head": [
+        179826,
+        183793,
+        182311
+      ]
+    },
+    "gc after unreachable 1000": {
+      "apollo@head": [
+        5627480,
+        5579332,
+        5579433
+      ],
+      "rs@head": [
+        5412480,
+        5534258,
+        5383136
+      ]
+    },
+    "extract 1000": {
+      "apollo@head": [
+        288309,
+        287767,
+        292687
+      ],
+      "rs@head": [
+        294160,
+        296104,
+        287316
+      ]
+    },
+    "restore 1000": {
+      "apollo@head": [
+        2587002,
+        2895179,
+        2940172
+      ],
+      "rs@head": [
+        2871233,
+        2662323,
+        2722857
+      ]
+    },
+    "write for restore comparison 1000": {
+      "apollo@head": [
+        14311981,
+        14469681,
+        14614579
+      ],
+      "rs@head": [
+        13818751,
+        14548275,
+        14012327
+      ]
+    },
+    "evict 1 of 5000": {
+      "apollo@head": [
+        26860,
+        28644,
+        29324
+      ],
+      "rs@head": [
+        27451,
+        27932,
+        28463
+      ]
+    },
+    "evict 1 field of 5000": {
+      "apollo@head": [
+        25808,
+        28153,
+        29485
+      ],
+      "rs@head": [
+        28714,
+        27682,
+        29546
+      ]
+    },
+    "gc with nothing to collect (5000)": {
+      "apollo@head": [
+        7900217,
+        7851337,
+        7888245
+      ],
+      "rs@head": [
+        7759894,
+        8027034,
+        7912051
+      ]
+    },
+    "gc again with nothing to collect (5000)": {
+      "apollo@head": [
+        4806318,
+        4863685,
+        4873904
+      ],
+      "rs@head": [
+        4752005,
+        4912847,
+        4817941
+      ]
+    },
+    "gc after unreachable 5000": {
+      "apollo@head": [
+        29274592,
+        29536453,
+        27951032
+      ],
+      "rs@head": [
+        28816139,
+        29066625,
+        28774617
+      ]
+    },
+    "extract 5000": {
+      "apollo@head": [
+        1897044,
+        1858051,
+        1883539
+      ],
+      "rs@head": [
+        1840216,
+        1890362,
+        1831902
+      ]
+    },
+    "restore 5000": {
+      "apollo@head": [
+        12471726,
+        12492195,
+        11945283
+      ],
+      "rs@head": [
+        12121069,
+        12347755,
+        12025327
+      ]
+    },
+    "write for restore comparison 5000": {
+      "apollo@head": [
+        68407138,
+        68200638,
+        67520466
+      ],
+      "rs@head": [
+        68718071,
+        67253485,
+        69131179
+      ]
+    },
+    "evict 1 of 20000": {
+      "apollo@head": [
+        27562,
+        28623,
+        28052
+      ],
+      "rs@head": [
+        28854,
+        28413,
+        28924
+      ]
+    },
+    "evict 1 field of 20000": {
+      "apollo@head": [
+        30447,
+        31168,
+        25628
+      ],
+      "rs@head": [
+        27261,
+        30577,
+        32751
+      ]
+    },
+    "gc with nothing to collect (20000)": {
+      "apollo@head": [
+        36575139,
+        36211193,
+        36379097
+      ],
+      "rs@head": [
+        36646722,
+        38352439,
+        36388025
+      ]
+    },
+    "gc again with nothing to collect (20000)": {
+      "apollo@head": [
+        22831075,
+        23182379,
+        23010524
+      ],
+      "rs@head": [
+        22656570,
+        23699073,
+        22749677
+      ]
+    },
+    "gc after unreachable 20000": {
+      "apollo@head": [
+        131000628,
+        128362168,
+        131082010
+      ],
+      "rs@head": [
+        130082587,
+        133126522,
+        129452078
+      ]
+    },
+    "extract 20000": {
+      "apollo@head": [
+        8781022,
+        8495839,
+        8646782
+      ],
+      "rs@head": [
+        8329474,
+        8578164,
+        8679292
+      ]
+    },
+    "restore 20000": {
+      "apollo@head": [
+        55940371,
+        53889187,
+        54720979
+      ],
+      "rs@head": [
+        54480787,
+        54700508,
+        55184147
+      ]
+    },
+    "write for restore comparison 20000": {
+      "apollo@head": [
+        285443306,
+        296278426,
+        286537392
+      ],
+      "rs@head": [
+        282021524,
+        284958921,
+        298241221
+      ]
+    },
+    "read warm, resultCaching on (N=5000)": {
+      "rs@head": [
+        9068,
+        9387,
+        10510
+      ],
+      "apollo@head": [
+        9729,
+        10469,
+        9958
+      ]
+    },
+    "read warm, resultCaching off (N=5000)": {
+      "rs@head": [
+        41585999,
+        40885863,
+        43300575
+      ],
+      "apollo@head": [
+        40819681,
+        40970769,
+        42091123
+      ]
+    },
+    "write, resultCaching on (N=5000)": {
+      "rs@head": [
+        72865380,
+        72375464,
+        75718412
+      ],
+      "apollo@head": [
+        71721438,
+        73971781,
+        75726712
+      ]
+    },
+    "write, resultCaching off (N=5000)": {
+      "rs@head": [
+        61061475,
+        61531448,
+        65255953
+      ],
+      "apollo@head": [
+        60098489,
+        62505678,
+        63402209
+      ]
+    },
+    "prod-build write N=5000": {
+      "apollo@head": [
+        72823037,
+        73270005,
+        77263992
+      ],
+      "rs@head": [
+        71852279,
+        73876953,
+        73175859
+      ]
+    },
+    "prod-build read cold N=5000": {
+      "apollo@head": [
+        115448797,
+        126107564,
+        129134109
+      ],
+      "rs@head": [
+        115478459,
+        121733319,
+        123189556
+      ]
+    },
+    "dev-build write N=5000": {
+      "apollo@head": [
+        77610937,
+        80364467,
+        80463287
+      ],
+      "rs@head": [
+        81383947,
+        80000298,
+        83255377
+      ]
+    },
+    "dev-build read cold N=5000": {
+      "apollo@head": [
+        140483830,
+        148655954,
+        150937074
+      ],
+      "rs@head": [
+        143600039,
+        148904858,
+        146718482
+      ]
+    }
+  }
+}

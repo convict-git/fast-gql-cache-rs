@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fast-gql-cache-rs benchmarks</title>
+<!-- Generated from scripts/bench/trend.html by scripts/bench/history.mjs. -->
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --grid: #d1d9e0;
+    --line: #0969da; --ref: #9a6700; --card: #f6f8fa;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --grid: #30363d;
+            --line: #4493f8; --ref: #d29922; --card: #151b23; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 0 0 16px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0 24px; }
+  .stat { background: var(--card); border-radius: 8px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 0.85rem; }
+  label { display: block; margin-bottom: 8px; color: var(--muted); }
+  select { max-width: 100%; font: inherit; padding: 4px 6px; background: var(--card); color: var(--fg); border: 1px solid var(--grid); border-radius: 6px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .grid { stroke: var(--grid); }
+  .ref { stroke: var(--ref); stroke-dasharray: 4 4; }
+  .series { fill: none; stroke: var(--line); stroke-width: 2; }
+  .dot { fill: var(--line); }
+  .empty { padding: 32px; text-align: center; background: var(--card); border-radius: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>fast-gql-cache-rs benchmarks</h1>
+  <p>InMemoryCacheRs ÷ Apollo's InMemoryCache, measured in the same nightly job on <code>main</code>.
+     Below 1.00× means InMemoryCacheRs is faster. The ratio does not depend on the runner machine.</p>
+  <div class="stats" id="stats"></div>
+  <label>Measurement
+    <select id="measurement"><option value="">All measurements (geometric mean)</option></select>
+  </label>
+  <div id="chart"></div>
+</main>
+<script>
+(async () => {
+  const chart = document.getElementById("chart");
+  let runs;
+  try {
+    const text = await (await fetch("history.jsonl", { cache: "no-store" })).text();
+    runs = text.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  } catch {
+    runs = [];
+  }
+  if (!runs.length) {
+    chart.innerHTML = '<div class="empty">No runs recorded yet.</div>';
+    return;
+  }
+
+  const latest = runs.at(-1);
+  const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+  document.getElementById("stats").innerHTML = [
+    stat(`${latest.geomeanVsApollo.toFixed(2)}×`, "Rs ÷ Apollo, latest"),
+    stat(`${(latest.wasmBytes / 1024).toFixed(1)} KiB`, "WASM size, latest"),
+    stat(runs.length, "runs recorded"),
+    stat(latest.sha.slice(0, 7), `latest commit, ${latest.date.slice(0, 10)}`),
+  ].join("");
+
+  const select = document.getElementById("measurement");
+  for (const label of Object.keys(latest.measurements)) {
+    select.add(new Option(label, label));
+  }
+
+  const svgNs = "http://www.w3.org/2000/svg";
+  const el = (name, attrs, text) => {
+    const node = document.createElementNS(svgNs, name);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  function draw(label) {
+    const points = runs
+      .map((r) => {
+        const m = label ? r.measurements[label] : null;
+        return { run: r, value: label ? (m ? m.rs / m.apollo : null) : r.geomeanVsApollo };
+      })
+      .filter((p) => p.value !== null);
+    // Drawn at the container's pixel width, so labels stay 11px on any screen.
+    const W = Math.max(280, chart.clientWidth);
+    const H = Math.round(Math.min(360, Math.max(220, W * 0.45)));
+    const L = 48, R = 12, T = 16, B = 36;
+    const values = points.map((p) => p.value).concat(1);
+    let lo = Math.min(...values), hi = Math.max(...values);
+    const pad = Math.max((hi - lo) * 0.1, 0.05);
+    lo -= pad; hi += pad;
+    const x = (i) => L + (points.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (points.length - 1));
+    const y = (v) => T + ((hi - v) * (H - T - B)) / (hi - lo);
+
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+      "aria-label": `Rs ÷ Apollo over ${points.length} runs` });
+    for (let i = 0; i <= 4; i++) {
+      const v = lo + ((hi - lo) * i) / 4;
+      svg.append(el("line", { class: "grid", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+      svg.append(el("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }, `${v.toFixed(2)}×`));
+    }
+    svg.append(el("line", { class: "ref", x1: L, x2: W - R, y1: y(1), y2: y(1) }));
+    svg.append(el("path", { class: "series",
+      d: points.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.value)}`).join("") }));
+    const every = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(W / 90))));
+    points.forEach((p, i) => {
+      const dot = el("circle", { class: "dot", cx: x(i), cy: y(p.value), r: 3.5 });
+      dot.append(el("title", {}, `${p.run.date.slice(0, 10)} ${p.run.sha.slice(0, 7)}: ${p.value.toFixed(3)}×`));
+      svg.append(dot);
+      const last = i === points.length - 1;
+      // Skip a periodic label that would crowd the last one; the last is right-aligned.
+      if (last || (i % every === 0 && points.length - 1 - i >= every / 2)) {
+        svg.append(el("text", { x: x(i), y: H - 12, "text-anchor": last ? "end" : "middle" },
+          p.run.date.slice(5, 10)));
+      }
+    });
+    chart.replaceChildren(svg);
+  }
+
+  select.addEventListener("change", () => draw(select.value));
+  new ResizeObserver(() => draw(select.value)).observe(chart);
+})();
+</script>
+</body>
+</html>
