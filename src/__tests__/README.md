@@ -2,9 +2,10 @@
 
 These suites are Apollo Client's own `InMemoryCache` tests
 (`apollo-client-sm/src/cache/`, `@apollo/client@4.2.11`), run against
-`InMemoryCacheRs`. They are the compatibility oracle (the client contract and the
-user-authored surface in ADR 0002, `docs/adr/`), so test bodies stay Apollo's: a port
-changes imports and wiring, never assertions.
+`InMemoryCacheRs`. They are the compatibility oracle for tiers 1 and 2 of
+[ADR 0002](../../docs/adr/0002-compatibility-target.md), so test bodies stay Apollo's: a
+port changes imports and wiring, never assertions. A test changes only through an entry
+in the [drift register](../../docs/compatibility.md).
 
 | Here | Apollo's source |
 | --- | --- |
@@ -41,7 +42,8 @@ tests.
 `helpers.ts` exports `StoreReader` and `StoreWriter` subclasses that accept an
 `InMemoryCacheRs`, so suites that drive Apollo's reader and writer directly keep their
 bodies. Its `defaultNormalizedCacheFactory` and `writeQueryToStore` build today's
-`EntityStore`; when Rust-WASM replaces the store (ADR 0001, Phase 2), switching them to
+`EntityStore`; when Rust-WASM replaces the store
+([ADR 0001](../../docs/adr/0001-js-rust-wasm-boundary.md), Phase 2), switching them to
 the Rust store turns `diffAgainstStore`, `readFromStore`, `writeToStore`, `roundtrip`
 and `recordingCache` into its oracle.
 
