@@ -264,8 +264,7 @@ Three rules carry the whole design:
 
 For a configuration that only uses keys and common policies, migrating means changing the
 import and how the policies are written. A policy becomes a descriptor: a plain object
-whose behaviour names are enums the package exports, the way Apollo exports
-`NetworkStatus`.
+whose behaviour names are enums the package exports.
 
 ```diff
   import { ApolloClient } from "@apollo/client";

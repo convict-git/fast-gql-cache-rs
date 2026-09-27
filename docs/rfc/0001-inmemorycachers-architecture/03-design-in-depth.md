@@ -278,8 +278,8 @@ of the Apollo helper or idiom it replaces. The catalogue comes from Apollo's cac
 state-management guides, its pagination helpers, and the 43 `read` and `merge` functions
 in Apollo's own policy tests ([ADR 0004 §2](../../adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary)).
 Each descriptor is a plain object whose behaviour names are exported enums (`ListMerge`,
-`ListRead`, `Connection`, `Dedupe`, `Keep`, `RedirectWhen`, `SortOrder`), the way Apollo
-exports `NetworkStatus`; the enums and the reasons for their shape are in
+`ListRead`, `Connection`, `Dedupe`, `Keep`, `RedirectWhen`, `SortOrder`); the enums and
+the reasons for their shape are in
 [ADR 0004 §2](../../adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary).
 
 **Choosing a merge descriptor**, starting from what your `merge` function does:

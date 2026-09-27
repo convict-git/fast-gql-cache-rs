@@ -132,9 +132,8 @@ default offset, the `keyArgs` parameter).
 
 **Spelling** (decided by the maintainer, 2026-09-28, which settles the former open question
 1). A descriptor is a plain object. Every name in it that selects a behaviour is a member of
-an exported enum, the way Apollo Client exports `NetworkStatus`
-(`core/networkStatus.ts`, re-exported from `@apollo/client`): a TypeScript `enum` with a
-PascalCase name, lowerCamelCase members and a doc comment on each. What belongs to the
+an exported TypeScript `enum`, with a PascalCase name, lowerCamelCase members and a doc
+comment on each. What belongs to the
 application stays a plain value: argument names (`offsetArg`, `limitArg`), field names
 (`path`, `equal`), key specifiers (`by`), type names and default values.
 
@@ -196,7 +195,7 @@ An application imports them next to the cache
 
 - **One enum per key**, named after it, with `list` split in two so TypeScript rejects a
   read mode in a merge.
-- **String values equal to the member names**, where `NetworkStatus` uses numbers. Numbers
+- **String values equal to the member names**, not numbers. Numbers
   would overlap across enums, so a member under the wrong key would silently select another
   behaviour; a string fails validation with an error that names it, and configuration
   dumps stay readable. JavaScript users may write the string; TypeScript users need the
@@ -988,8 +987,7 @@ need their own evidence.
 - **Rust-WASM is a product constraint.** No pure-JS engine is built or measured as an
   alternative.
 - **Descriptors are spelled with exported enums** (2026-09-28): plain objects whose
-  behaviour names are enum members, as Apollo exports `NetworkStatus`
-  ([section 2](#2-the-descriptor-vocabulary)).
+  behaviour names are exported enum members ([section 2](#2-the-descriptor-vocabulary)).
 - **E10 and E11 run before the profile ships** (step 2), and no ported test is converted
   or deleted.
 - **Write-back semantics stay Apollo's** (contract 7, section 5 cases 4 and 5). Writing
@@ -1062,8 +1060,7 @@ Resolved on 2026-09-26:
 
 Resolved on 2026-09-28:
 - descriptor spelling (formerly question 1): plain objects whose behaviour names are
-  exported enums, as Apollo exports `NetworkStatus`
-  ([section 2](#2-the-descriptor-vocabulary)).
+  exported enums ([section 2](#2-the-descriptor-vocabulary)).
 
 None is open.
 

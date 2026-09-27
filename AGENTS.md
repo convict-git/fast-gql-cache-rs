@@ -27,9 +27,8 @@ stating it.
 ## Package boundaries
 
 - **Public export**: `InMemoryCacheRs`, `InMemoryCacheRsConfig`, and the descriptor enums
-  (`ListMerge`, `ListRead`, `Connection`, `Dedupe`, `Keep`, `RedirectWhen`, `SortOrder`),
-  exported the way Apollo exports `NetworkStatus`
-  ([ADR 0004 §2](docs/adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary)).
+  (`ListMerge`, `ListRead`, `Connection`, `Dedupe`, `Keep`, `RedirectWhen`, `SortOrder`;
+  [ADR 0004 §2](docs/adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary)).
   WASM bindings and other classes stay internal.
 - **Apollo version**: `@apollo/client@4.2.11`, both dev dependency and peer dependency.
 - **Config type**: `InMemoryCacheRsConfig` is our own interface, not an extension of
