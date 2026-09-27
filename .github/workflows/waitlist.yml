@@ -43,7 +43,8 @@ jobs:
         run: |
           count=$(gh api "repos/$REPO/issues/$WAITLIST_ISSUE" --jq '.reactions["+1"]')
           jq -n --arg count "$count" \
-            '{schemaVersion: 1, label: "waitlist", message: $count, color: "blue"}' \
+            '{schemaVersion: 1, label: "join the waitlist", message: "\($count) waiting",
+              color: "2563eb", style: "for-the-badge"}' \
             > badges/waitlist.json
           cat badges/waitlist.json
 

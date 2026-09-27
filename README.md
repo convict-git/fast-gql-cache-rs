@@ -1,8 +1,8 @@
 # fast-gql-cache-rs
 
 [![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
-[![Sponsors](https://img.shields.io/github/sponsors/convict-git?label=sponsors)](https://github.com/sponsors/convict-git)
-[![CI](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml)
+[![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/convict-git)
+[![CI](https://img.shields.io/github/actions/workflow/status/convict-git/fast-gql-cache-rs/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml)
 
 **Apollo Client's normalized cache, with the engine rebuilt in Rust and compiled to
 WebAssembly.**
@@ -435,7 +435,7 @@ correctness.
 
 - **Join the waitlist.** React with a thumbs-up on the [waitlist issue](https://github.com/convict-git/fast-gql-cache-rs/issues/18), and
   subscribe to it if you'd like a notification when the first release ships. The badge at
-  the top counts the thumbs-ups.
+  the top counts them.
 - **Sponsor the work.** [GitHub Sponsors](https://github.com/sponsors/convict-git) helps fund the time it takes to build the
   engine and prove it against Apollo's own tests.
 - **Help shape it.** See [How can I help?](#faq) in the FAQ.
