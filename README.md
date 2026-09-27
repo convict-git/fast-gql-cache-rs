@@ -1,4 +1,16 @@
-# fast-gql-cache-rs
+<h1 align="center">
+  <a href="https://rustacean.net"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/ferris.svg" alt="Ferris the crab" height="29"></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.apollographql.com/docs/react/"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/apollo-wordmark-white.svg"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/apollo-wordmark.svg" alt="Apollo Client" height="29"></picture></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.rust-lang.org"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/rust-logo-white-outline.svg"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/rust-logo.svg" alt="Rust" height="36"></picture></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://webassembly.org"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/webassembly-icon.svg" alt="WebAssembly" height="31"></a>
+  <br>
+  fast-gql-cache-rs 🦀
+</h1>
+
+<div align="center">
 
 [![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fdnd-data%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/convict-git)
@@ -7,11 +19,23 @@
 **Apollo Client's normalized cache, with the engine rebuilt in Rust and compiled to
 WebAssembly.**
 
+</div>
+
 `InMemoryCacheRs` is a replacement for Apollo Client's
 [`InMemoryCache`](https://www.apollographql.com/docs/react/caching/overview), built for
 applications that write a lot: polling dashboards, live feeds, subscriptions, big lists
-that refresh every few seconds. You swap one constructor. `ApolloClient`, your hooks and
-your queries don't change. The goal is that every write gives the main thread back sooner.
+that refresh every few seconds. It moves the cache's work into a Rust engine compiled to
+WebAssembly, with the goal that every write gives the main thread back sooner.
+
+**Same `ApolloClient`. Same hooks. Same queries. You swap one constructor:**
+
+```diff
+- const cache = new InMemoryCache({ typePolicies });
++ const cache = new InMemoryCacheRs({ typePolicies });
+```
+
+***(Policies have to be declarative: key arrays and named merge behaviours instead of
+custom functions. See [the trade](#the-trade).)***
 
 > **Start with the design:
 > [RFC 0001: The architecture of `InMemoryCacheRs`](docs/rfc/0001-inmemorycachers-architecture/README.md).**
@@ -411,11 +435,18 @@ oracle.
 </details>
 
 <details>
-<summary><b>Is this an official Apollo project?</b></summary>
+<summary><b>Is this an official Apollo, Rust or WebAssembly project?</b></summary>
 
 No. It is an independent open-source project, not affiliated with or endorsed by Apollo
-Graph, Inc. It builds on Apollo Client and uses Apollo's test suite as its measure of
-correctness.
+Graph, Inc., the Rust Foundation or the W3C WebAssembly Community Group. It builds on
+Apollo Client and uses Apollo's test suite as its measure of correctness.
+
+The logos at the top belong to their owners and appear only to say what the project is
+built from: the Apollo wordmark (recoloured white for dark themes), the Rust logo by the
+Rust Foundation under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), and the
+WebAssembly logo and Ferris the crab, both dedicated to the public domain under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/). Sources are listed on the
+[`dnd-data/assets`](https://github.com/convict-git/fast-gql-cache-rs/tree/dnd-data/assets#logos) branch.
 
 </details>
 
@@ -508,3 +539,20 @@ npm test
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same steps.
+
+## License
+
+- **Code** (everything that is not documentation, including the npm package and the Rust
+  crate): dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your
+  option. This is the convention across the Rust ecosystem.
+- **Documentation** (this README's prose, `docs/` and its diagrams):
+  [CC-BY 4.0](LICENSE-CC-BY). Reuse it anywhere, with credit to fast-gql-cache-rs and a
+  link back. Code samples in the documentation are also available under the code licenses,
+  so you can paste them without attribution overhead.
+- **Third-party material**: code adapted from Apollo Client stays under Apollo's MIT
+  license, and the logos belong to their owners. See
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Unless you say otherwise, any contribution you submit is licensed the same way as the file
+it changes: code under MIT OR Apache-2.0, documentation under CC-BY 4.0, with no
+additional terms.
