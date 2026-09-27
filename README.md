@@ -1,5 +1,9 @@
 # fast-gql-cache-rs
 
+[![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
+[![Sponsors](https://img.shields.io/github/sponsors/convict-git?label=sponsors)](https://github.com/sponsors/convict-git)
+[![CI](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml)
+
 **Apollo Client's normalized cache, with the engine rebuilt in Rust and compiled to
 WebAssembly.**
 
@@ -35,6 +39,9 @@ renders it and moves on, you can close this tab and go ship something. We won't 
   instead of custom `read`/`merge` functions;
 - **or you're curious** how far Rust and WebAssembly can push a cache that has to stay
   synchronous.
+
+**Want it when it ships?** [Join the waitlist](https://github.com/convict-git/fast-gql-cache-rs/issues/18): one thumbs-up, no sign-up.
+**Want it sooner?** [Sponsor the work](https://github.com/sponsors/convict-git).
 
 ## Wait, isn't a cache just a `Map`?
 
@@ -300,7 +307,7 @@ The gates for each step are in
 
 No. The package doesn't work outside this repository yet: it depends on a development-only
 patch of `@apollo/client`, and its WebAssembly initialization isn't built. Nothing ships
-for production use before v2. Star or watch the repository if you'd like to know when it
+for production use before v2. [Join the waitlist](https://github.com/convict-git/fast-gql-cache-rs/issues/18) if you'd like to know when it
 does.
 
 </details>
@@ -415,14 +422,23 @@ correctness.
 
 - Read [RFC 0001](docs/rfc/0001-inmemorycachers-architecture/README.md) and weigh in on its
   [open questions](docs/rfc/0001-inmemorycachers-architecture/04-getting-there.md#23-open-questions).
-- Have a write-heavy workload? Open an issue describing its shape: payload sizes, polling
-  rate, how many watchers. The synthetic workload is frozen before the engine is built, so
-  real shapes are most useful now.
+- Have a write-heavy workload? Describe its shape in a comment on the
+  [waitlist issue](https://github.com/convict-git/fast-gql-cache-rs/issues/18): payload sizes, polling rate, how many watchers. The synthetic
+  workload is frozen before the engine is built, so real shapes are most useful now.
 - Check your cache configuration against
   [Unsupported features](docs/compatibility.md#unsupported-features) and tell us what
   would block you.
 
 </details>
+
+## Support the project
+
+- **Join the waitlist.** React with a thumbs-up on the [waitlist issue](https://github.com/convict-git/fast-gql-cache-rs/issues/18), and
+  subscribe to it if you'd like a notification when the first release ships. The badge at
+  the top counts the thumbs-ups.
+- **Sponsor the work.** [GitHub Sponsors](https://github.com/sponsors/convict-git) helps fund the time it takes to build the
+  engine and prove it against Apollo's own tests.
+- **Help shape it.** See [How can I help?](#faq) in the FAQ.
 
 ## Go deeper: the research
 
