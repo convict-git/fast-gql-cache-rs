@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" width="800" height="380" role="img" aria-labelledby="memory-title memory-desc" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title id="memory-title">Memory: InMemoryCacheRs vs InMemoryCache</title>
+<desc id="memory-desc">InMemoryCache ÷ InMemoryCacheRs, nightly on main; higher is smaller. All memory: 1.00× (44 measurements); Retained: 1.00× (35 measurements); Allocated: 1.00× (9 measurements), as of 2026-09-27.</desc>
+<rect x="0.5" y="0.5" width="799" height="379" rx="6" fill="#0d1117" stroke="#3d444d"/>
+<text x="24" y="34" font-size="16" font-weight="600" fill="#f0f6fc">Memory: InMemoryCacheRs vs InMemoryCache</text>
+<text x="24" y="56" font-size="12" fill="#9198a1">How many times smaller than InMemoryCache: geometric mean of the probe's memory measurements, nightly on main.</text>
+<line x1="24" y1="80" x2="42" y2="80" stroke="#3987e5" stroke-width="3" stroke-linecap="round"/>
+<text x="50" y="84" font-size="12" fill="#9198a1">All memory <tspan font-weight="600" fill="#f0f6fc">1.00×</tspan></text>
+<line x1="274.7" y1="80" x2="292.7" y2="80" stroke="#d95926" stroke-width="3" stroke-linecap="round"/>
+<text x="300.7" y="84" font-size="12" fill="#9198a1">Retained <tspan font-weight="600" fill="#f0f6fc">1.00×</tspan></text>
+<line x1="525.3" y1="80" x2="543.3" y2="80" stroke="#199e70" stroke-width="3" stroke-linecap="round"/>
+<text x="551.3" y="84" font-size="12" fill="#9198a1">Allocated <tspan font-weight="600" fill="#f0f6fc">1.00×</tspan></text>
+<line x1="56" y1="313.8" x2="650" y2="313.8" stroke="#21262d" stroke-width="1"/>
+<text x="48" y="317.8" font-size="11" text-anchor="end" fill="#9198a1" style="font-variant-numeric: tabular-nums">0.5×</text>
+<line x1="56" y1="256" x2="650" y2="256" stroke="#21262d" stroke-width="1"/>
+<text x="48" y="260" font-size="11" text-anchor="end" fill="#9198a1" style="font-variant-numeric: tabular-nums">0.75×</text>
+<text x="48" y="219" font-size="11" text-anchor="end" fill="#9198a1" style="font-variant-numeric: tabular-nums">1×</text>
+<line x1="56" y1="157.2" x2="650" y2="157.2" stroke="#21262d" stroke-width="1"/>
+<text x="48" y="161.2" font-size="11" text-anchor="end" fill="#9198a1" style="font-variant-numeric: tabular-nums">1.5×</text>
+<text x="48" y="120.2" font-size="11" text-anchor="end" fill="#9198a1" style="font-variant-numeric: tabular-nums">2×</text>
+<line x1="56" y1="116.2" x2="650" y2="116.2" stroke="#656c76" stroke-width="1"/>
+<text x="660" y="120.2" font-size="11" fill="#9198a1">goal: 2× smaller</text>
+<line x1="56" y1="215" x2="650" y2="215" stroke="#656c76" stroke-width="1.5"/>
+<text x="660" y="219" font-size="11" fill="#9198a1">InMemoryCache</text>
+<text x="353" y="352" font-size="11" text-anchor="middle" fill="#9198a1">2026-09-27</text>
+<text x="353" y="368" font-size="11" text-anchor="middle" fill="#9198a1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">e4d30a4</text>
+<circle cx="353" cy="215.1" r="4" fill="#199e70" stroke="#0d1117" stroke-width="2"><title>Allocated, 2026-09-27 e4d30a4: 1.00× (9 measurements)</title></circle>
+<circle cx="353" cy="215.3" r="4" fill="#d95926" stroke="#0d1117" stroke-width="2"><title>Retained, 2026-09-27 e4d30a4: 1.00× (35 measurements)</title></circle>
+<circle cx="353" cy="215.2" r="4" fill="#3987e5" stroke="#0d1117" stroke-width="2"><title>All memory, 2026-09-27 e4d30a4: 1.00× (44 measurements)</title></circle>
+</svg>
