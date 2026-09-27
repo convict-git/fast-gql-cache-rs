@@ -4,9 +4,9 @@ status: accepted
 
 > **Amended by [ADR 0004](0004-declarative-policies-rust-engine.md).** Tier 2 holds for
 > the declarative profile; configuration outside it is unsupported, not drift, and is
-> listed in [Unsupported features](../unsupported.md). Tier 2's "`cache.policies`' public
-> methods" narrows to `addTypePolicies`, `addPossibleTypes`, `identify` and
-> `fragmentMatches`. Tiers 1 and 3 and the drift rules are unchanged.
+> listed in [Unsupported features](../compatibility.md#unsupported-features). Tier 2's
+> "`cache.policies`' public methods" narrows to `addTypePolicies`, `addPossibleTypes`,
+> `identify` and `fragmentMatches`. Tiers 1 and 3 and the drift rules are unchanged.
 
 # Compatibility target: close to `InMemoryCache`, not byte-identical
 
@@ -71,9 +71,9 @@ fields. Nothing in Apollo Client's API or production code depends on it. That is
 1. It is tier 3. Moving anything out of tiers 1–2 needs the maintainer.
 2. It buys something measured (benchmark or probe numbers in the PR) or removes real
    complexity from the Rust core.
-3. It is recorded in [the drift register](../compatibility.md) in the same PR, with the
-   old and new behaviour, the reason, a migration note for users, and the tests and probe
-   lines that now pin the new behaviour.
+3. It is recorded in [the drift register](../compatibility.md#behaviour-drift) in the same
+   PR, with the old and new behaviour, the reason, a migration note for users, and the
+   tests and probe lines that now pin the new behaviour.
 4. The oracle stays Apollo's `InMemoryCache`: `npm test` and `npm run probe:parity` pass
    except for registered drifts. The parity check will compare against Apollo with the
    register's exceptions applied, never against a re-recorded baseline of our own output.

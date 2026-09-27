@@ -150,7 +150,7 @@ amendment, and AGENTS.md carries it.
 | `-0`/`0` and `NaN` rewrites | F10 |
 | a warm re-read returns `===` list items (the list memo hits) | F8 |
 | a nested write inside a merge function; a merge function that throws after earlier entities were merged | contract 6, F6 |
-| development console output, byte for byte except [registered drifts](../compatibility.md) | `npm run probe:parity`, ADR 0002 |
+| development console output, byte for byte except [registered drifts](../compatibility.md#behaviour-drift) | `npm run probe:parity`, ADR 0002 |
 
 **Measurements**, from the performance probe (`docs/probes/cache-performance-probe.mjs`) at
 N = 5 000, against Apollo's baselines [performance §1.3]: write cold 83.41 ms, write of an

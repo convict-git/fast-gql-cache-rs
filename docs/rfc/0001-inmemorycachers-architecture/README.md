@@ -419,15 +419,16 @@ stays close to `InMemoryCache`
 
 | A good fit | A poor fit, and the reason |
 | --- | --- |
-| polling dashboards and boards like the example | `read` functions that compute or transform values ([U1](../../unsupported.md#u1-read-functions)) |
-| subscriptions and live feeds that rewrite overlapping data | `merge` functions the descriptor catalogue cannot express ([U2](../../unsupported.md#u2-merge-functions)) |
-| large normalized lists, refreshed often | `keyFields`/`keyArgs` functions, `dataIdFromObject` ([U3](../../unsupported.md#u3-keyfields-and-keyargs-functions), [U4](../../unsupported.md#u4-dataidfromobject)) |
-| many components watching overlapping data | reactive variables read inside type policies ([U5](../../unsupported.md#u5-reactive-variables-read-by-the-cache)) |
-| servers that build a cache per request and must get the memory back | runtimes without WebAssembly, or a CSP without `'wasm-unsafe-eval'` ([U9](../../unsupported.md#u9-runtimes-without-webassembly)–[U11](../../unsupported.md#u11-content-security-policies-without-wasm-unsafe-eval)) |
-| | code that reaches into `InMemoryCache` internals or tests `instanceof InMemoryCache` ([U12](../../unsupported.md#u12-instanceof-inmemorycache)–[U14](../../unsupported.md#u14-cachepolicies-beyond-four-methods)) |
+| polling dashboards and boards like the example | `read` functions that compute or transform values ([U1](../../compatibility.md#u1-read-functions)) |
+| subscriptions and live feeds that rewrite overlapping data | `merge` functions the descriptor catalogue cannot express ([U2](../../compatibility.md#u2-merge-functions)) |
+| large normalized lists, refreshed often | `keyFields`/`keyArgs` functions, `dataIdFromObject` ([U3](../../compatibility.md#u3-keyfields-and-keyargs-functions), [U4](../../compatibility.md#u4-dataidfromobject)) |
+| many components watching overlapping data | reactive variables read inside type policies ([U5](../../compatibility.md#u5-reactive-variables-read-by-the-cache)) |
+| servers that build a cache per request and must get the memory back | runtimes without WebAssembly, or a CSP without `'wasm-unsafe-eval'` ([U9](../../compatibility.md#u9-runtimes-without-webassembly)–[U11](../../compatibility.md#u11-content-security-policies-without-wasm-unsafe-eval)) |
+| | code that reaches into `InMemoryCache` internals or tests `instanceof InMemoryCache` ([U12](../../compatibility.md#u12-instanceof-inmemorycache)–[U14](../../compatibility.md#u14-cachepolicies-beyond-four-methods)) |
 
 An application in the right column should keep `InMemoryCache`. That is by design, and
-[Unsupported features](../../unsupported.md) says so before anyone migrates.
+[Unsupported features](../../compatibility.md#unsupported-features) says so before anyone
+migrates.
 
 ## 3. The proposal in one picture
 
@@ -539,7 +540,7 @@ Where each part of Apollo's cache goes:
 | `CacheGroup` dependencies, `maybeBroadcastWatch` | the dependency index and the watch registry ([§12](03-design-in-depth.md#12-invalidation-and-broadcast)) | Rust |
 | policy `storage` | stays, because modifiers receive it | JS |
 | `transformDocument`, the fragment registry | unchanged | JS |
-| `makeVar` | unchanged for `useReactiveVar`; the cache no longer reads variables ([U5](../../unsupported.md#u5-reactive-variables-read-by-the-cache)) | JS |
+| `makeVar` | unchanged for `useReactiveVar`; the cache no longer reads variables ([U5](../../compatibility.md#u5-reactive-variables-read-by-the-cache)) | JS |
 
 ### 3.2 The trade
 

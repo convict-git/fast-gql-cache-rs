@@ -44,9 +44,9 @@ value cache holds them ([ADR 0004, consequences](../../adr/0004-declarative-poli
 layers, `NaN` treated as unchanged, looser development-warning text and order, any stable
 `extract()` key order ([drift register, candidates](../../compatibility.md#candidates)).
 
-**For adopters**, [Unsupported features](../../unsupported.md) lists what the profile leaves out,
-how an application notices, and what to use instead. A migration guide expands on it at
-step 2.
+**For adopters**, [Unsupported features](../../compatibility.md#unsupported-features)
+lists what the profile leaves out, how an application notices, and what to use instead. A
+migration guide expands on it at step 2.
 
 ## 18. How correctness is proved
 
@@ -322,8 +322,8 @@ This project's terms. Apollo's (`dataId`, `storeFieldName`, `Reference`, layer,
 | what each of its paths costs, and why | the [performance guide](../../performance/README.md) |
 | Apollo's invariants, which this design keeps | [architecture §9.1](../../architecture/09-invariants-and-checklist.md#91-the-invariants) |
 | the facts and experiments behind the boundary | [ADR 0001, established facts](../../adr/0001-js-rust-wasm-boundary.md#established-facts) and [evidence](../../adr/0001-js-rust-wasm-boundary.md#evidence) |
-| what adopters give up, and what they use instead | [Unsupported features](../../unsupported.md) |
-| where the cache deliberately differs | the [drift register](../../compatibility.md) |
+| what adopters give up, and what they use instead | [Unsupported features](../../compatibility.md#unsupported-features) |
+| where the cache deliberately differs | the [drift register](../../compatibility.md#behaviour-drift) |
 | how performance is measured and compared | [benchmarking.md](../../benchmarking.md) |
 | how the ported tests are kept honest | [src/__tests__/README.md](../../../src/__tests__/README.md) |
 

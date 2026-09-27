@@ -172,11 +172,11 @@ While a write is in `Encoding` or `Comparing`:
 
 Apollo's production build would have committed the entities before the throw (W1 says its
 phase 2 is not atomic). Committing nothing is a registered tier-3 drift
-([drift register](../../compatibility.md#decided-registered-when-implemented)), pinned by the
-case that reaches it with supported data: a JSON blob nested about 10 000 levels deep, on
-which `equal()` overflows the stack. Values with getters, Proxies or custom coercion are
-unsupported, documented and not detected, because detecting them would run their traps
-([U8](../../unsupported.md#u8-written-values-that-are-not-plain-data)).
+([drift register](../../compatibility.md#decided-registered-when-implemented)), pinned by
+the case that reaches it with supported data: a JSON blob nested about 10 000 levels deep,
+on which `equal()` overflows the stack. Values with getters, Proxies or custom coercion
+are unsupported, documented and not detected, because detecting them would run their traps
+([U8](../../compatibility.md#u8-written-values-that-are-not-plain-data)).
 
 ### 6.4 What crosses the boundary
 
@@ -1228,8 +1228,9 @@ flowchart LR
   the application already ships Apollo's formatting functions, and a Rust copy would add
   bytes to the module.
 - **A Content Security Policy must allow `'wasm-unsafe-eval'`**
-  ([U11](../../unsupported.md#u11-content-security-policies-without-wasm-unsafe-eval)), and runtimes
-  without WebAssembly keep `InMemoryCache` ([U9](../../unsupported.md#u9-runtimes-without-webassembly)).
+  ([U11](../../compatibility.md#u11-content-security-policies-without-wasm-unsafe-eval)),
+  and runtimes without WebAssembly keep `InMemoryCache`
+  ([U9](../../compatibility.md#u9-runtimes-without-webassembly)).
 - **No public initializer.** If the bundled bytes prove too costly, the escape hatch is a
   static `InMemoryCacheRs.init(source)`, never a new export.
 - **Not implemented yet.** Today the published entry imports the web-target glue and nothing

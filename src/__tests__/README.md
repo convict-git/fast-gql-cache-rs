@@ -5,8 +5,8 @@ These suites are Apollo Client's own `InMemoryCache` tests
 `InMemoryCacheRs`. They are the compatibility oracle for tiers 1 and 2 of
 [ADR 0002](../../docs/adr/0002-compatibility-target.md), so test bodies stay Apollo's: a
 port changes imports and wiring, never assertions. An assertion changes only through an
-entry in the [drift register](../../docs/compatibility.md), and every changed or new test
-is [annotated](#annotating-a-changed-or-new-test).
+entry in the [drift register](../../docs/compatibility.md#behaviour-drift), and every
+changed or new test is [annotated](#annotating-a-changed-or-new-test).
 
 | Here | Apollo's source |
 | --- | --- |
@@ -59,7 +59,7 @@ it("runs nested merge functions as well as ancestors (descriptors)", function ()
 | `fast-gql-cache-rs:` | the kind: **`implementation`** (the setup or wiring changed, every assertion is Apollo's), **`behaviour`** (an assertion changed: what the cache does differs from `InMemoryCache`) or **`new`** (no Apollo original) |
 | `from:` | Apollo's file, test name and line at `@apollo/client@4.2.11`, for `implementation` and `behaviour`; for `new`, the invariant, ADR or finding the test pins |
 | `changed:` | what differs from the original, concretely |
-| `behaviour:` | `unchanged` for `implementation`. For `behaviour`, the old and the new behaviour, and the [drift register](../../docs/compatibility.md) entry that records it; a behaviour change without an entry is not allowed |
+| `behaviour:` | `unchanged` for `implementation`. For `behaviour`, the old and the new behaviour, and the [drift register](../../docs/compatibility.md#behaviour-drift) entry that records it; a behaviour change without an entry is not allowed |
 
 Keep Apollo's original test next to a changed copy whenever it still runs, so the oracle
 never shrinks to our own expectations. A configuration the cache rejects is not deleted:

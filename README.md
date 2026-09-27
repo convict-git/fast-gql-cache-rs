@@ -215,7 +215,7 @@ Three rules carry the whole design:
 | --- | --- |
 | custom `read` and `merge` functions, replaced by named descriptors that cover Apollo's pagination helpers and common idioms | writes at least **2× faster**, with 4× as the aim |
 | `keyFields`/`keyArgs` functions and `dataIdFromObject`, replaced by key arrays | broadcasts to many watchers at least **2× faster** |
-| a few rarely used features ([the full list](docs/unsupported.md)) | at most **half the memory** per watched query |
+| a few rarely used features ([the full list](docs/compatibility.md#unsupported-features)) | at most **half the memory** per watched query |
 | runtimes without WebAssembly | `evict` and `gc()` that actually give memory back, and `cache[Symbol.dispose]()` for caches built per request |
 
 For a configuration that only uses keys and common policies, migrating means changing the
@@ -259,7 +259,8 @@ project is set up so that it cannot quietly drift from Apollo:
   rewritten to make it pass. A green run counts only for tests proven to reach Rust.
 - **Byte-for-byte behaviour checks.** `npm run probe:parity` compares our cache's output
   with Apollo's. Any difference is a bug, or an entry in the
-  [drift register](docs/compatibility.md) with a measured reason and tests that pin it.
+  [drift register](docs/compatibility.md#behaviour-drift) with a measured reason and tests
+  that pin it.
 - **Evidence before engine.** Faster is a hypothesis, not a promise. The two riskiest
   pieces, the encoder and the materializer, are prototyped and measured first, and each
   has a stop condition to meet before any engine work starts.
@@ -268,8 +269,8 @@ project is set up so that it cannot quietly drift from Apollo:
   ([benchmarking](docs/benchmarking.md)).
 - **Decisions are written down.** [ADRs](docs/adr/) record every decision and the evidence
   for it, the [RFC](docs/rfc/0001-inmemorycachers-architecture/README.md) explains how they
-  fit together, and [Unsupported features](docs/unsupported.md) lists what won't work, with
-  a workaround for each, before anyone migrates.
+  fit together, and [Unsupported features](docs/compatibility.md#unsupported-features)
+  lists what won't work, with a workaround for each, before anyone migrates.
 - **No leaks, by contract.** JavaScript's garbage collector can't see WebAssembly memory,
   so every cache owns its Rust allocations and frees them deterministically. A memory check
   that disposal returns the heap to its baseline is a release gate.
@@ -325,10 +326,11 @@ keep the reader and the writer tied to JavaScript. Removing that one capability 
 everything else move to Rust.
 
 First, check whether your policies can be written declaratively.
-[Unsupported features](docs/unsupported.md) lists each function-based feature, with its
-declarative replacement where one exists. If your policies can't be expressed that way,
-this probably isn't the right cache for you, and `InMemoryCache` remains the better
-choice. If you think the need is a genuine one that a new descriptor could cover,
+[Unsupported features](docs/compatibility.md#unsupported-features) lists each
+function-based feature, with its declarative replacement where one exists. If your
+policies can't be expressed that way, this probably isn't the right cache for you, and
+`InMemoryCache` remains the better choice. If you think the need is a genuine one that a
+new descriptor could cover,
 [open an issue](https://github.com/convict-git/fast-gql-cache-rs/issues/new) that
 describes your policy and what it does. The descriptor catalogue grows by amendment, one
 real use case at a time.
@@ -377,7 +379,7 @@ WebAssembly ships inside the package and compiles the first time you create a ca
 CI keeps it within a size budget
 ([ADR 0003](docs/adr/0003-wasm-initialization.md)). This needs a runtime with WebAssembly,
 Chrome 115 or later on the main thread, and `'wasm-unsafe-eval'` in any Content Security
-Policy ([U9–U11](docs/unsupported.md#runtime-environment)).
+Policy ([U9–U11](docs/compatibility.md#runtime-environment)).
 
 </details>
 
@@ -416,8 +418,9 @@ correctness.
 - Have a write-heavy workload? Open an issue describing its shape: payload sizes, polling
   rate, how many watchers. The synthetic workload is frozen before the engine is built, so
   real shapes are most useful now.
-- Check your cache configuration against [Unsupported features](docs/unsupported.md) and
-  tell us what would block you.
+- Check your cache configuration against
+  [Unsupported features](docs/compatibility.md#unsupported-features) and tell us what
+  would block you.
 
 </details>
 

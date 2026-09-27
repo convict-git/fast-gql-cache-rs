@@ -65,14 +65,16 @@ The target is close to `InMemoryCache`, not byte-identical
   `resultCaching: false`, reactive variables consumed by the cache, written values that
   are not passive data, and `cache.policies` beyond `addTypePolicies`, `addPossibleTypes`,
   `identify` and `fragmentMatches`), and anything else we cannot or choose not to support. It is
-  not drift. Each feature goes into [docs/unsupported.md](docs/unsupported.md) in the PR
-  that decides it, as soon as it is decided, because migrating teams read it to weigh the
+  not drift. Each feature goes into the "Unsupported features" part of
+  [docs/compatibility.md](docs/compatibility.md#unsupported-features) in the PR that
+  decides it, as soon as it is decided, because migrating teams read it to weigh the
   effort. An entry states what, how an application notices, and what to use instead; the
   reason goes only in its collapsed **Why** block. The document's last section has the
   rules.
 - **May drift**: incidental behaviour (tier 3 in ADR 0002), one entry at a time, each with
-  a measured reason, a migration note and pinning tests, recorded in
-  [docs/compatibility.md](docs/compatibility.md) in the same PR. Nothing drifts silently.
+  a measured reason, a migration note and pinning tests, recorded in the "Behaviour drift"
+  part of [docs/compatibility.md](docs/compatibility.md#behaviour-drift) in the same PR.
+  Nothing drifts silently.
 
 ## Import rules (production code)
 

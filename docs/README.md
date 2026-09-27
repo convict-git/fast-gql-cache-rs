@@ -11,7 +11,7 @@ two executable probes pin the claims that can be observed or measured.
 | **Performance guide** | What every path *costs*, which data shapes stress it, and what to optimize | [performance/](performance/README.md) |
 | **Probes** | A behaviour oracle (78 assertions), a performance probe and a memory probe | [Probes](#probes) |
 | **RFC 0001: `InMemoryCacheRs` architecture** | The proposed Rust-WASM design, explained level by level, from the idea to its contracts and plan | [rfc/0001](rfc/0001-inmemorycachers-architecture/README.md) |
-| **Migrating** | What `InMemoryCacheRs` does not support, and where it behaves differently | [Unsupported features](unsupported.md), [drift register](compatibility.md) |
+| **Migrating** | What `InMemoryCacheRs` does not support, and where it behaves differently | [Compatibility with `InMemoryCache`](compatibility.md): [unsupported features](compatibility.md#unsupported-features), [behaviour drift](compatibility.md#behaviour-drift) |
 
 ## Reading paths
 
