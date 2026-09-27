@@ -31,6 +31,14 @@ Nothing is released yet; the first release is v2 of
 development build still delegates to Apollo's own implementation and accepts everything
 below. The configuration checks arrive with ADR 0004's step 2.
 
+**Migrating a configuration.** Most function-valued policies have a declarative
+replacement, and the entries below list them. After v1, the **migration skill**, an agent
+skill for coding agents such as Claude Code and Cursor, applies these replacements to your
+`typePolicies` and points to the alternative where there is none
+([ADR 0004, maintainer decisions](adr/0004-declarative-policies-rust-engine.md#maintainer-decisions)).
+If a `read` or `merge` function of yours expresses an idiom other applications share and no
+descriptor fits it, [request a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml).
+
 ### Summary
 
 | # | Feature | Status | Instead |
@@ -81,6 +89,9 @@ For anything else:
 - **local-only `@client` fields** that a `read` function resolved: a `LocalState` resolver;
 - **value transforms** (`new Date(existing)`, `toLowerCase()`): parse in a link or in the
   component.
+
+If yours is a read pattern other applications share and no descriptor covers it yet,
+[request a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml).
 
 The descriptor spelling is not final.
 
@@ -134,7 +145,9 @@ tests for that idiom, so the descriptors lose no semantics.
 | keep the stored value while a version field is unchanged | `{ keepExistingWhen: { equal: [fieldNames] } }` |
 
 For anything else, such as unit conversion, case normalization or summing numbers,
-normalize the data in a link or on the server, or keep that state outside the cache.
+normalize the data in a link or on the server, or keep that state outside the cache. If
+yours is a merge pattern other applications share and no descriptor covers it yet,
+[request a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml).
 
 The descriptor spelling is not final.
 

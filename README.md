@@ -12,6 +12,7 @@
 
 <div align="center">
 
+[![Status: pre-alpha, not released](https://img.shields.io/badge/status-pre--alpha%2C%20not%20released-orange?style=for-the-badge)](#where-we-are)
 [![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fdnd-data%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/convict-git)
 [![CI](https://img.shields.io/github/actions/workflow/status/convict-git/fast-gql-cache-rs/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml)
@@ -37,15 +38,8 @@ WebAssembly, with the goal that every write gives the main thread back sooner.
 ***(Policies have to be declarative: key arrays and named merge behaviours instead of
 custom functions. See [the trade](#the-trade).)***
 
-> **Start with the design:
-> [RFC 0001: The architecture of `InMemoryCacheRs`](docs/rfc/0001-inmemorycachers-architecture/README.md).**
-> Level 1 covers the idea, the trade and one before-and-after picture in about ten
-> minutes. Each later level goes one step deeper, down to the contracts between the parts.
-
-> **Status: pre-alpha, not released.** The TypeScript shell implements Apollo's full
-> cache API and passes Apollo's own `InMemoryCache` test suite. So far that only proves the
-> shell: underneath, it still delegates to Apollo's internals, and the Rust engine is a
-> stub. See [where we are](#where-we-are).
+**Read the design:
+[RFC 0001: The architecture of `InMemoryCacheRs`](docs/rfc/0001-inmemorycachers-architecture/README.md)**
 
 ## You probably don't need this
 
@@ -283,6 +277,11 @@ const client = new ApolloClient({ link, cache }); // unchanged
 A configuration that still contains a function fails loudly: TypeScript rejects it, and the
 constructor throws an error that names every offending path. Nothing half-works.
 
+You won't have to do this rewrite by hand. Once v1 is done, the project ships a
+**migration skill**: an agent skill that coding agents such as Claude Code and Cursor load,
+which rewrites imperative `typePolicies` into declarative ones and, for anything with no
+declarative form, points to the replacement.
+
 ## How we're building it
 
 A cache sits under every screen of an application, so "mostly works" doesn't count. The
@@ -310,6 +309,10 @@ project is set up so that it cannot quietly drift from Apollo:
 
 ## Where we are
 
+**Pre-alpha, not released.** The TypeScript shell implements Apollo's full cache API and
+passes Apollo's own `InMemoryCache` test suite. So far that only proves the shell:
+underneath, it still delegates to Apollo's internals, and the Rust engine is a stub.
+
 - [x] **Phase 1**: the full `ApolloCache` API in TypeScript, delegating to Apollo; the
       ported parity suite; behaviour, performance and memory probes; the benchmark workflow
 - [ ] **0. Evidence**: benchmark fixes, a frozen synthetic workload (polling first)
@@ -318,7 +321,8 @@ project is set up so that it cannot quietly drift from Apollo:
 - [ ] **2. The declarative profile**: types, validation, a migration guide
 - [ ] **3. Vertical slice**: a real `ApolloClient` polling through the Rust engine, measured
       in a browser
-- [ ] **4. v1**: the full engine, passing the full oracle
+- [ ] **4. v1**: the full engine, passing the full oracle, followed by the migration skill
+      that rewrites imperative `typePolicies` into declarative ones
 - [ ] **5. v2, the first release**: no patched Apollo imports, `Symbol.dispose`, a
       clean-install check
 - [ ] **6. Beyond Apollo**: improvements Apollo's model can't make, each measured on its own
@@ -345,8 +349,16 @@ For declarative configurations, that's the goal. What Apollo Client relies on ho
 exactly: the `ApolloCache` contract and synchronous read-your-writes. So does everything
 you write yourself: config shapes, identity, descriptor and modifier semantics, `possibleTypes`,
 and `extract`/`restore` contents. Incidental behaviour may differ, but only one registered
-entry at a time ([ADR 0002](docs/adr/0002-compatibility-target.md)). If your configuration
-uses functions, it isn't a drop-in replacement, and the constructor tells you so.
+entry at a time ([ADR 0002](docs/adr/0002-compatibility-target.md)).
+
+If your configuration uses functions, it needs a migration first, and most functions have
+a declarative form: key arrays instead of `keyFields`/`keyArgs` functions, and named
+descriptors instead of Apollo's pagination helpers and the common `merge` and `read`
+idioms. The constructor names every path that still needs one. After v1, the
+[migration skill](#the-trade) does that rewrite for you. And if a policy of yours has no
+descriptor yet but solves a problem other apps share too,
+[request a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml): the catalogue grows
+one real use case at a time.
 
 </details>
 
@@ -358,15 +370,15 @@ Rust back into JavaScript that often would cost more than the engine saves, and 
 keep the reader and the writer tied to JavaScript. Removing that one capability is what lets
 everything else move to Rust.
 
-First, check whether your policies can be written declaratively.
+Most policies don't need to be functions, though.
 [Unsupported features](docs/compatibility.md#unsupported-features) lists each
-function-based feature, with its declarative replacement where one exists. If your
-policies can't be expressed that way, this probably isn't the right cache for you, and
-`InMemoryCache` remains the better choice. If you think the need is a genuine one that a
-new descriptor could cover,
-[open an issue](https://github.com/convict-git/fast-gql-cache-rs/issues/new) that
-describes your policy and what it does. The descriptor catalogue grows by amendment, one
-real use case at a time.
+function-based feature with its declarative replacement, and after v1 the
+[migration skill](#the-trade) applies those replacements for you. If a policy of yours has
+no replacement yet but expresses a pattern other apps are likely to share,
+[request a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml) that describes the policy and
+what it does. The catalogue grows by amendment, one real use case at a time. What stays
+out is logic that computes values, such as a computed field, and that list gives the
+alternative for each.
 
 </details>
 

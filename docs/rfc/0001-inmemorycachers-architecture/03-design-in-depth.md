@@ -346,7 +346,9 @@ helpers do. A field with both a read and a merge descriptor counts as defining b
 the implicit `keyArgs: false`). A read and a merge descriptor on one field must agree on
 their list mode. A list keeps holes distinct from `null`; after a JSON round trip the holes
 are `null`s. The catalogue grows by amending ADR 0004, one descriptor at a time, each with
-the Apollo tests it mirrors.
+the Apollo tests it mirrors. Adopters propose candidates with a
+[descriptor request](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml); one qualifies when it is an
+idiom other applications share, not one application's logic.
 
 **What stays out** because no closed vocabulary covers it without becoming a programming
 language: computed fields (use an `@client` field with a `LocalState` resolver, or a
@@ -393,6 +395,9 @@ flowchart TB
   reads. It is small, and it changes only through `addPossibleTypes`.
 - The profile, its validation and the migration guide ship at step 2, on top of today's
   delegating cache, so adopters can check their configuration before the engine exists.
+  After v1, the migration skill rewrites imperative `typePolicies` into the profile, from
+  the same catalogue and validation
+  ([ADR 0004, maintainer decisions](../../adr/0004-declarative-policies-rust-engine.md#maintainer-decisions)).
 
 ## 8. Names: entity ids, field keys and interned strings
 

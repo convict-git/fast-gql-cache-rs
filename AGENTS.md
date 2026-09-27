@@ -132,7 +132,8 @@ callbacks) and two bulk codecs; Rust never calls JavaScript.
      fixes thresholds and stop conditions;
   2. the declarative profile: types, validation, migration guide, test inventory;
   3. a vertical slice driven by a real `ApolloClient`, with ADR 0003's initialization;
-  4. the full engine: **v1**, correctness;
+  4. the full engine: **v1**, correctness, followed by the migration skill (an agent
+     skill that rewrites imperative `typePolicies` into declarative ones);
   5. patch removal, `[Symbol.dispose]` and a clean-install check: **v2**, the first
      release;
   6. measured improvements beyond Apollo's model.

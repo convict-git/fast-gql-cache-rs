@@ -426,9 +426,14 @@ stays close to `InMemoryCache`
 | servers that build a cache per request and must get the memory back | runtimes without WebAssembly, or a CSP without `'wasm-unsafe-eval'` ([U9](../../compatibility.md#u9-runtimes-without-webassembly)–[U11](../../compatibility.md#u11-content-security-policies-without-wasm-unsafe-eval)) |
 | | code that reaches into `InMemoryCache` internals or tests `instanceof InMemoryCache` ([U12](../../compatibility.md#u12-instanceof-inmemorycache)–[U14](../../compatibility.md#u14-cachepolicies-beyond-four-methods)) |
 
-An application in the right column should keep `InMemoryCache`. That is by design, and
-[Unsupported features](../../compatibility.md#unsupported-features) says so before anyone
-migrates.
+An application whose policies really need the right column should keep `InMemoryCache`.
+That is by design, and [Unsupported features](../../compatibility.md#unsupported-features)
+says so before anyone migrates. The column is narrower than it looks, though. Most
+function-valued policies have a declarative form: key arrays for `keyFields` and
+`keyArgs`, and descriptors for Apollo's pagination helpers and the common `merge` and
+`read` idioms. After v1, the migration skill rewrites them for you, and an idiom other
+applications share that the catalogue lacks can be requested as a descriptor
+([§3.3](#33-what-an-application-changes)).
 
 ## 3. The proposal in one picture
 
@@ -603,6 +608,14 @@ const client = new ApolloClient({ link, cache }); // unchanged
 A configuration that still contains a function does not half-work: the constructor
 throws, naming every offending path, and TypeScript rejects it at compile time
 ([§7.3](03-design-in-depth.md#73-validation-and-the-policy-table)).
+
+That rewrite doesn't have to be done by hand. After v1, the **migration skill**, an agent
+skill for coding agents such as Claude Code and Cursor, turns imperative `typePolicies`
+like the ones above into their declarative form and points to the replacement for anything
+that has none
+([ADR 0004, maintainer decisions](../../adr/0004-declarative-policies-rust-engine.md#maintainer-decisions)).
+A policy that expresses a shared idiom the catalogue lacks can be
+[requested as a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml).
 
 ### 3.4 Goals and non-goals
 
