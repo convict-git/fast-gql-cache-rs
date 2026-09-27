@@ -10,7 +10,8 @@ two executable probes pin the claims that can be observed or measured.
 | **Architecture guide** | What every path *does*: the store, policies, writer, reader, reactivity, every public method, and the client pipeline around the cache | [architecture/](architecture/README.md) |
 | **Performance guide** | What every path *costs*, which data shapes stress it, and what to optimize | [performance/](performance/README.md) |
 | **Probes** | A behaviour oracle (78 assertions), a performance probe and a memory probe | [Probes](#probes) |
-| **Migrating** | What `InMemoryCacheRs` does not support, and where it behaves differently | [Unsupported features](unsupported.md), [drift register](compatibility.md) |
+| **RFC 0001: `InMemoryCacheRs` architecture** | The proposed Rust-WASM design, explained level by level, from the idea to its contracts and plan | [rfc/0001](rfc/0001-inmemorycachers-architecture/README.md) |
+| **Migrating** | What `InMemoryCacheRs` does not support, and where it behaves differently | [Compatibility with `InMemoryCache`](compatibility.md): [unsupported features](compatibility.md#unsupported-features), [behaviour drift](compatibility.md#behaviour-drift) |
 
 ## Reading paths
 
@@ -27,6 +28,9 @@ Pick the path that matches your goal. Each step is one chapter or section.
 - **Find out why the cache is slow.** Performance [Part 1](performance/01-cost-model.md),
   then [Part 7](performance/07-structural-stress.md), then the decision tree in
   [§9.1](performance/09-optimization-playbook.md#91-decision-tree).
+- **Review the proposed `InMemoryCacheRs` design.** [RFC 0001](rfc/0001-inmemorycachers-architecture/README.md)
+  from Level 1, then the ADRs it links (the decisions of record) in
+  [adr/](adr/).
 - **Re-implement the cache.** Architecture [Part 9](architecture/09-invariants-and-checklist.md)
   (invariants, build order, minimum surface) and the
   [method reference](architecture/07-method-reference.md); the performance

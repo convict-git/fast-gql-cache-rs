@@ -1,0 +1,62 @@
+# Every six hours: counts the thumbs-up reactions on the pinned waitlist issue
+# and publishes the count to the `badges` branch as waitlist.json, a shields.io
+# endpoint badge that the README's waitlist badge reads. Commits only when the
+# count changes. It reads a public count and stores nothing about who reacted.
+name: Waitlist count
+
+on:
+  schedule:
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: waitlist-count
+  cancel-in-progress: false
+
+env:
+  # The pinned "Waitlist: notify me when InMemoryCacheRs ships" issue.
+  WAITLIST_ISSUE: 18
+
+jobs:
+  count:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check out the badges branch
+        run: |
+          if git fetch --depth 1 origin badges:refs/remotes/origin/badges; then
+            git worktree add -B badges badges origin/badges
+          else
+            git worktree add --orphan -b badges badges
+          fi
+
+      - name: Count the waitlist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          count=$(gh api "repos/$REPO/issues/$WAITLIST_ISSUE" --jq '.reactions["+1"]')
+          jq -n --arg count "$count" \
+            '{schemaVersion: 1, label: "join the waitlist", message: "\($count) waiting",
+              color: "2563eb", style: "for-the-badge"}' \
+            > badges/waitlist.json
+          cat badges/waitlist.json
+
+      - name: Publish
+        run: |
+          cd badges
+          git add waitlist.json
+          if git diff --cached --quiet; then
+            echo "The count has not changed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Waitlist: $(jq -r .message waitlist.json)"
+          git push origin HEAD:badges
