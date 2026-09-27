@@ -24,8 +24,18 @@ WebAssembly.**
 `InMemoryCacheRs` is a replacement for Apollo Client's
 [`InMemoryCache`](https://www.apollographql.com/docs/react/caching/overview), built for
 applications that write a lot: polling dashboards, live feeds, subscriptions, big lists
-that refresh every few seconds. You swap one constructor. `ApolloClient`, your hooks and
-your queries don't change. The goal is that every write gives the main thread back sooner.
+that refresh every few seconds. It moves the cache's work into a Rust engine compiled to
+WebAssembly, with the goal that every write gives the main thread back sooner.
+
+**Same `ApolloClient`. Same hooks. Same queries. You swap one constructor:**
+
+```diff
+- const cache = new InMemoryCache({ typePolicies });
++ const cache = new InMemoryCacheRs({ typePolicies });
+```
+
+***(Policies have to be declarative: key arrays and named merge behaviours instead of
+custom functions. See [the trade](#the-trade).)***
 
 > **Start with the design:
 > [RFC 0001: The architecture of `InMemoryCacheRs`](docs/rfc/0001-inmemorycachers-architecture/README.md).**
