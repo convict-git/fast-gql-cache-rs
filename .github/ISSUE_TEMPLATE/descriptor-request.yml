@@ -1,0 +1,41 @@
+name: Descriptor request
+description: A type policy you write as a function today that a declarative descriptor could cover.
+title: "Descriptor request: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `InMemoryCacheRs` accepts declarative type policies only: key arrays, and `merge`/`read` behaviours chosen from a catalogue of named descriptors ([ADR 0004, section 2](https://github.com/convict-git/fast-gql-cache-rs/blob/main/docs/adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary)). The catalogue grows one real use case at a time. If a policy of yours has no descriptor yet and solves a problem other apps are likely to share, describe it here.
+
+        Check [Unsupported features](https://github.com/convict-git/fast-gql-cache-rs/blob/main/docs/compatibility.md#unsupported-features) first: your policy may already have a declarative replacement.
+
+        **Share the shape of your policy and data, never real data.**
+  - type: textarea
+    id: policy
+    attributes:
+      label: The policy today
+      description: The `typePolicies` entry as you write it for `InMemoryCache`. Rename types and fields freely.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What it does
+      description: In words, what the function does with `existing`, `incoming` and `args`, and why your app needs it.
+    validations:
+      required: true
+  - type: textarea
+    id: generic
+    attributes:
+      label: Why other apps would need it too
+      description: Is this a known idiom (a pagination style, an API convention, a pattern from Apollo's docs)? Links help.
+    validations:
+      required: true
+  - type: textarea
+    id: descriptor
+    attributes:
+      label: A descriptor you'd imagine (optional)
+      description: 'For example `merge: { list: "append", dedupeBy: ["id"] }`. Spelling is not final anywhere yet.'
+      render: ts

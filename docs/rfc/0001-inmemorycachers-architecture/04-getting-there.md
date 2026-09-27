@@ -46,7 +46,9 @@ layers, `NaN` treated as unchanged, looser development-warning text and order, a
 
 **For adopters**, [Unsupported features](../../compatibility.md#unsupported-features)
 lists what the profile leaves out, how an application notices, and what to use instead. A
-migration guide expands on it at step 2.
+migration guide expands on it at step 2, and after v1 the migration skill applies it: an
+agent skill that rewrites imperative `typePolicies` into declarative ones
+([ADR 0004, maintainer decisions](../../adr/0004-declarative-policies-rust-engine.md#maintainer-decisions)).
 
 ## 18. How correctness is proved
 
@@ -164,7 +166,7 @@ flowchart TB
     subgraph engine["The engine"]
         direction LR
         S3["<b>3. Vertical slice</b><br/>Root store, writer, reader,<br/>watches, append descriptor,<br/>a real ApolloClient polling,<br/>ADR 0003 initialization"]:::write
-        S4["<b>4. Full engine: v1</b><br/>layers, modify, evict, gc,<br/>extract, restore, the other<br/>descriptors. Then drop Apollo's<br/>store, reader and writer"]:::write
+        S4["<b>4. Full engine: v1</b><br/>layers, modify, evict, gc,<br/>extract, restore, the other<br/>descriptors. Then drop Apollo's<br/>store, reader and writer,<br/>and ship the migration skill"]:::write
         S5["<b>5. Releasable: v2</b><br/>no patched import in production,<br/>Symbol.dispose and its memory<br/>check, clean-install check"]:::dirty
         S6["<b>6. Beyond Apollo</b><br/>shared plans, result memory<br/>bounded by live results,<br/>optimistic set from root content"]:::memo
         S3 --> S4 --> S5 --> S6
@@ -197,7 +199,7 @@ probe.
 | Risk | Why it matters | What contains it |
 | --- | --- | --- |
 | the codecs are too slow | they are the only per-field JavaScript left; if encoding and materializing cost close to Apollo's write, the design loses its point | E10 and E11 run before any engine work, inside real sequences, with stop conditions |
-| the descriptor catalogue does not cover an adopter | that adopter cannot migrate | by design; the catalogue grows by amendment, the error at construction and the migration guide say so up front |
+| the descriptor catalogue does not cover an adopter | that adopter cannot migrate | by design; the error at construction and the migration guide say so up front. The catalogue grows by amendment from [descriptor requests](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml), and after v1 the migration skill rewrites what it covers |
 | two kinds of identity (node ids and JS objects) drift apart | a stale id matching a new node would suppress a callback or skip a write | node ids are never reused; slot and string ids carry generations; differential tests against Apollo |
 | the frontier holds more than Apollo's memo in some shapes | memory would regress where it was meant to shrink | pins plus a byte-bounded LRU; the memory probe; the `WeakRef` variant in reserve |
 | linear memory never shrinks, one instance per realm | a peak stays; a trap stops every cache in the realm | probe checks of the high-water mark; panic-free audit and tests |
@@ -270,6 +272,7 @@ This project's terms. Apollo's (`dataId`, `storeFieldName`, `Reference`, layer,
 | **level** | one store in the chain: the Root, the Stump, or a Layer ([§9.1](03-design-in-depth.md#91-levels-root-stump-and-layers)) |
 | **materializer** | the JS component that turns node records into frozen objects, once per node ([§5.3](02-how-data-moves.md#53-reading-it-back-and-watching-it)) |
 | **memo entry** | a cached read of one plan node over one entity or embedded parent, in one view; it holds one result node ([§11.2](03-design-in-depth.md#112-memo-entries-and-result-nodes)) |
+| **migration skill** | an agent skill, shipped after v1, that rewrites an application's imperative `typePolicies` into the declarative profile ([§17](#17-compatibility)) |
 | **node, node id** | a result node: a record of ids that one memo entry produced. Node ids are never reused |
 | **occurrence** | where a stored value lives (level, entity, field key, version), which keys the values handed to modifiers ([§13.4](03-design-in-depth.md#134-values-handed-to-modifiers)) |
 | **op buffer** | the integer buffer one write crosses the boundary in ([§5.2](02-how-data-moves.md#52-the-first-response-a-cold-write)) |
@@ -291,6 +294,7 @@ This project's terms. Apollo's (`dataId`, `storeFieldName`, `Reference`, layer,
 | --- | --- | --- |
 | the declarative profile | [ADR 0004 §1](../../adr/0004-declarative-policies-rust-engine.md#1-the-declarative-profile) | [§3.3](README.md#33-what-an-application-changes), [§7.1](03-design-in-depth.md#71-what-is-accepted) |
 | the descriptor vocabulary | [ADR 0004 §2](../../adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary) | [§7.2](03-design-in-depth.md#72-descriptors) |
+| the migration skill, after v1 | [ADR 0004, maintainer decisions](../../adr/0004-declarative-policies-rust-engine.md#maintainer-decisions) | [§17](#17-compatibility) |
 | the boundary | [ADR 0004 §3](../../adr/0004-declarative-policies-rust-engine.md#3-the-boundary) | [§3.1](README.md#31-before-and-after), [§6](03-design-in-depth.md#6-components-responsibilities-and-the-boundary) |
 | contract 1, one store | [ADR 0004 §4](../../adr/0004-declarative-policies-rust-engine.md#4-the-contracts) | [§1](README.md#1-summary), [§13.1](03-design-in-depth.md#131-its-three-parts) |
 | contract 2, Rust calls no JavaScript | ADR 0004 §4 | [§6.3](03-design-in-depth.md#63-the-call-discipline-rust-calls-no-javascript), [§10.4](03-design-in-depth.md#104-errors-and-re-entrancy) |

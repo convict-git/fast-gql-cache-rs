@@ -174,7 +174,9 @@ that needs no descriptor.
   holes are `null`s and read as `null` (review, #16). `extract()` emits the holes as holes.
 - The set grows by amending this record, one descriptor at a time, each with the Apollo
   tests it mirrors. Candidates are logged as adopters report policies the catalogue
-  cannot express.
+  cannot express, through a descriptor request
+  (`.github/ISSUE_TEMPLATE/descriptor-request.yml`); a candidate qualifies when it is an
+  idiom other applications share, not one application's logic.
 
 **What stays out, and where it goes instead.** These policies compute or transform values
 with arbitrary code, and no closed vocabulary covers them without becoming a programming
@@ -787,6 +789,8 @@ for production use before v2.
    `probe:parity`, in both builds. Guideposts: no performance measurement slower than
    Apollo's beyond noise, no memory measurement larger, and every memory check passing.
    Then remove the imports of `EntityStore`, `Policies`, `StoreReader` and `StoreWriter`.
+   Once v1 is done, the migration skill follows
+   ([maintainer decisions](#maintainer-decisions)).
 5. **Releasable: v2.**
    - Production code imports no symbol that `patches/@apollo+client+4.2.11.patch`
      exports, and the patch leaves the production path. Vendoring the Apollo modules is
@@ -857,7 +861,10 @@ it is for now (maintainer).
 - The engine is larger than ADR 0001's V0. Formatting, documents and user code stay in JS,
   partly to keep the `.wasm` inside ADR 0003's budget.
 - Some adopters cannot migrate, and that is by design. The guide states it up front, and
-  the error at construction states it again.
+  the error at construction states it again. Fewer are left out than the rejected shapes
+  suggest: most function-valued policies have a declarative form, the migration skill
+  rewrites them after v1, and an idiom the catalogue lacks can be requested as a
+  descriptor.
 - `extract()` becomes a materialization, `O(S · F)` against Apollo's `O(S)` shallow copy,
   and `restore()` stops adopting the caller's objects by reference (tier 3). SSR hydration
   pays this once per page.
@@ -924,6 +931,15 @@ need their own evidence.
   which step 4 removes. `fragmentMatches` ignores Apollo's `result` and `variables`
   arguments, which only feed fuzzy matching. This narrows ADR 0002's tier-2 row
   "`cache.policies`' public methods" to these four.
+- **A migration skill follows v1** (2026-09-28). Once v1 is done, the project ships an
+  agent skill (a `SKILL.md` that coding agents such as Claude Code and Cursor load) that
+  rewrites an application's imperative `typePolicies` into the declarative profile:
+  `keyFields`/`keyArgs` functions into specifier arrays, Apollo's pagination helpers and
+  the `merge` and `read` idioms the catalogue covers into descriptors, and, for a shape
+  with no declarative form, the replacement that
+  [Unsupported features](../compatibility.md#unsupported-features) gives. It works from
+  the same catalogue and the same validation as the constructor, so it waits for v1,
+  once step 4 has added the remaining descriptors. The migration guide of step 2 stays the reference it follows.
 
 ### What the review changed
 
