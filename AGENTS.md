@@ -146,13 +146,16 @@ callbacks) and two bulk codecs; Rust never calls JavaScript.
 
 ## Data branches
 
-A **data branch** holds data a workflow writes, not code, and its name starts with
-`dnd-data/` ("do not delete"): `dnd-data/benchmarks` is the nightly history
-(`benchmark-history.yml`), and `dnd-data/badges` backs the README's waitlist badge
-(`waitlist.yml`). Only its workflow changes a data branch, by appending commits. Leave data
-branches out of branch clean-ups, rebases, force-pushes, renames and PRs: deleting one
-breaks the README badge or loses the benchmark history. A new branch of this kind goes
-under `dnd-data/`.
+A **data branch** holds data or assets that are not code, kept off `main`, and its name
+starts with `dnd-data/` ("do not delete"): `dnd-data/benchmarks` is the nightly history
+(`benchmark-history.yml`), `dnd-data/badges` backs the README's waitlist badge
+(`waitlist.yml`), and `dnd-data/assets` holds the logos and other static files the README
+and docs load by `raw.githubusercontent.com` URL. A workflow's branch changes only through
+that workflow; `dnd-data/assets` changes by hand. Either way a data branch only gains
+commits. Leave data branches out of branch clean-ups, rebases, force-pushes, renames and
+PRs: deleting or rewriting one breaks the README's images and badge, in past versions too,
+or loses the benchmark history. A new branch of this kind goes under `dnd-data/`, and a
+new README or docs image goes on `dnd-data/assets`, not on `main`.
 
 ## Skills
 

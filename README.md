@@ -1,4 +1,16 @@
-# fast-gql-cache-rs
+<h1 align="center">
+  <a href="https://rustacean.net"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/ferris.svg" alt="Ferris the crab" height="29"></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.apollographql.com/docs/react/"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/apollo-wordmark-white.svg"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/apollo-wordmark.svg" alt="Apollo Client" height="29"></picture></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.rust-lang.org"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/rust-logo-white-outline.svg"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/rust-logo.svg" alt="Rust" height="36"></picture></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://webassembly.org"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/assets/logos/webassembly-icon.svg" alt="WebAssembly" height="31"></a>
+  <br>
+  fast-gql-cache-rs 🦀
+</h1>
+
+<div align="center">
 
 [![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fdnd-data%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/convict-git)
@@ -6,6 +18,8 @@
 
 **Apollo Client's normalized cache, with the engine rebuilt in Rust and compiled to
 WebAssembly.**
+
+</div>
 
 `InMemoryCacheRs` is a replacement for Apollo Client's
 [`InMemoryCache`](https://www.apollographql.com/docs/react/caching/overview), built for
@@ -411,11 +425,18 @@ oracle.
 </details>
 
 <details>
-<summary><b>Is this an official Apollo project?</b></summary>
+<summary><b>Is this an official Apollo, Rust or WebAssembly project?</b></summary>
 
 No. It is an independent open-source project, not affiliated with or endorsed by Apollo
-Graph, Inc. It builds on Apollo Client and uses Apollo's test suite as its measure of
-correctness.
+Graph, Inc., the Rust Foundation or the W3C WebAssembly Community Group. It builds on
+Apollo Client and uses Apollo's test suite as its measure of correctness.
+
+The logos at the top belong to their owners and appear only to say what the project is
+built from: the Apollo wordmark (recoloured white for dark themes), the Rust logo by the
+Rust Foundation under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/), and the
+WebAssembly logo and Ferris the crab, both dedicated to the public domain under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/). Sources are listed on the
+[`dnd-data/assets`](https://github.com/convict-git/fast-gql-cache-rs/tree/dnd-data/assets#logos) branch.
 
 </details>
 
