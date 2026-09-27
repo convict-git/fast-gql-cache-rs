@@ -45,6 +45,8 @@ renders it and moves on, you can close this tab and go ship something. We won't 
 
 ## Wait, isn't a cache just a `Map`?
 
+*Already know Apollo Client's cache? [Skip to where it hurts](#where-it-hurts).*
+
 Not this one. If you haven't used Apollo Client: it is one of the most popular GraphQL
 clients for React, and `InMemoryCache` is the part that holds your data. Calling it a cache
 undersells it. It is a **reactive, normalized database that runs in the browser**:
