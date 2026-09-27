@@ -269,89 +269,86 @@ whose behaviour names are enums the package exports.
 ```diff
   import { ApolloClient } from "@apollo/client";
 - import { InMemoryCache } from "@apollo/client";
-- import { offsetLimitPagination } from "@apollo/client/utilities";
-+ import { InMemoryCacheRs, ListMerge } from "fast-gql-cache-rs";
+- import {
+-   concatPagination,
+-   offsetLimitPagination,
+-   relayStylePagination,
+- } from "@apollo/client/utilities";
++ import {
++   Connection,
++   InMemoryCacheRs,
++   Keep,
++   ListMerge,
++   RedirectWhen,
++ } from "fast-gql-cache-rs";
 
 - const cache = new InMemoryCache({
 + const cache = new InMemoryCacheRs({
     typePolicies: {
       Query: {
         fields: {
+          // Offset pagination: offsetLimitPagination()
 -         activity: offsetLimitPagination(["ticketId"]),
 +         activity: { keyArgs: ["ticketId"], merge: { list: ListMerge.offset } },
+
+          // Infinite scroll: concatPagination()
+-         feed: concatPagination(),
++         feed: { merge: { list: ListMerge.append } },
+
+          // Newest first: a list that grows at the top
+          notifications: {
+-           merge(existing = [], incoming) {
+-             return [...incoming, ...existing];
+-           },
++           merge: { list: ListMerge.prepend },
+          },
+
+          // Relay connections: relayStylePagination()
+-         tickets: relayStylePagination(["status"]),
++         tickets: {
++           keyArgs: ["status"],
++           read: { connection: Connection.relay },
++           merge: { connection: Connection.relay },
++         },
+
+          // A cache redirect: ticket(id: "T1") finds a ticket another query loaded
+          ticket: {
+-           read(existing, { args, toReference }) {
+-             return existing ?? toReference({ __typename: "Ticket", id: args?.id });
+-           },
++           read: {
++             redirect: { typename: "Ticket", keyArgs: { id: "id" } },
++             when: RedirectWhen.missing,
++           },
+          },
+        },
+      },
+      User: {
+        fields: {
+          // A default for a field the server may leave out
+          role: {
+-           read(existing = "viewer") {
+-             return existing;
+-           },
++           read: { default: "viewer" },
+          },
+        },
+      },
+      Ticket: {
+        fields: {
+          // First write wins: a value that must not change once stored
+          createdAt: {
+-           merge(existing, incoming) {
+-             return existing ?? incoming;
+-           },
++           merge: { keep: Keep.existing },
+          },
         },
       },
     },
   });
 
   const client = new ApolloClient({ link, cache }); // unchanged
-```
-
-The other common policies, field by field:
-
-**Infinite scroll**, `concatPagination()`:
-
-```diff
-- feed: concatPagination(),
-+ feed: { merge: { list: ListMerge.append } },
-```
-
-**Newest first**, a notification list that grows at the top:
-
-```diff
-  notifications: {
--   merge(existing = [], incoming) {
--     return [...incoming, ...existing];
--   },
-+   merge: { list: ListMerge.prepend },
-  },
-```
-
-**Relay connections**, `relayStylePagination()`:
-
-```diff
-- tickets: relayStylePagination(["status"]),
-+ tickets: {
-+   keyArgs: ["status"],
-+   read: { connection: Connection.relay },
-+   merge: { connection: Connection.relay },
-+ },
-```
-
-**A cache redirect**, so `ticket(id: "T1")` finds a ticket another query already loaded:
-
-```diff
-  ticket: {
--   read(existing, { args, toReference }) {
--     return existing ?? toReference({ __typename: "Ticket", id: args?.id });
--   },
-+   read: {
-+     redirect: { typename: "Ticket", keyArgs: { id: "id" } },
-+     when: RedirectWhen.missing,
-+   },
-  },
-```
-
-**A default** for a field the server may leave out:
-
-```diff
-  role: {
--   read(existing = "viewer") {
--     return existing;
--   },
-+   read: { default: "viewer" },
-  },
-```
-
-**First write wins**, a value that must not change once stored:
-
-```diff
-  createdAt: {
--   merge(existing, incoming) {
--     return existing ?? incoming;
--   },
-+   merge: { keep: Keep.existing },
-  },
 ```
 
 [Unsupported features](docs/compatibility.md#unsupported-features) has the whole catalogue,
