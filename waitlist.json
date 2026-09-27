@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
-  "label": "waitlist",
-  "message": "0",
-  "color": "blue"
+  "label": "join the waitlist",
+  "message": "0 waiting",
+  "color": "2563eb",
+  "style": "for-the-badge"
 }
