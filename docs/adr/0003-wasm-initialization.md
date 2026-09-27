@@ -41,7 +41,7 @@ the public surface.
 - **No public initializer for now.** If the bundled bytes prove too costly (A8 measures
   the gzipped size), the escape hatch is a static `InMemoryCacheRs.init(source)` that
   fetches or compiles the `.wasm` asynchronously ahead of time. It is a static method, so
-  the public exports stay `InMemoryCacheRs` and `InMemoryCacheRsConfig`.
+  initialization adds no export.
 
 ## Considered options
 

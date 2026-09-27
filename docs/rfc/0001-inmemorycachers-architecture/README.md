@@ -561,7 +561,8 @@ Where each part of Apollo's cache goes:
 ### 3.3 What an application changes
 
 For a configuration that uses only keys and the common policies, the change is the import
-and the policy spelling. The support board, before and after:
+and the policy spelling: descriptors, whose behaviour names are enums imported from the
+package. The support board, before and after:
 
 ```ts
 // Before: InMemoryCache
@@ -585,17 +586,20 @@ const cache = new InMemoryCache({
 ```
 
 ```ts
-// After: InMemoryCacheRs (descriptor spelling not final, open question 1)
+// After: InMemoryCacheRs
 import { ApolloClient } from "@apollo/client";
-import { InMemoryCacheRs } from "fast-gql-cache-rs";
+import { InMemoryCacheRs, ListMerge, RedirectWhen } from "fast-gql-cache-rs";
 
 const cache = new InMemoryCacheRs({
   typePolicies: {
     Query: {
       fields: {
-        activity: { keyArgs: ["ticketId"], merge: { list: "offset" } },
+        activity: { keyArgs: ["ticketId"], merge: { list: ListMerge.offset } },
         ticket: {
-          read: { redirect: { typename: "Ticket", keyArgs: { id: "id" } }, when: "missing" },
+          read: {
+            redirect: { typename: "Ticket", keyArgs: { id: "id" } },
+            when: RedirectWhen.missing,
+          },
         },
       },
     },

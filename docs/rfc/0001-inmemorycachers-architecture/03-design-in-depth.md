@@ -277,7 +277,10 @@ A descriptor names a behaviour that the cache implements in Rust, with the exact
 of the Apollo helper or idiom it replaces. The catalogue comes from Apollo's caching and
 state-management guides, its pagination helpers, and the 43 `read` and `merge` functions
 in Apollo's own policy tests ([ADR 0004 §2](../../adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary)).
-The spelling is not settled ([Q1](04-getting-there.md#23-open-questions)); the semantics are.
+Each descriptor is a plain object whose behaviour names are exported enums (`ListMerge`,
+`ListRead`, `Connection`, `Dedupe`, `Keep`, `RedirectWhen`, `SortOrder`); the enums and
+the reasons for their shape are in
+[ADR 0004 §2](../../adr/0004-declarative-policies-rust-engine.md#2-the-descriptor-vocabulary).
 
 **Choosing a merge descriptor**, starting from what your `merge` function does:
 
@@ -293,16 +296,16 @@ flowchart TB
 
     D1["false: replace, no warning<br/>(with no merge policy at all, the<br/>default replaces and may warn)"]:::write
     D2["true"]:::write
-    D4["keep: existing"]:::write
+    D4["keep: Keep.existing"]:::write
     D5["keepExistingWhen: equal: fields"]:::write
     D6["not expressible: LocalState resolver,<br/>a link, or the component"]:::dirty
 
     P1{"how is the page placed?"}:::api
-    L1["list: append<br/>concatPagination"]:::write
-    L2["list: prepend<br/>newest first"]:::write
-    L3["list: offset<br/>offsetLimitPagination"]:::write
-    L4["connection: relay<br/>relayStylePagination"]:::write
-    X1["add dedupe: ref, or dedupe by a key"]:::memo
+    L1["list: ListMerge.append<br/>concatPagination"]:::write
+    L2["list: ListMerge.prepend<br/>newest first"]:::write
+    L3["list: ListMerge.offset<br/>offsetLimitPagination"]:::write
+    L4["connection: Connection.relay<br/>relayStylePagination"]:::write
+    X1["add dedupe: Dedupe.ref,<br/>or dedupe by a key"]:::memo
     X2["add path when the list sits<br/>inside a wrapper object"]:::memo
 
     Q --> R1 --> D1
@@ -325,21 +328,21 @@ flowchart TB
 | Merge descriptor | Replaces |
 | --- | --- |
 | `true` / `false` | `merge: true` (`mergeObjects`) / `merge: false` (replace, no data-loss warning) |
-| `{ list: "append" }`, `{ list: "prepend" }` | `concatPagination()`, `[...existing, ...incoming]`, and the newest-first form |
-| `{ list: …, dedupe: "ref" }`, `{ list: …, dedupe: { by: KeySpecifier } }` | appending only references, or only items with a key, not already present |
-| `{ list: "offset", offsetArg? }` | `offsetLimitPagination()`: splice at `args[offsetArg]`, leaving holes before it; append when there are no `args` |
+| `{ list: ListMerge.append }`, `{ list: ListMerge.prepend }` | `concatPagination()`, `[...existing, ...incoming]`, and the newest-first form |
+| `{ list: …, dedupe: Dedupe.ref }`, `{ list: …, dedupe: { by: KeySpecifier } }` | appending only references, or only items with a key, not already present |
+| `{ list: ListMerge.offset, offsetArg? }` | `offsetLimitPagination()`: splice at `args[offsetArg]`, leaving holes before it; append when there are no `args` |
 | `{ …a list descriptor, path: "items" }` | a list inside a wrapper object |
-| `{ connection: "relay" }` | `relayStylePagination()`, read and merge together |
-| `{ keep: "existing" }` | first write wins: `existing ?? incoming` |
+| `{ connection: Connection.relay }` | `relayStylePagination()`, read and merge together |
+| `{ keep: Keep.existing }` | first write wins: `existing ?? incoming` |
 | `{ keepExistingWhen: { equal: [fieldNames] } }` | the version guard of [Apollo performance §7.4](../../research/performance/07-structural-stress.md#74-the-untyped-blob-pathology); the one descriptor with no Apollo helper |
 
 | Read descriptor | Replaces |
 | --- | --- |
 | `{ default: <JSON value> }` | `read(existing = value)` |
-| `{ redirect: { typename, keyArgs: { keyField: argName } }, when?: "always" \| "missing" }` | a cache redirect with `toReference`; `"missing"` is the `existing ?? toReference(…)` form |
-| `{ list: "slice", offsetArg?, limitArg? }` | reading one page out of an offset-merged list |
-| `{ list: "sort", by: KeySpecifier, order? }` | sorting a list by a field of its items |
-| `{ connection: "relay" }` | the read half of `relayStylePagination()` |
+| `{ redirect: { typename, keyArgs: { keyField: argName } }, when?: RedirectWhen.always \| RedirectWhen.missing }` | a cache redirect with `toReference`; `RedirectWhen.missing` is the `existing ?? toReference(…)` form |
+| `{ list: ListRead.slice, offsetArg?, limitArg? }` | reading one page out of an offset-merged list |
+| `{ list: ListRead.sort, by: KeySpecifier, order?: SortOrder }` | sorting a list by a field of its items |
+| `{ connection: Connection.relay }` | the read half of `relayStylePagination()` |
 
 **Rules.** Pagination and connection descriptors default `keyArgs` to `false`, as the
 helpers do. A field with both a read and a merge descriptor counts as defining both (for
@@ -462,7 +465,7 @@ flowchart LR
   the arguments are known once the variables are.
 - This split is a prototype candidate that E10 measures, with redirects, composite keys and
   sorting over interned strings as its test cases. Sorting is the awkward one: Rust holds
-  ids, not text, so a `{ list: "sort" }` over string fields needs an order that JS provides.
+  ids, not text, so a `ListRead.sort` over string fields needs an order that JS provides.
 
 ### 8.3 Interned strings
 

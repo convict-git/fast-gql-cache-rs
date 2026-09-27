@@ -131,13 +131,30 @@ From the [Apollo performance guide](docs/research/performance/README.md), for a 
 | --- | --- |
 | read the list, nothing changed | **3.8 µs** |
 | write the list again with **one** entity changed | **72.18 ms** |
+| write the list again with **nothing** changed | 75.95 ms |
 | re-read it after that one field changed | 19.53 ms |
 | notify 200 watchers after a relevant write (2 000 entities) | 95.99 ms |
 | memory kept for a query that is read and watched | **14.8×** the size of the store itself |
 
-At 60 fps, a frame lasts 16.7 ms. A poll that changes one ticket out of 5 000 spends about
-four frames just writing it. A write-heavy application pays on exactly the side Apollo
-cannot memoize.
+**Why milliseconds matter here.** The cache runs on the main thread, the thread that also
+scrolls, animates and handles input. To draw 60 frames a second, the browser has
+**16.7 ms per frame** for all of it, your JavaScript included (8.3 ms on a 120 Hz
+display). While a cache call runs, no frame is drawn and no click is handled. Browsers
+flag any task over 50 ms as a [long task](https://w3c.github.io/longtasks/).
+
+Now take one poll of that list, with one of the 5 000 tickets changed:
+
+1. **The write: 72.18 ms.** One changed field costs about as much as rewriting the whole
+   list unchanged (75.95 ms), because the writer only finds out what changed by comparing
+   every field.
+2. **The re-read by the query that shows the list: 19.53 ms**, against 3.8 µs when
+   nothing changed, because one dirty field invalidates the memoized list.
+
+That is about **92 ms in a single task**, more than five frames at 60 fps, to show one
+changed field, and every poll that brings a change pays it again, however small the
+change. More watchers cost more: a write that 200 watchers see takes 95.99 ms, on a list
+less than half the size. Reads are the side Apollo memoizes, and a write-heavy
+application spends its time on the other side.
 
 *These numbers were measured under Node. Browser measurements come with the vertical
 slice ([§19](docs/rfc/0001-inmemorycachers-architecture/04-getting-there.md#19-performance-and-memory-targets)).*
@@ -246,33 +263,101 @@ Three rules carry the whole design:
 | runtimes without WebAssembly | `evict` and `gc()` that actually give memory back, and `cache[Symbol.dispose]()` for caches built per request |
 
 For a configuration that only uses keys and common policies, migrating means changing the
-import and how the policies are written:
+import and how the policies are written. A policy becomes a descriptor: a plain object
+whose behaviour names are enums the package exports.
 
-```ts
-// Before
-import { InMemoryCache } from "@apollo/client";
-import { offsetLimitPagination } from "@apollo/client/utilities";
+<details>
+<summary><b>Before and after: seven common policies in one configuration</b></summary>
 
-const cache = new InMemoryCache({
-  typePolicies: {
-    Query: { fields: { activity: offsetLimitPagination(["ticketId"]) } },
-  },
-});
+```diff
+  import { ApolloClient } from "@apollo/client";
+- import { InMemoryCache } from "@apollo/client";
+- import {
+-   concatPagination,
+-   offsetLimitPagination,
+-   relayStylePagination,
+- } from "@apollo/client/utilities";
++ import {
++   Connection,
++   InMemoryCacheRs,
++   Keep,
++   ListMerge,
++   RedirectWhen,
++ } from "fast-gql-cache-rs";
+
+- const cache = new InMemoryCache({
++ const cache = new InMemoryCacheRs({
+    typePolicies: {
+      Query: {
+        fields: {
+          // Offset pagination: offsetLimitPagination()
+-         activity: offsetLimitPagination(["ticketId"]),
++         activity: { keyArgs: ["ticketId"], merge: { list: ListMerge.offset } },
+
+          // Infinite scroll: concatPagination()
+-         feed: concatPagination(),
++         feed: { merge: { list: ListMerge.append } },
+
+          // Newest first: a list that grows at the top
+          notifications: {
+-           merge(existing = [], incoming) {
+-             return [...incoming, ...existing];
+-           },
++           merge: { list: ListMerge.prepend },
+          },
+
+          // Relay connections: relayStylePagination()
+-         tickets: relayStylePagination(["status"]),
++         tickets: {
++           keyArgs: ["status"],
++           read: { connection: Connection.relay },
++           merge: { connection: Connection.relay },
++         },
+
+          // A cache redirect: ticket(id: "T1") finds a ticket another query loaded
+          ticket: {
+-           read(existing, { args, toReference }) {
+-             return existing ?? toReference({ __typename: "Ticket", id: args?.id });
+-           },
++           read: {
++             redirect: { typename: "Ticket", keyArgs: { id: "id" } },
++             when: RedirectWhen.missing,
++           },
+          },
+        },
+      },
+      User: {
+        fields: {
+          // A default for a field the server may leave out
+          role: {
+-           read(existing = "viewer") {
+-             return existing;
+-           },
++           read: { default: "viewer" },
+          },
+        },
+      },
+      Ticket: {
+        fields: {
+          // First write wins: a value that must not change once stored
+          createdAt: {
+-           merge(existing, incoming) {
+-             return existing ?? incoming;
+-           },
++           merge: { keep: Keep.existing },
+          },
+        },
+      },
+    },
+  });
+
+  const client = new ApolloClient({ link, cache }); // unchanged
 ```
 
-```ts
-// After (descriptor spelling not final yet)
-import { ApolloClient } from "@apollo/client";
-import { InMemoryCacheRs } from "fast-gql-cache-rs";
+</details>
 
-const cache = new InMemoryCacheRs({
-  typePolicies: {
-    Query: { fields: { activity: { keyArgs: ["ticketId"], merge: { list: "offset" } } } },
-  },
-});
-
-const client = new ApolloClient({ link, cache }); // unchanged
-```
+[Unsupported features](docs/compatibility.md#unsupported-features) has the whole catalogue,
+with the replacement for each kind of function.
 
 A configuration that still contains a function fails loudly: TypeScript rejects it, and the
 constructor throws an error that names every offending path. Nothing half-works.
