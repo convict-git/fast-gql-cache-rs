@@ -76,7 +76,7 @@ flowchart TB
 | --- | --- | --- | --- | --- |
 | `InMemoryCacheRs` | JS | the handle, the disposed flag, policy `storage` | implements every `ApolloCache` method; keeps `evict`, `modify` and `reset` assignable on the instance, because `QueryInfo` wraps them | hold store data |
 | orchestration | JS | `txCount`, the map from `WatchOptions` to watch id, layer ids and their replay functions | runs `batch` in its three modes, the broadcast loop and its gates, and all user code, between Rust calls | call user code while a Rust call is running |
-| documents | JS | a `WeakMap` from `DocumentNode` to plan id, the transform caches | runs `transformDocument` (idempotent, `===`-stable, [§9.3](../../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)) and compiles each document once | parse or print documents on a hot path |
+| documents | JS | a `WeakMap` from `DocumentNode` to plan id, the transform caches | runs `transformDocument` (idempotent, `===`-stable, [§9.3](../../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)) and compiles each document once | parse or print documents on a hot path |
 | profile validation | JS | the compiled key specifiers | validates a whole configuration argument before any of it applies; throws with every offending path | warn and continue |
 | encoder | JS | a reused op buffer | walks a result by its plan, identifies objects, looks up `isFresh`, compares leaf slots with `equal()` | decide merges or dirtying |
 | materializer | JS | node id to frozen object; object to node (a `WeakMap`); the pin set and the LRU | builds objects for new nodes only, freezes each once, caches values for modifiers by occurrence | read the store |
@@ -140,7 +140,7 @@ flowchart LR
 User code that remains is operation-level, and it already runs between cache calls in
 Apollo: modifiers inside `modify`, `update` functions inside `batch`, replay functions when
 a layer is rebuilt, and watch callbacks during a broadcast
-([architecture §6.4](../../architecture/06-reactivity.md#64-batch--the-transactional-api)).
+([Apollo architecture §6.4](../../research/architecture/06-reactivity.md#64-batch--the-transactional-api)).
 
 **The one exception: comparing leaf slots.** A JSON blob or a custom scalar is compared with
 `@wry/equality`'s `equal()` in JavaScript, and `equal()` runs the values' getters, `valueOf`
@@ -331,7 +331,7 @@ flowchart TB
 | `{ …a list descriptor, path: "items" }` | a list inside a wrapper object |
 | `{ connection: "relay" }` | `relayStylePagination()`, read and merge together |
 | `{ keep: "existing" }` | first write wins: `existing ?? incoming` |
-| `{ keepExistingWhen: { equal: [fieldNames] } }` | the version guard of [performance §7.4](../../performance/07-structural-stress.md#74-the-untyped-blob-pathology); the one descriptor with no Apollo helper |
+| `{ keepExistingWhen: { equal: [fieldNames] } }` | the version guard of [Apollo performance §7.4](../../research/performance/07-structural-stress.md#74-the-untyped-blob-pathology); the one descriptor with no Apollo helper |
 
 | Read descriptor | Replaces |
 | --- | --- |
@@ -476,7 +476,7 @@ reused carries a generation, so a stale lookup can never alias a new string
 
 The store keeps Apollo's model: a flat map of entities, a durable `Root`, a permanent
 `Stump`, and optimistic `Layer`s above it
-([architecture Part 2](../../architecture/02-normalized-store.md)). What changes is where it
+([Apollo architecture Part 2](../../research/architecture/02-normalized-store.md)). What changes is where it
 lives and how values are represented.
 
 ### 9.1 Levels: Root, Stump and Layers
@@ -507,7 +507,7 @@ flowchart BT
 - **Two views, two memo sets.** Optimistic reads start at the top level (the `Stump` when
   there is no layer) and root reads at the `Root`. They never share memo entries or result
   objects (L2), because `ObservableQuery` compares the two to avoid network requests during
-  an optimistic update ([§9.3](../../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
+  an optimistic update ([§9.3](../../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
 - **Dirtying follows L5.** An optimistic read depends on its fields in both scopes, so a
   root write dirties root and optimistic readers, and a layer write dirties optimistic
   readers only.
@@ -517,13 +517,13 @@ flowchart BT
   ([drift register](../../compatibility.md#candidates)).
 - **`batch({ optimistic })` keeps its three modes**: a string adds a layer and runs the
   update into it, `false` runs it against the `Root`, and `true` (the default) only batches
-  broadcasts ([architecture §6.4](../../architecture/06-reactivity.md#64-batch--the-transactional-api)).
+  broadcasts ([Apollo architecture §6.4](../../research/architecture/06-reactivity.md#64-batch--the-transactional-api)).
   The shell implements the modes by choosing the write target level for the calls the
   update function makes.
 
 **Removing a layer that is not on top** (**Proposed**). Apollo rebuilds every layer above
 the removed one by calling its replay function again, against the new parent (L4,
-[architecture §2.10](../../architecture/02-normalized-store.md#210-layer-removal-and-replay)).
+[Apollo architecture §2.10](../../research/architecture/02-normalized-store.md#210-layer-removal-and-replay)).
 The replay functions are JS, so the shell drives the rebuild:
 
 ```mermaid
@@ -594,7 +594,7 @@ Everything Rust stores that has structure (lists, references, embedded objects w
 selection set) lives in a **value arena**, interned bottom-up by the ids of its children
 (**hash-consing**). Two equal structures are one value with one id, so comparing a stored
 list with an incoming one is one integer comparison, however long the list
-([performance §9.4](../../performance/09-optimization-playbook.md#94-what-a-rustwasm-re-implementation-should-target), item 1).
+([Apollo performance §9.4](../../research/performance/09-optimization-playbook.md#94-what-a-rustwasm-re-implementation-should-target), item 1).
 
 ```mermaid
 flowchart LR
@@ -640,7 +640,7 @@ loses the written object's identity. They are leaf slots ([§10.3](#103-leaf-slo
 ### 10.1 The pipeline
 
 Each stage keeps one or more of Apollo's write invariants
-([architecture §9.1](../../architecture/09-invariants-and-checklist.md#91-the-invariants),
+([Apollo architecture §9.1](../../research/architecture/09-invariants-and-checklist.md#91-the-invariants),
 Writes).
 
 ```mermaid
@@ -670,7 +670,7 @@ flowchart LR
 
 - **Staging** writes into arenas that the next write reuses, so a write allocates nothing
   per field in steady state (Apollo allocates 18.8 KiB per entity per write, about 97 % of
-  it garbage, [performance §10.3](../../performance/10-memory.md#103-allocation-what-an-operation-throws-away)).
+  it garbage, [Apollo performance §10.3](../../research/performance/10-memory.md#103-allocation-what-an-operation-throws-away)).
 - **Descriptors** see `existing` through the level being written, and `overwrite: true`
   (a refetch with `refetchWritePolicy: "overwrite"`) hands them no `existing`, as Apollo
   hands custom merge functions `undefined` (W5).
@@ -766,11 +766,11 @@ conditions of fragments and the directives that matter, for one transformed
 plan applied to one set of variables and one policy epoch ([§8.2](#82-field-keys-and-bindings)).
 Reads and writes both run over bindings, so the per-field work Apollo repeats on every
 object (`getStoreFieldName`, `getMergeFunction`, `flattenFields`) happens once per binding
-([performance §9.4](../../performance/09-optimization-playbook.md#94-what-a-rustwasm-re-implementation-should-target), item 3).
+([Apollo performance §9.4](../../research/performance/09-optimization-playbook.md#94-what-a-rustwasm-re-implementation-should-target), item 3).
 
 Until step 6, plans are per document object, exactly as Apollo's memo is per
 `SelectionSetNode`. Sharing one plan between separately parsed identical documents removes
-the 128× cliff of [performance §4.5](../../performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity),
+the 128× cliff of [Apollo performance §4.5](../../research/performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity),
 but it is observable: after `addTypePolicies`, Apollo keeps a warmed document's old result
 while a newly parsed identical document reads the new one (review #17). So it needs its own
 oracle case and a register entry.
@@ -851,7 +851,7 @@ and the root get new nodes, and the 4 999 other tickets keep theirs.
 Missing trees (which fields could not be read, and why) are built in Rust from ids, and
 their messages ("Can't find field 'x' on Y object") are formatted in JS by Apollo's own
 code. The reader keeps Apollo's read invariants
-([architecture §9.1](../../architecture/09-invariants-and-checklist.md#91-the-invariants),
+([Apollo architecture §9.1](../../research/architecture/09-invariants-and-checklist.md#91-the-invariants),
 Reads):
 
 - **R4**: a dangling reference in a list is filtered out and the read stays complete; in a
@@ -883,7 +883,7 @@ Apollo's quadratic cost is elsewhere, in the **re-read**. When a child entry reg
 clean under a parent that is only "dirty by a child", `optimism` reports clean to *its*
 parent, and so on to the root; after a leaf change in a chain of `D` entities that is
 exactly `D(D + 1) / 2` reports: 2 080 at `D = 64`
-([performance §3.3](../../performance/03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
+([Apollo performance §3.3](../../research/performance/03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
 The Rust reader has no "dirty by a child" state to report through, so its re-read is
 `O(D)` too. E11 measures the re-read at `D` = 64 to 512, not only the dirtying.
 
@@ -916,7 +916,7 @@ flowchart LR
 ### 12.3 The broadcast loop and its gates
 
 Apollo has three gates between a write and a watch callback
-([architecture §6.2](../../architecture/06-reactivity.md#62-broadcastwatch-and-the-equality-gate)):
+([Apollo architecture §6.2](../../research/architecture/06-reactivity.md#62-broadcastwatch-and-the-equality-gate)):
 the memo gate (the watch's entry is clean), `onWatchUpdated` returning `false`, and the
 equality gate. This design keeps all three, and changes how the first and the last are
 decided.
@@ -957,7 +957,7 @@ flowchart TB
 
 - **Gate 1 visits only dirtied watches.** Apollo's loop visits every registered watch and
   builds a memo key for each (about 2 µs per watch,
-  [performance §4.4](../../performance/04-dependency-graph-and-broadcast.md#44-broadcast-fan-out));
+  [Apollo performance §4.4](../../research/performance/04-dependency-graph-and-broadcast.md#44-broadcast-fan-out));
   here an unrelated write wakes no watch at all.
 - **Gate 3 has a fast half.** The same root node id means the same content, so the callback
   is skipped in `O(1)`. Different ids mean "compare": the gate runs `equal()` on the two
@@ -970,12 +970,12 @@ flowchart TB
   in a `lastDiff` or the `isFresh` map without ever matching a new node.
 - **A cleared `lastDiff` fires the callback**, as in Apollo. `ObservableQuery` clears it on
   purpose for queries with `@client @export` variables or forced resolvers
-  ([architecture §8.2](../../architecture/08-client-pipeline.md#82-observablequery--the-caches-principal-client)).
+  ([Apollo architecture §8.2](../../research/architecture/08-client-pipeline.md#82-observablequery--the-caches-principal-client)).
 
 ### 12.4 `batch`, `onWatchUpdated` and the client's own writes
 
 These are the cross-boundary requirements of
-[architecture §9.3](../../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements),
+[Apollo architecture §9.3](../../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements),
 and they are the shell's job:
 
 - **The `WatchOptions` object passes through by reference**, extension fields included
@@ -986,7 +986,7 @@ and they are the shell's job:
 - **`batch` calls `onWatchUpdated` for every watch its update dirtied**, and only those.
   Apollo finds the watches that were already dirty before the update with a pre-pass that
   reads them with callbacks suppressed, then re-dirties them afterwards
-  ([architecture §6.4](../../architecture/06-reactivity.md#64-batch--the-transactional-api)).
+  ([Apollo architecture §6.4](../../research/architecture/06-reactivity.md#64-batch--the-transactional-api)).
   **Proposed:** with dirty flags in Rust, the pre-pass becomes set operations. Take (and
   clear) the dirty set before the update; after it, broadcast the watches the update
   flagged, calling `onWatchUpdated`; then flag again the watches of the first set that
@@ -1028,10 +1028,10 @@ flowchart LR
   needs it: a write fills slots and strings; a read, `diff` or broadcast materializes only
   the nodes it is about to return that are new. A batch of 100 writes followed by one
   broadcast materializes once, which is the saving `batch` exists for (53× in Apollo's
-  probe, [performance §4.6](../../performance/04-dependency-graph-and-broadcast.md#46-batching)).
+  probe, [Apollo performance §4.6](../../research/performance/04-dependency-graph-and-broadcast.md#46-batching)).
 - **Each object is frozen once**, when it is materialized. Apollo's development build
   re-walks subtrees with `maybeDeepFreeze` on every read
-  ([performance §3.6](../../performance/03-read-path.md#36-the-dev-build-tax)).
+  ([Apollo performance §3.6](../../research/performance/03-read-path.md#36-the-dev-build-tax)).
 - **It is disposable, except the slots.** Dropping a result object costs a
   re-materialization from Rust's nodes, never a re-read of the store and never a wrong
   answer (contract 1). Slots are the store's data, referenced by id, and live as long as

@@ -1,6 +1,10 @@
 # Part 3 — `Policies`
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 2](02-normalized-store.md) · [Part 4 →](04-store-writer.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 2](02-normalized-store.md) · [Part 4 →](04-store-writer.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 `EntityStore` knows how to store things but not *what to call them*. Every naming
 decision — which objects become entities, what their ids are, what key a field is stored
@@ -809,4 +813,4 @@ matches; there is no fallback and no warning.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 2 — The normalized store](02-normalized-store.md) | [Architecture guide](README.md) | [Part 4 — `StoreWriter`](04-store-writer.md) |
+| [Part 2 — The normalized store](02-normalized-store.md) | [Apollo architecture guide](README.md) | [Part 4 — `StoreWriter`](04-store-writer.md) |

@@ -79,9 +79,9 @@ The body:
 - **Cite the ground truth.**
   - Claims about Apollo Client behaviour are checked against `apollo-client-sm/src/`
     ([AGENTS.md](../../AGENTS.md)).
-  - Performance claims cite `docs/performance/` or a measurement.
+  - Performance claims cite `docs/research/performance/` or a measurement.
   - Invariants are cited by id (S1, D3, W1, …) from
-    [architecture §9.1](../architecture/09-invariants-and-checklist.md#91-the-invariants).
+    [Apollo architecture §9.1](../research/architecture/09-invariants-and-checklist.md#91-the-invariants).
 - **End with the ledger change you propose**, if any:
   `Ledger: A1 discussing → agreed ("…")`.
 

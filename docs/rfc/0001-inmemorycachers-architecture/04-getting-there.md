@@ -243,7 +243,7 @@ each names the section it came from.
 | Q4 | **Writes without a plan.** `restore()` and `modify()` of a field that holds nothing yet carry no selection set, so the encoder cannot tell an embedded object from a JSON blob. Store such values structurally (a later read can serve both a selection and a whole-value read from structure, but a blob loses the written object's identity), or as slots (identity kept, but a later read with a selection set cannot see inside)? | [§5.10](02-how-data-moves.md#510-server-rendering-extract-restore-and-disposal) | step 4 |
 | Q5 | **Freed ids and dropped nodes.** Rust must tell JS which string and slot ids it freed, and JS must tell Rust which materialized nodes its LRU dropped. Piggyback both on the next call's arguments and return value, or make them explicit calls? | [§6.4](03-design-in-depth.md#64-what-crosses-the-boundary) | step 3 |
 | Q6 | **`batch`'s pre-pass as set operations.** Is anything observable lost when the pre-pass stops reading the already-dirty watches? | [§12.4](03-design-in-depth.md#124-batch-onwatchupdated-and-the-clients-own-writes) | step 3 |
-| Q7 | **`getMemoryInternals`.** It is optional ([§9.3 of the architecture guide](../../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)) and its shape is tier 3. Report the Rust tables in a new shape, or omit it? | [§14](03-design-in-depth.md#14-memory-and-ownership) | step 4 |
+| Q7 | **`getMemoryInternals`.** It is optional ([§9.3 of the Apollo architecture guide](../../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)) and its shape is tier 3. Report the Rust tables in a new shape, or omit it? | [§14](03-design-in-depth.md#14-memory-and-ownership) | step 4 |
 | Q8 | **Sorting interned strings.** `{ list: "sort" }` over a string field needs an order, and Rust holds ids, not text. Should JS maintain an order rank per interned string, or should sorting happen in the materializer? | [§8.2](03-design-in-depth.md#82-field-keys-and-bindings) | E10 |
 | Q9 | **An ADR inconsistency.** ADR 0004's memory table puts "build the optimistic set from the root set's content" at step 4, and its migration order lists it under step 6. Which is it? | [§14](03-design-in-depth.md#14-memory-and-ownership) | step 4 |
 | Q10 | **`possibleTypes` on both sides.** The encoder needs it to match fragments while writing and the reader while reading. Is keeping a copy on each side, both updated by `addPossibleTypes`, acceptable? | [§7.3](03-design-in-depth.md#73-validation-and-the-policy-table) | step 2 |
@@ -253,7 +253,7 @@ each names the section it came from.
 ## Appendix A. Glossary
 
 This project's terms. Apollo's (`dataId`, `storeFieldName`, `Reference`, layer,
-`CacheGroup`, …) are in [architecture §0.4](../../architecture/00-orientation.md#04-vocabulary).
+`CacheGroup`, …) are in [Apollo architecture §0.4](../../research/architecture/00-orientation.md#04-vocabulary).
 
 | Term | Meaning |
 | --- | --- |
@@ -322,9 +322,9 @@ This project's terms. Apollo's (`dataId`, `storeFieldName`, `Reference`, layer,
 
 | To learn | Read |
 | --- | --- |
-| how `InMemoryCache` works, part by part | the [architecture guide](../../architecture/README.md) |
-| what each of its paths costs, and why | the [performance guide](../../performance/README.md) |
-| Apollo's invariants, which this design keeps | [architecture §9.1](../../architecture/09-invariants-and-checklist.md#91-the-invariants) |
+| how `InMemoryCache` works, part by part | the [Apollo architecture guide](../../research/architecture/README.md) |
+| what each of its paths costs, and why | the [Apollo performance guide](../../research/performance/README.md) |
+| Apollo's invariants, which this design keeps | [Apollo architecture §9.1](../../research/architecture/09-invariants-and-checklist.md#91-the-invariants) |
 | the facts and experiments behind the boundary | [ADR 0001, established facts](../../adr/0001-js-rust-wasm-boundary.md#established-facts) and [evidence](../../adr/0001-js-rust-wasm-boundary.md#evidence) |
 | what adopters give up, and what they use instead | [Unsupported features](../../compatibility.md#unsupported-features) |
 | where the cache deliberately differs | the [drift register](../../compatibility.md#behaviour-drift) |

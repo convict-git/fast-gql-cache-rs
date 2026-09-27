@@ -1,6 +1,10 @@
 # Part 1 — The cost model in one page
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Performance guide](README.md) · [Part 2 →](02-write-path.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Apollo performance guide](README.md) · [Part 2 →](02-write-path.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 ## 1.1 The four costs that matter
 
@@ -165,4 +169,4 @@ flowchart TB
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Performance guide](README.md) | [Performance guide](README.md) | [Part 2 — The write path](02-write-path.md) |
+| [Apollo performance guide](README.md) | [Apollo performance guide](README.md) | [Part 2 — The write path](02-write-path.md) |

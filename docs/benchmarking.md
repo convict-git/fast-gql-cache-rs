@@ -158,7 +158,7 @@ that predates the counters falls back to the growth of linear memory.
 The committed Apollo baseline is
 [`probes/cache-memory-probe.log`](probes/cache-memory-probe.log) (five runs, rendered
 from [`probes/cache-memory-probe.json`](probes/cache-memory-probe.json)). The
-[performance guide's Part 10](performance/10-memory.md) interprets it.
+[Apollo performance guide's Part 10](research/performance/10-memory.md) interprets it.
 
 ## Files
 

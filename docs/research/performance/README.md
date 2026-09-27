@@ -1,6 +1,10 @@
 # Apollo Client `InMemoryCache` — Performance Deep Dive
 
-[Documentation home](../README.md) › Performance
+[Documentation home](../../README.md) › [Research](../README.md) › Apollo performance guide
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 > **Companion to** the [architecture guide](../architecture/README.md). That guide
 > explains *what* every path does; this one explains *what every path costs*, *which
@@ -9,11 +13,11 @@
 > **Source of truth.** `apollo-client-sm` at `ba511be` (`@apollo/client@4.2.11`).
 >
 > **Measurements.** Every table and timing in this guide comes from
-> [`probes/cache-performance-probe.mjs`](../probes/cache-performance-probe.mjs), whose
+> [`probes/cache-performance-probe.mjs`](../../probes/cache-performance-probe.mjs), whose
 > full output is committed at
-> [`probes/cache-performance-probe.log`](../probes/cache-performance-probe.log), together
+> [`probes/cache-performance-probe.log`](../../probes/cache-performance-probe.log), together
 > with the raw data behind it,
-> [`probes/cache-performance-probe.json`](../probes/cache-performance-probe.json): every
+> [`probes/cache-performance-probe.json`](../../probes/cache-performance-probe.json): every
 > measurement's median, minimum, maximum and per-run values. The few checks made outside
 > the probe are labelled "verified" in the text; they are counts, not timings, so they do
 > not vary from run to run.

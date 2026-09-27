@@ -1,6 +1,10 @@
 # Part 9 — Optimization playbook
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 8](08-worst-case-shapes.md) · [Part 10 →](10-memory.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 8](08-worst-case-shapes.md) · [Part 10 →](10-memory.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 ## 9.1 Decision tree
 
@@ -100,4 +104,4 @@ with the shape of the data:
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 8 — Worst-case shapes and a stress corpus](08-worst-case-shapes.md) | [Performance guide](README.md) | [Part 10 — Memory](10-memory.md) |
+| [Part 8 — Worst-case shapes and a stress corpus](08-worst-case-shapes.md) | [Apollo performance guide](README.md) | [Part 10 — Memory](10-memory.md) |

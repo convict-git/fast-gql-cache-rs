@@ -1,6 +1,10 @@
 # Part 1 — Foundations
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 0](00-orientation.md) · [Part 2 →](02-normalized-store.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 0](00-orientation.md) · [Part 2 →](02-normalized-store.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 The cache is built on seven small primitives. None of them are GraphQL-aware, and all of
 them are load-bearing for correctness, not just performance. Re-implementing the cache
@@ -422,4 +426,4 @@ frozen, and the caller's input object is not.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 0 — Orientation](00-orientation.md) | [Architecture guide](README.md) | [Part 2 — The normalized store](02-normalized-store.md) |
+| [Part 0 — Orientation](00-orientation.md) | [Apollo architecture guide](README.md) | [Part 2 — The normalized store](02-normalized-store.md) |

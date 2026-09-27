@@ -1,6 +1,10 @@
 # Part 3 — The read path
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 2](02-write-path.md) · [Part 4 →](04-dependency-graph-and-broadcast.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 2](02-write-path.md) · [Part 4 →](04-dependency-graph-and-broadcast.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 ## 3.1 The memo graph *is* the read path
 
@@ -329,4 +333,4 @@ the development build.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 2 — The write path](02-write-path.md) | [Performance guide](README.md) | [Part 4 — The dependency graph and broadcast](04-dependency-graph-and-broadcast.md) |
+| [Part 2 — The write path](02-write-path.md) | [Apollo performance guide](README.md) | [Part 4 — The dependency graph and broadcast](04-dependency-graph-and-broadcast.md) |

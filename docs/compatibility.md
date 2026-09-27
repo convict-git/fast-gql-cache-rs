@@ -109,8 +109,8 @@ Rust (ADR 0004, [contract 8](adr/0004-declarative-policies-rust-engine.md#4-the-
 That is where most of the cost of a write-heavy application sits, not in the write itself.
 At 5 000 entities, Apollo takes 19.53 ms to re-read after one field changes, 95.99 ms to
 broadcast to 200 watchers of one document, and 7.42 s when those watchers use separately
-parsed documents ([performance Part 1](performance/01-cost-model.md),
-[§4.5](performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
+parsed documents ([Apollo performance Part 1](research/performance/01-cost-model.md),
+[§4.5](research/performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
 
 Supporting functions on a slower path was considered and rejected: one `read` function
 anywhere would keep the whole reader in JavaScript for that application
@@ -166,7 +166,7 @@ Without functions, a write crosses as one buffer and runs to completion
 ([ADR 0004, contracts 2 and 4](adr/0004-declarative-policies-rust-engine.md#4-the-contracts)).
 Apollo takes 83.41 ms for a cold write of 5 000 entities and 75.95 ms to rewrite an
 identical payload, with no fast path for "nothing changed"
-([performance Part 1](performance/01-cost-model.md)).
+([Apollo performance Part 1](research/performance/01-cost-model.md)).
 
 </details>
 
@@ -239,7 +239,7 @@ the cache with `writeQuery` and select it with `@client`.
 
 The cache can only read a reactive variable from inside a `read` function, where the read
 is registered as a dependency without being declared
-([architecture §6.6](architecture/06-reactivity.md#66-reactive-variables);
+([Apollo architecture §6.6](research/architecture/06-reactivity.md#66-reactive-variables);
 [ADR 0001, F14](adr/0001-js-rust-wasm-boundary.md#established-facts)). With `read` functions
 gone (U1), no read can depend on a variable. The variable itself does not depend on the
 cache, so it keeps working in components.
@@ -252,7 +252,7 @@ cache, so it keeps working in components.
 
 **Unsupported:** a `possibleTypes` entry that is a pattern rather than a type name, which
 Apollo turns into a `RegExp`
-([architecture §3.6](architecture/03-policies.md#36-fragmentmatches--type-condition-resolution)).
+([Apollo architecture §3.6](research/architecture/03-policies.md#36-fragmentmatches--type-condition-resolution)).
 
 **You will notice:** construction and `cache.policies.addPossibleTypes()` throw, naming each
 entry.
@@ -293,7 +293,7 @@ accepted and does nothing, so configurations that spell out the default keep wor
 
 In Apollo it is a debugging tool. It makes a warm read about 9 600 times slower in exchange
 for a write about 14 % cheaper
-([performance §3.1](performance/03-read-path.md#31-the-memo-graph-is-the-read-path)).
+([Apollo performance §3.1](research/performance/03-read-path.md#31-the-memo-graph-is-the-read-path)).
 Supporting it would mean a second read path with no memo and no dependency index, a second
 rule for when the store keeps a deleted field as `undefined`, and a broadcast that
 recomputes every watch: complexity in the Rust engine for a mode that should not ship.

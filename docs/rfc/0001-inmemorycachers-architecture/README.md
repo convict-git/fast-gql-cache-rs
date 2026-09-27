@@ -52,15 +52,15 @@ flowchart LR
 RFC adds, for review. **Open** marks a question with no answer yet.
 
 **Words.** Apollo's own terms (`dataId`, `storeFieldName`, layer, `CacheGroup`, …) mean
-what [architecture §0.4](../../architecture/00-orientation.md#04-vocabulary) says they mean,
+what [Apollo architecture §0.4](../../research/architecture/00-orientation.md#04-vocabulary) says they mean,
 and Apollo's invariants are cited by their ids (S1, R2, D5, …) from
-[architecture §9.1](../../architecture/09-invariants-and-checklist.md#91-the-invariants). This
+[Apollo architecture §9.1](../../research/architecture/09-invariants-and-checklist.md#91-the-invariants). This
 project's own terms (plan, frontier, leaf slot, node, …) are defined where they first
 appear and collected in [Appendix A](04-getting-there.md#appendix-a-glossary).
 
 ### Diagram legend
 
-The diagrams reuse the [architecture guide's palette](../../architecture/README.md#diagram-legend),
+The diagrams reuse the [Apollo architecture guide's palette](../../research/architecture/README.md#diagram-legend),
 so a colour means the same thing in every document of this repository. This RFC adds two
 conventions, for the boundary between JavaScript and Rust.
 
@@ -95,7 +95,7 @@ flowchart LR
 ```
 
 - A **solid arrow** is a synchronous call or a data hand-off; a **dotted arrow** is a
-  dependency registration or an invalidation signal (as in the architecture guide).
+  dependency registration or an invalidation signal (as in the Apollo architecture guide).
 - A **thick arrow** crosses the JS ↔ WASM boundary. Every one that points into Rust is a
   call from JavaScript, and every one that points out of Rust is that call's return value.
   Rust never calls JavaScript ([§6.3](03-design-in-depth.md#63-the-call-discipline-rust-calls-no-javascript)),
@@ -268,12 +268,12 @@ Three details of that store matter for everything that follows:
 1. **Entities are stored flat, by id.** Both tickets point at one `User:U7` record. Rename
    Ada once and every query that shows her updates. The id comes from `__typename` and
    `id` by default, or from a type's `keyFields`
-   ([architecture §3.2](../../architecture/03-policies.md#32-entity-identity-policiesidentify)).
+   ([Apollo architecture §3.2](../../research/architecture/03-policies.md#32-entity-identity-policiesidentify)).
 2. **A field with arguments is stored under a key that includes them.**
    `tickets({"status":"OPEN"})` is a *store field name*: the field name plus its arguments,
    serialized in a canonical order. The closed tickets would sit beside it under
    `tickets({"status":"CLOSED"})`. A field policy's `keyArgs` decides which arguments count
-   ([architecture §3.3](../../architecture/03-policies.md#33-field-identity-getstorefieldname)).
+   ([Apollo architecture §3.3](../../research/architecture/03-policies.md#33-field-identity-getstorefieldname)).
 3. **A value without a selection set is stored as the object you gave.** `meta` is a JSON
    scalar, so the cache does not look inside it, except to compare it with the previous
    value on the next write. Objects *with* a selection set and no id are stored embedded in
@@ -339,12 +339,12 @@ flowchart LR
 
 The two dotted arrows into your policy functions are the constraint that shaped Apollo's
 design: your functions run in the middle of steps 1 and 3, can read the cache from there,
-and can throw. [Architecture §0.5](../../architecture/00-orientation.md#05-the-whole-machine-in-one-diagram)
+and can throw. [Apollo architecture §0.5](../../research/architecture/00-orientation.md#05-the-whole-machine-in-one-diagram)
 has the full version of this loop.
 
 ### 2.3 Where the time and the memory go
 
-The [performance guide](../../performance/README.md) measured every path of Apollo's cache
+The [Apollo performance guide](../../research/performance/README.md) measured every path of Apollo's cache
 (production build, medians of five fresh-process runs; the absolute numbers depend on the
 machine, the ratios do not). For a list of 5 000 entities of eight fields each:
 
@@ -352,13 +352,13 @@ machine, the ratios do not). For a list of 5 000 entities of eight fields each:
 | --- | --- | --- |
 | write the list for the first time | 83.41 ms | walk every field, identify every object, allocate, dirty every field |
 | write it again with one entity changed | 72.18 ms | a write has no incremental path: it normalizes and compares everything before it knows what changed |
-| write it again, identical | 75.95 ms | the same work; it only avoids dirtying ([§1.3](../../performance/01-cost-model.md#13-measured-the-shape-of-the-curves)) |
+| write it again, identical | 75.95 ms | the same work; it only avoids dirtying ([§1.3](../../research/performance/01-cost-model.md#13-measured-the-shape-of-the-curves)) |
 | read it, nothing changed since the last read | **3.8 µs** | a memo hit: why reads rarely show up in a profile |
-| read it after one field changed | 19.53 ms | recompute the entity, the list and the root; rebuilding the list is `O(N)` ([§3.3](../../performance/03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)) |
-| notify 200 watchers of one query after a relevant write (2 000 entities) | 95.99 ms | one shared re-read, then an `equal()` walk of the list per watcher ([§4.4](../../performance/04-dependency-graph-and-broadcast.md#44-broadcast-fan-out)) |
-| notify 50 watchers of identical but separately parsed documents (2 000 entities) | 7.42 s, against 58.12 ms for one shared document | the memo is keyed by the document *object*, and 50 copies overflow its LRU ([§4.5](../../performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)) |
+| read it after one field changed | 19.53 ms | recompute the entity, the list and the root; rebuilding the list is `O(N)` ([§3.3](../../research/performance/03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)) |
+| notify 200 watchers of one query after a relevant write (2 000 entities) | 95.99 ms | one shared re-read, then an `equal()` walk of the list per watcher ([§4.4](../../research/performance/04-dependency-graph-and-broadcast.md#44-broadcast-fan-out)) |
+| notify 50 watchers of identical but separately parsed documents (2 000 entities) | 7.42 s, against 58.12 ms for one shared document | the memo is keyed by the document *object*, and 50 copies overflow its LRU ([§4.5](../../research/performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)) |
 
-And memory ([performance Part 10](../../performance/10-memory.md)):
+And memory ([Apollo performance Part 10](../../research/performance/10-memory.md)):
 
 | What is kept | `InMemoryCache` |
 | --- | --- |
@@ -369,7 +369,7 @@ And memory ([performance Part 10](../../performance/10-memory.md)):
 | `evict` plus `gc()` | leaves 21 of 46 MiB behind: dirty memo entries keep their last results |
 
 The shape behind those numbers is one asymmetry
-([performance §1.4](../../performance/01-cost-model.md#14-the-one-diagram-to-remember)):
+([Apollo performance §1.4](../../research/performance/01-cost-model.md#14-the-one-diagram-to-remember)):
 **reads are memoized and writes are not.** A write pays for its whole payload, and the
 reactions to it (the re-read and the broadcast) pay for its blast radius. A write-heavy
 application pays on exactly the side that Apollo cannot memoize.
@@ -402,7 +402,7 @@ workload of step 0 measures the real sequence ([§19](04-getting-there.md#19-per
 > **A detail that changes what "polling" costs.** When a poll returns exactly what this
 > `ObservableQuery` wrote last time, Apollo Client does not write at all. `QueryInfo`'s
 > "feud breaker" deep-compares the result with its last write (a cost of Apollo Client,
-> the same with either cache) and skips the write when they are equal ([architecture §8.4](../../architecture/08-client-pipeline.md#84-queryinfomarkqueryresult--the-write-path-and-the-feud-breaker);
+> the same with either cache) and skips the write when they are equal ([Apollo architecture §8.4](../../research/architecture/08-client-pipeline.md#84-queryinfomarkqueryresult--the-write-path-and-the-feud-breaker);
 > `core/QueryInfo.ts:159`, `:265`, `:281`). So for a polling query the expensive case is
 > not "nothing changed" but "almost nothing changed", which the table's 72.18 ms row
 > measures. An identical payload still reaches the cache from other sources: a second

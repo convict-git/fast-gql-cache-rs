@@ -1,6 +1,10 @@
 # Apollo Client `InMemoryCache` — Architecture Deep Dive
 
-[Documentation home](../README.md) › Architecture
+[Documentation home](../../README.md) › [Research](../README.md) › Apollo architecture guide
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 > **Source of truth.** Everything in this guide is derived from the `apollo-client-sm`
 > submodule, pinned at `ba511be` (`@apollo/client@4.2.11`). Paths are relative to
@@ -11,7 +15,7 @@
 >
 > **Companion material.** The [performance guide](../performance/README.md) covers the cost
 > model of every path described here.
-> [`probes/cache-behavior-probe.mjs`](../probes/cache-behavior-probe.mjs) is an executable
+> [`probes/cache-behavior-probe.mjs`](../../probes/cache-behavior-probe.mjs) is an executable
 > oracle: 78 assertions that pin the observable behaviour documented in this guide. Run it
 > from the repository root with
 > `node --conditions=development docs/probes/cache-behavior-probe.mjs`.

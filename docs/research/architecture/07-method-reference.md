@@ -1,6 +1,10 @@
 # Part 7 — Method-by-method reference
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 6](06-reactivity.md) · [Part 8 →](08-client-pipeline.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 6](06-reactivity.md) · [Part 8 →](08-client-pipeline.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 Everything below is `ApolloCache`'s surface as `InMemoryCache` implements it. The
 classification matters for a re-implementation: **abstract** methods must be written from
@@ -705,4 +709,4 @@ switch that changes client behaviour.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 6 — Reactivity](06-reactivity.md) | [Architecture guide](README.md) | [Part 8 — The cache in the Apollo Client pipeline](08-client-pipeline.md) |
+| [Part 6 — Reactivity](06-reactivity.md) | [Apollo architecture guide](README.md) | [Part 8 — The cache in the Apollo Client pipeline](08-client-pipeline.md) |

@@ -1,6 +1,10 @@
 # Part 0 — Orientation
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Architecture guide](README.md) · [Part 1 →](01-foundations.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Apollo architecture guide](README.md) · [Part 1 →](01-foundations.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 ## 0.1 The one-paragraph mental model
 
@@ -25,7 +29,7 @@ make the cache fast, reactive, and transactional.
 
 The blog says the cache "splits results into objects, assigns identifiers, and stores them
 flat". Here is the literal `cache.extract()` output for its `GetAllTodos` example, taken
-from [section 1 of the probe](../probes/cache-behavior-probe.mjs):
+from [section 1 of the probe](../../probes/cache-behavior-probe.mjs):
 
 ```jsonc
 {
@@ -241,4 +245,4 @@ loop.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Architecture guide](README.md) | [Architecture guide](README.md) | [Part 1 — Foundations](01-foundations.md) |
+| [Apollo architecture guide](README.md) | [Apollo architecture guide](README.md) | [Part 1 — Foundations](01-foundations.md) |

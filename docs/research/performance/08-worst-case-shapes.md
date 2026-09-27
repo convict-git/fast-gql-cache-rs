@@ -1,6 +1,10 @@
 # Part 8 — Worst-case shapes and a stress corpus
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 7](07-structural-stress.md) · [Part 9 →](09-optimization-playbook.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 7](07-structural-stress.md) · [Part 9 →](09-optimization-playbook.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 ## 8.1 The four adversarial payloads
 
@@ -69,4 +73,4 @@ nothing; if it does not, every identical write recomputes every affected watch).
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 7 — Structural properties that stress the hot paths](07-structural-stress.md) | [Performance guide](README.md) | [Part 9 — Optimization playbook](09-optimization-playbook.md) |
+| [Part 7 — Structural properties that stress the hot paths](07-structural-stress.md) | [Apollo performance guide](README.md) | [Part 9 — Optimization playbook](09-optimization-playbook.md) |

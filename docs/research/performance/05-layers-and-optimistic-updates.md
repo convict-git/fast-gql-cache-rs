@@ -1,6 +1,10 @@
 # Part 5 — Layers and optimistic updates
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 4](04-dependency-graph-and-broadcast.md) · [Part 6 →](06-lifecycle-operations.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 4](04-dependency-graph-and-broadcast.md) · [Part 6 →](06-lifecycle-operations.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 `L` stacked optimistic layers over a 2 000-entity list. Each layer is one
 `recordOptimisticTransaction` that writes one field of one entity (`Item:i0.f0`, with
@@ -102,4 +106,4 @@ The practical rules that fall out:
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 4 — The dependency graph and broadcast](04-dependency-graph-and-broadcast.md) | [Performance guide](README.md) | [Part 6 — Lifecycle operations](06-lifecycle-operations.md) |
+| [Part 4 — The dependency graph and broadcast](04-dependency-graph-and-broadcast.md) | [Apollo performance guide](README.md) | [Part 6 — Lifecycle operations](06-lifecycle-operations.md) |

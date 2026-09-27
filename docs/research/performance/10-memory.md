@@ -1,13 +1,17 @@
 # Part 10 — Memory
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 9](09-optimization-playbook.md) · [Documentation home →](../README.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 9](09-optimization-playbook.md) · [Documentation home →](../../README.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 Parts 1–9 are about time. This part is about the other resource a cache spends: what
 `InMemoryCache` keeps alive, and how much garbage it makes on the way. Every number comes
-from the [memory probe](../probes/cache-memory-probe.mjs), whose output is committed at
-[`probes/cache-memory-probe.log`](../probes/cache-memory-probe.log) (median of five runs,
+from the [memory probe](../../probes/cache-memory-probe.mjs), whose output is committed at
+[`probes/cache-memory-probe.log`](../../probes/cache-memory-probe.log) (median of five runs,
 each section in a fresh process; Node v24.21.0, darwin/arm64, production build). The
-method, and the traps it avoids, are in [benchmarking.md](../benchmarking.md#memory).
+method, and the traps it avoids, are in [benchmarking.md](../../benchmarking.md#memory).
 A few facts were checked outside the probe; those are marked "verified".
 
 Memory numbers are much steadier than timings: across the five runs, no measurement
@@ -169,7 +173,7 @@ part to keep:
    should be expressed in bytes.
 4. **One memo for optimistic and root reads when no layer shadows the data.**
 
-[ADR 0004](../adr/0004-declarative-policies-rust-engine.md) turns these into measured
+[ADR 0004](../../adr/0004-declarative-policies-rust-engine.md) turns these into measured
 targets for `InMemoryCacheRs`. This probe is the oracle: each item above corresponds to
 one of its rows or checks.
 
@@ -179,4 +183,4 @@ one of its rows or checks.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 9 — Optimization playbook](09-optimization-playbook.md) | [Performance guide](README.md) | [Documentation home](../README.md) |
+| [Part 9 — Optimization playbook](09-optimization-playbook.md) | [Apollo performance guide](README.md) | [Documentation home](../../README.md) |

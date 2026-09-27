@@ -43,13 +43,13 @@ assumption forced most of ADR 0001:
 | stored values as JS *slots* (A2), and stored-value identity (contract 2) | user functions and Apollo's `StoreReader` see JS identity (F3, F8) |
 | V0: a Rust store under Apollo's reader and writer | the reader and writer could not move while they run user code |
 
-**Where the time goes** ([performance Part 1](../performance/01-cost-model.md)), for a list
+**Where the time goes** ([Apollo performance Part 1](../research/performance/01-cost-model.md)), for a list
 of 5 000 entities: a cold write takes 83.41 ms and a write of an identical payload 75.95 ms,
 against 3.8 µs for a warm read. For a fresh payload a write has no "nothing changed" fast
 path. Around every write sit the costs of reacting to it: a re-read after one dirty field
 (19.53 ms), a broadcast to 200 watchers of one document (95.99 ms), and the
 same broadcast when those watchers use separately parsed documents (7.42 s,
-[§4.5](../performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
+[§4.5](../research/performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
 A write-heavy application pays some of them on most writes, not all of them on every one:
 an identical rewrite dirties nothing, an unrelated write wakes no watcher, and a batch shares
 one broadcast. So the experiments measure real write, read-back and broadcast sequences on a
@@ -83,7 +83,7 @@ unchanged.
 | `typePolicies[T].fields[f].merge`, `typePolicies[T].merge` | `true`, `false`, a [merge descriptor](#2-the-descriptor-vocabulary) | functions |
 | `typePolicies[T].fields[f].read` | a [read descriptor](#2-the-descriptor-vocabulary) | functions |
 | `typePolicies[T].queryType` / `mutationType` / `subscriptionType` | as Apollo | — |
-| `possibleTypes` | exact type names | pattern entries (fuzzy subtypes, [architecture §3.6](../architecture/03-policies.md#36-fragmentmatches--type-condition-resolution)): any entry that is not a plain type name, which Apollo would compile into a `RegExp` (decided by the maintainer; [review](#review-of-2026-09-26)) |
+| `possibleTypes` | exact type names | pattern entries (fuzzy subtypes, [Apollo architecture §3.6](../research/architecture/03-policies.md#36-fragmentmatches--type-condition-resolution)): any entry that is not a plain type name, which Apollo would compile into a `RegExp` (decided by the maintainer; [review](#review-of-2026-09-26)) |
 | `dataIdFromObject` | — (the default `__typename:id` / `_id` behaviour is built in) | any value (confirmed by the maintainer in the review) |
 | `fragments` (fragment registry) | as Apollo | — |
 | `resultCaching` | `true`, which is Apollo's default and the only mode | `false`: result caching is always on, and the option is not in `InMemoryCacheRsConfig` |
@@ -104,7 +104,7 @@ The Rust policy table keeps that first-use snapshot rather than compiling polici
 
 **Why `resultCaching: false` goes.** In Apollo it is a debugging tool: it makes a warm read
 about 9 600× slower and a write about 14 % cheaper
-([performance §3.1](../performance/03-read-path.md#31-the-memo-graph-is-the-read-path)).
+([Apollo performance §3.1](../research/performance/03-read-path.md#31-the-memo-graph-is-the-read-path)).
 Supporting it would mean a second read path with no memo and no dependency index, a second
 set of rules for when the Root keeps `undefined` (F9), and a watch loop that recomputes
 every watch. That is complexity on the boundary for a mode nobody should ship. `true` is
@@ -147,14 +147,14 @@ it):
 | `{ ...a list descriptor, path: "items" }` | a list inside a wrapper object: `{ ...incoming, items: [...existing.items, ...incoming.items] }` | caching guide, `posts` |
 | `{ connection: "relay" }` | `relayStylePagination()`, a paired read and merge | `utilities/policies/pagination.ts`, `utilities/policies/__tests__/relayStylePagination.test.ts` |
 | `{ keep: "existing" }` | first write wins: `existing ?? incoming` | `policies.ts` test (6157) |
-| `{ keepExistingWhen: { equal: [fieldNames] } }` | the version guard: keep the stored value when the named fields are unchanged | [performance §7.4](../performance/07-structural-stress.md#74-the-untyped-blob-pathology); the only descriptor with no Apollo helper |
+| `{ keepExistingWhen: { equal: [fieldNames] } }` | the version guard: keep the stored value when the named fields are unchanged | [Apollo performance §7.4](../research/performance/07-structural-stress.md#74-the-untyped-blob-pathology); the only descriptor with no Apollo helper |
 
 **Read descriptors** (`read:`):
 
 | Descriptor | Replaces | Semantics source |
 | --- | --- | --- |
 | `{ default: <JSON value> }` | `read(existing = value)`: a value when the field is missing | caching guide, `role` |
-| `{ redirect: { typename, keyArgs: { keyField: argName } }, when?: "always" \| "missing" }` | the cache redirect, `toReference({ __typename, id: args.id })`; `"missing"` is the `existing \|\| toReference(...)` form | [architecture §3.4](../architecture/03-policies.md#34-readfield--the-field-read-entry-point); `policies.ts` test (4648); probe section 11 |
+| `{ redirect: { typename, keyArgs: { keyField: argName } }, when?: "always" \| "missing" }` | the cache redirect, `toReference({ __typename, id: args.id })`; `"missing"` is the `existing \|\| toReference(...)` form | [Apollo architecture §3.4](../research/architecture/03-policies.md#34-readfield--the-field-read-entry-point); `policies.ts` test (4648); probe section 11 |
 | `{ list: "slice", offsetArg?: "offset", limitArg?: "limit" }` | reading one page out of an offset-merged list | caching guide, custom pagination; `policies.ts` test (3385) |
 | `{ list: "sort", by: KeySpecifier, order?: "asc" \| "desc" }` | sorting a list by a field of its items on read | `policies.ts` test (2634) |
 | `{ connection: "relay" }` | the read half of `relayStylePagination()`: drop unreadable edges, derive `pageInfo` | `utilities/policies/pagination.ts` |
@@ -166,7 +166,7 @@ that needs no descriptor.
 - Pagination and connection descriptors default `keyArgs` to `false`, as the helpers do.
 - A field with both a read and a merge descriptor counts as defining both, so the implicit
   `keyArgs: false` of
-  [architecture §3.3](../architecture/03-policies.md#keyargs-specifiers) applies.
+  [Apollo architecture §3.3](../research/architecture/03-policies.md#keyargs-specifiers) applies.
 - A read and a merge descriptor on one field must agree on their list mode (`offset` with
   `slice`, `relay` with `relay`); validation rejects other pairs.
 - A list keeps holes distinct from `null` and `undefined`. `offsetLimitPagination` at
@@ -253,7 +253,7 @@ flowchart TB
     classDef ext fill:#e2e8f0,stroke:#475569,stroke-width:2px,color:#0f172a
 ```
 
-Colours follow the [architecture legend](../architecture/README.md#diagram-legend). Solid
+Colours follow the [architecture legend](../research/architecture/README.md#diagram-legend). Solid
 arrows are synchronous calls or data hand-offs; dotted arrows are dependency registration
 and invalidation. Every arrow into the Rust engine is a call from JS, and every arrow out of
 it is a return value: Rust calls nothing.
@@ -276,7 +276,7 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
 2. **Rust calls no JavaScript.** The module imports nothing on any cache path. Every
    exported operation runs to completion and returns. Operation-level user code runs in the
    JS shell, between Rust calls, as it does in Apollo
-   ([architecture §6.4](../architecture/06-reactivity.md#64-batch--the-transactional-api),
+   ([Apollo architecture §6.4](../research/architecture/06-reactivity.md#64-batch--the-transactional-api),
    §2.7, §2.10). With no callouts, ADR 0001's resumable engine, continuations and
    per-callout flushes (contracts 5 and 6) have nothing left to do.
 
@@ -308,7 +308,7 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    integers.
 5. **Observable bytes are formatted in JS, once per distinct value.** `dataId`s
    (`JSON.stringify` of the key object, P2), `storeFieldName`s (`canonicalStringify`,
-   [architecture §3.3](../architecture/03-policies.md#33-field-identity-getstorefieldname)),
+   [Apollo architecture §3.3](../research/architecture/03-policies.md#33-field-identity-getstorefieldname)),
    `extract()` keys and missing-field messages are built by the same JS functions Apollo
    uses. The results are interned, and Rust computes over ids. A field's `storeFieldName`
    depends on the arguments *and* on the policy of the entity's typename: under one
@@ -355,11 +355,11 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    `(entity, storeFieldName)` and `__exists` in Rust. Writes dirty them there, with D1–D3
    and L5 as the specification. At the end of a transaction JS asks Rust which watches were
    **dirtied**. That set, not "changed", is what gate 1 and `onWatchUpdated` need (D7,
-   [§9.3](../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
+   [§9.3](../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
    Propagation stops at the first ancestor that is already dirty, so dirtying a leaf at
    depth `D` costs `O(D)`. `optimism`'s `O(D²)` is elsewhere: in the *re-read*, where each
    clean child reports up through every ancestor that is only dirty by a child
-   ([performance §3.3](../performance/03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
+   ([Apollo performance §3.3](../research/performance/03-read-path.md#33-invalidation-blast-radius--the-single-most-important-read-path-concept)).
    The Rust reader is designed without a "dirty by a child" state to report through, so
    that its re-read is `O(D)`; E11 measures the re-read at `D` = 64 to 512, not only the dirtying (review,
    #23).
@@ -370,14 +370,14 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    is a sufficient test for equality, never a necessary one, so it can skip work but can
    never suppress a callback that `equal()` would allow. When `lastDiff` was cleared (gate
    0 in
-   [architecture §8.2](../architecture/08-client-pipeline.md#82-observablequery--the-caches-principal-client))
+   [Apollo architecture §8.2](../research/architecture/08-client-pipeline.md#82-observablequery--the-caches-principal-client))
    the callback fires, as in Apollo. "Same id" is sound only because node ids are never
    reused: they count up from 0, cross as `f64` (exact to 2⁵³), and running out raises a
    checked error rather than wrapping. A freed node's id can therefore outlive it in a
    `lastDiff` or the `isFresh` map without ever matching a new node. The
    `diff` object passed to `onWatchUpdated` is the one passed to the callback
    (`lastOwnDiff`), and `evict`, `modify` and `reset` stay instance-assignable
-   ([§9.3](../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
+   ([§9.3](../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
 10. **State model (ADR 0001 contract 3, kept).** Absent, tombstone and snapshot per level;
     Present fields that may hold `undefined` (in the Root only transiently, since
     `resultCaching` is always on); reconciliation under `@wry/equality` rules (`-0` equals
@@ -433,7 +433,7 @@ call that needs it: a write fills leaf slots and strings; a read, `diff` or broa
 materializes the result nodes it is about to return, and only the nodes that are new.
 Nothing is materialized ahead of a read. A batch of 100 writes followed by one broadcast
 materializes once, which is the saving `batch` exists for
-([performance §4.6](../performance/04-dependency-graph-and-broadcast.md#46-batching)).
+([Apollo performance §4.6](../research/performance/04-dependency-graph-and-broadcast.md#46-batching)).
 
 **Result nodes are stable per memo entry, not hash-consed globally.** A result node
 belongs to one memo entry, (plan, entity or embedded parent, view). When an entry *below
@@ -441,7 +441,7 @@ the entity level* recomputes, Rust compares its new content with its previous co
 shallowly: scalars by id, children by node id. If they are equal, the entry keeps its old
 node, and nothing above it changes. An entity-level entry always gets a new node when it
 recomputes ([contract 7](#4-the-contracts)). `optimism` has this short-circuit (`reportCleanChild`,
-[architecture §1.1](../architecture/01-foundations.md#entry--the-dependency-graph)), but
+[Apollo architecture §1.1](../research/architecture/01-foundations.md#entry--the-dependency-graph)), but
 Apollo can almost never use it, because `execSelectionSetImpl` builds a new object on
 every run. Two things are deliberately not shared:
 
@@ -470,7 +470,7 @@ same content and a new object, which is what Apollo does after an LRU eviction.
 
 **Leaf slots.** A JSON blob or custom scalar is stored as the application's own object,
 so a read returns that object, as Apollo does in production
-([architecture §4.4](../architecture/04-store-writer.md#44-processfieldvalue--scalars-arrays-recursion)),
+([Apollo architecture §4.4](../research/architecture/04-store-writer.md#44-processfieldvalue--scalars-arrays-recursion)),
 and a `Date` keeps its identity (F5). Rust stores the slot id. When a write meets a slot
 field that is already stored:
 
@@ -529,7 +529,7 @@ entry for the production difference.
 | 14 | a plain `Date` scalar | identity kept (F5) | identity kept (slot); other class instances are outside the supported input (section 1) |
 | 15 | a modifier returns the value it received | no change | no change |
 | 16 | `extract()` twice, no write in between | the same entity objects | the same objects while the value cache holds them (tier 3) |
-| 17 | development builds | `maybeDeepFreeze` re-walks subtrees on every read ([performance §3.6](../performance/03-read-path.md#36-the-dev-build-tax)) | each object is frozen once, when it is materialized |
+| 17 | development builds | `maybeDeepFreeze` re-walks subtrees on every read ([Apollo performance §3.6](../research/performance/03-read-path.md#36-the-dev-build-tax)) | each object is frozen once, when it is materialized |
 
 In no case does the design keep fewer objects stable than Apollo. In cases 7 and 8 it keeps
 more, and in cases 4 and 5 it keeps more below the entity level; a stable object is a
@@ -572,7 +572,7 @@ sequenceDiagram
 ### 7. Memory
 
 The [memory probe](../probes/cache-memory-probe.mjs) measures Apollo's `InMemoryCache`
-([performance Part 10](../performance/10-memory.md)). Six results shape this design:
+([Apollo performance Part 10](../research/performance/10-memory.md)). Six results shape this design:
 
 | Apollo, measured | This design |
 | --- | --- |
@@ -661,7 +661,7 @@ stated budget; a single finite run cannot show a plateau.
 ## Compatibility (amends ADR 0002)
 
 - **Tier 1 is unchanged.** Every row of
-  [§9.3](../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements) and
+  [§9.3](../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements) and
   the invariants ADR 0002 lists hold, L2 included: optimistic and root reads keep separate
   memo entries and separate result objects ([section 5](#5-where-javascript-objects-live-the-frontier)).
 - **Tier 2 holds for the declarative profile** (section 1, section 2): identity, field keys,
@@ -674,7 +674,7 @@ stated budget; a single finite run cannot show a plateau.
   `possibleTypes` entries are rejected too (section 1). Written values with getters,
   Proxies or custom coercion are unsupported without being rejected (contract 2). `makeVar`
   itself still works with `useReactiveVar`, and `broadcastWatches` stays callable for it
-  ([architecture §6.6](../architecture/06-reactivity.md#66-reactive-variables)).
+  ([Apollo architecture §6.6](../research/architecture/06-reactivity.md#66-reactive-variables)).
   `resolvesClientField` returns `true` only for fields with a read descriptor. Each
   unsupported shape is an entry in
   [Unsupported features](../compatibility.md#unsupported-features), with its replacement:
@@ -804,15 +804,15 @@ for production use before v2.
      already checks that the tarball carries every file it loads.)
 6. **Beyond Apollo's model.** Each of these is measured and merged on its own:
    - plans deduplicated by structure, which removes the 128× document-fragmentation cliff
-     ([§4.5](../performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
+     ([§4.5](../research/performance/04-dependency-graph-and-broadcast.md#45-memo-fragmentation-by-document-identity)).
      It is observable: after `addTypePolicies`, Apollo keeps a warmed document's old result
      while a newly parsed identical document reads the new one (review, #17, #18). Sharing
      one plan makes them agree, so it needs its own oracle case and a register entry;
    - result memory bounded by live results rather than a 50 000-entry LRU, which removes
-     the cliff of [§4.3](../performance/04-dependency-graph-and-broadcast.md#43-the-memo-lru-cliff);
+     the cliff of [§4.3](../research/performance/04-dependency-graph-and-broadcast.md#43-the-memo-lru-cliff);
    - a first optimistic read with no layers active built from the root entries' content
      instead of a second cold read of the store, still with its own nodes
-     ([§4.2](../performance/04-dependency-graph-and-broadcast.md#42-optimistic-reads-maintain-a-second-set-of-memo-entries)).
+     ([§4.2](../research/performance/04-dependency-graph-and-broadcast.md#42-optimistic-reads-maintain-a-second-set-of-memo-entries)).
 
 Throughout: the `.wasm` stays within its size budgets (ADR 0003), and every PR labelled
 `benchmark` runs the memory probe beside the performance probe, with the same noise

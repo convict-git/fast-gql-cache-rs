@@ -41,7 +41,7 @@ alone and merged with `{ list: "offset" }`; and a `ticket(id)` field is redirect
 ### 4.2 Its traffic through the cache
 
 Every arrow below is a call path in Apollo Client 4.2.11
-([architecture §8.0](../../architecture/08-client-pipeline.md#80-the-call-map)). None of them
+([Apollo architecture §8.0](../../research/architecture/08-client-pipeline.md#80-the-call-map)). None of them
 changes: `InMemoryCacheRs` receives exactly the calls `InMemoryCache` receives.
 
 ```mermaid
@@ -159,12 +159,12 @@ sequenceDiagram
 
 The board mounts with an empty cache. `cache-first` finds nothing, the network answers
 with 5 000 tickets, and `QueryInfo.markQueryResult` writes them inside a `batch`
-([architecture §8.4](../../architecture/08-client-pipeline.md#84-queryinfomarkqueryresult--the-write-path-and-the-feud-breaker)).
+([Apollo architecture §8.4](../../research/architecture/08-client-pipeline.md#84-queryinfomarkqueryresult--the-write-path-and-the-feud-breaker)).
 
 **In `InMemoryCache`**, `StoreWriter` walks the result along the query, builds a
 `StoreObject` per entity, identifies each object, computes each field's store key, and
 merges the result into the `Root` field by field, dirtying every new field
-([architecture §4.9](../../architecture/04-store-writer.md#49-the-full-write-end-to-end)).
+([Apollo architecture §4.9](../../research/architecture/04-store-writer.md#49-the-full-write-end-to-end)).
 For 5 000 entities of eight scalar fields, the probe's shape, that is 83.41 ms and 92 MiB of
 allocation.
 
@@ -283,7 +283,7 @@ broadcast delivers the result to the board's watch.
 Each selection set on each entity is an `optimism` memo entry that records every
 `(entity, field)` it read, and each entry builds a new object (deeply frozen in development
 builds, R3)
-([architecture §5.1](../../architecture/05-store-reader.md#51-the-two-memoized-functions)).
+([Apollo architecture §5.1](../../research/architecture/05-store-reader.md#51-the-two-memoized-functions)).
 
 ```mermaid
 sequenceDiagram
@@ -359,7 +359,7 @@ flowchart LR
 registers the watch in Rust's watch registry, and keeps a JS map from the `WatchOptions`
 object to the watch id. The object itself is never copied, because Apollo Client sets
 fields on it (`watcher`, `lastDiff`, `lastOwnDiff`) and expects to get the same object back
-in `onWatchUpdated` ([§9.3](../../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
+in `onWatchUpdated` ([§9.3](../../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
 `immediate: true` delivers the first result before `watch` returns (D6).
 
 **What differs**
@@ -538,7 +538,7 @@ update(cache, { data }) {
 
 **In `InMemoryCache`**, `modify` looks up the entity, calls the modifier for each field
 with the stored value, and merges the changed fields at the end
-([architecture §2.7](../../architecture/02-normalized-store.md#27-modify--user-controlled-field-surgery)).
+([Apollo architecture §2.7](../../research/architecture/02-normalized-store.md#27-modify--user-controlled-field-surgery)).
 The nested `writeFragment` is an ordinary write that happens while `modify` is running.
 
 ```mermaid
@@ -597,8 +597,8 @@ the server's answer, or revert if the server refuses.
 the mutation's writes land in it. Optimistic reads see the layer, root reads do not. On
 success, one `batch` writes the server result to the `Root` and removes the layer; on
 failure, `removeOptimistic` removes it. Removing a layer that is not on top replays every
-layer above it ([architecture §6.5](../../architecture/06-reactivity.md#65-optimistic-lifecycle-end-to-end),
-[§8.5](../../architecture/08-client-pipeline.md#85-mutations--optimistic-layer-final-write-root-field-scrub)).
+layer above it ([Apollo architecture §6.5](../../research/architecture/06-reactivity.md#65-optimistic-lifecycle-end-to-end),
+[§8.5](../../research/architecture/08-client-pipeline.md#85-mutations--optimistic-layer-final-write-root-field-scrub)).
 
 ```mermaid
 sequenceDiagram
@@ -684,7 +684,7 @@ details and [Q3](04-getting-there.md#23-open-questions) asks the reviewers to ch
   stay in JS and run between Rust calls ([§9.1](03-design-in-depth.md#91-levels-root-stump-and-layers)).
 - **Optimistic and root reads keep separate memo entries and separate objects**, as in
   Apollo (L2), so `ObservableQuery` can still tell an optimistic result from a root one
-  ([§9.3 of the architecture guide](../../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
+  ([§9.3 of the Apollo architecture guide](../../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements)).
 
 ### 5.8 Loading more: `fetchMore` and a merge descriptor
 
@@ -746,7 +746,7 @@ dirties each deleted field and then the entity's existence. The list that still 
 T2 filters the dangling reference out on the next read (R4). `gc()` marks from the roots and
 the retained ids and sweeps the rest. The memo entries that held T2 stay until the LRU
 drops them: after `evict` and `gc()`, 21 of 46 MiB are still held
-([performance §10.5](../../performance/10-memory.md#105-reclamation)).
+([Apollo performance §10.5](../../research/performance/10-memory.md#105-reclamation)).
 
 ```mermaid
 sequenceDiagram
