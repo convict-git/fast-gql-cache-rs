@@ -13,7 +13,6 @@ Memory: InMemoryCacheRs ÷ InMemoryCache = **1.00×** (geometric mean of the mem
 | Date | Commit | Rs ÷ Apollo | Memory Rs ÷ Apollo | WASM size | Node |
 | --- | --- | --: | --: | --: | --- |
 | 2026-09-27 | `e4d30a4` | 1.03× | 1.00× | 12.4 KiB | v24.21.0 |
-| 2026-09-26 | `7e59c29` | 1.02× | — | 13.9 KiB | v24.21.0 |
 
 ## Latest run, per measurement
 
