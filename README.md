@@ -330,6 +330,24 @@ underneath, it still delegates to Apollo's internals, and the Rust engine is a s
 The gates for each step are in
 [RFC §20](docs/rfc/0001-inmemorycachers-architecture/04-getting-there.md#20-where-we-are-and-the-plan).
 
+### Measured against `InMemoryCache`
+
+Each night that `main` has changed, a job runs the
+[performance](docs/probes/cache-performance-probe.mjs) and
+[memory](docs/probes/cache-memory-probe.mjs) probes on both caches, `InMemoryCacheRs`
+and Apollo's `InMemoryCache`, on the same machine. Each point shows how many times
+faster (solid lines) or smaller (dashed lines) `InMemoryCacheRs` is than `InMemoryCache`
+at that commit. 1× is `InMemoryCache`, higher is better, and the 2× line is the target
+for writes, broadcasts and memory from [the trade](#the-trade). Every line sits at about
+1× for now: underneath, the engine is still Apollo's.
+
+<a href="https://github.com/convict-git/fast-gql-cache-rs/tree/dnd-data/benchmarks"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/benchmarks/charts/benchmarks-dark.svg"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/benchmarks/charts/benchmarks.svg" alt="Speed and memory of InMemoryCacheRs relative to InMemoryCache per measured commit of main. Speed: all timings, writes, reads and broadcasts. Memory: all, retained and allocated. InMemoryCache is at 1× and the goal at 2×." width="100%"></picture></a>
+
+Every run and every measurement is on the
+[`dnd-data/benchmarks`](https://github.com/convict-git/fast-gql-cache-rs/tree/dnd-data/benchmarks)
+branch. [Benchmarking](docs/benchmarking.md) explains how the numbers are produced and
+why you can trust them.
+
 ## FAQ
 
 <details>

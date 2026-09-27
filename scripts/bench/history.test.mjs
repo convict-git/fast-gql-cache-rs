@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
+import { CHART_FILES } from "./charts.mjs";
 import { append, lastSha } from "./history.mjs";
 
 const summary = (sha, date, rs) => ({
@@ -18,7 +19,7 @@ const summary = (sha, date, rs) => ({
   measurements: { "write N=10": { apollo: 100, rs } },
 });
 
-test("appends runs and regenerates the README and trend page", (t) => {
+test("appends runs and regenerates the README, trend page and charts", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "bench-history-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -43,4 +44,5 @@ test("appends runs and regenerates the README and trend page", (t) => {
       readme.indexOf("`aaaaaaa`", readme.indexOf("| Date"))
   );
   assert.ok(existsSync(join(dir, "index.html")));
+  for (const file of CHART_FILES) assert.ok(existsSync(join(dir, file)), file);
 });
