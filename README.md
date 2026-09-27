@@ -12,6 +12,7 @@
 
 <div align="center">
 
+[![Status: pre-alpha, not released](https://img.shields.io/badge/status-pre--alpha%2C%20not%20released-orange?style=for-the-badge)](#where-we-are)
 [![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fdnd-data%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/convict-git)
 [![CI](https://img.shields.io/github/actions/workflow/status/convict-git/fast-gql-cache-rs/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml)
@@ -37,15 +38,8 @@ WebAssembly, with the goal that every write gives the main thread back sooner.
 ***(Policies have to be declarative: key arrays and named merge behaviours instead of
 custom functions. See [the trade](#the-trade).)***
 
-> **Start with the design:
-> [RFC 0001: The architecture of `InMemoryCacheRs`](docs/rfc/0001-inmemorycachers-architecture/README.md).**
-> Level 1 covers the idea, the trade and one before-and-after picture in about ten
-> minutes. Each later level goes one step deeper, down to the contracts between the parts.
-
-> **Status: pre-alpha, not released.** The TypeScript shell implements Apollo's full
-> cache API and passes Apollo's own `InMemoryCache` test suite. So far that only proves the
-> shell: underneath, it still delegates to Apollo's internals, and the Rust engine is a
-> stub. See [where we are](#where-we-are).
+**Read the design:
+[RFC 0001: The architecture of `InMemoryCacheRs`](docs/rfc/0001-inmemorycachers-architecture/README.md)**
 
 ## You probably don't need this
 
@@ -314,6 +308,10 @@ project is set up so that it cannot quietly drift from Apollo:
   that disposal returns the heap to its baseline is a release gate.
 
 ## Where we are
+
+**Pre-alpha, not released.** The TypeScript shell implements Apollo's full cache API and
+passes Apollo's own `InMemoryCache` test suite. So far that only proves the shell:
+underneath, it still delegates to Apollo's internals, and the Rust engine is a stub.
 
 - [x] **Phase 1**: the full `ApolloCache` API in TypeScript, delegating to Apollo; the
       ported parity suite; behaviour, performance and memory probes; the benchmark workflow
