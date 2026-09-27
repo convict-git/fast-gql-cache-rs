@@ -49,7 +49,7 @@ changed. Mechanical porting under rules 1–5 needs none.
 ```ts
 // fast-gql-cache-rs: implementation
 //   from: cache/inmemory/__tests__/policies.ts, "runs nested merge functions as well as ancestors" (line 4473)
-//   changed: the two concat merge functions are written as `{ list: "append" }` descriptors
+//   changed: the two concat merge functions are written as `{ list: ListMerge.append }` descriptors
 //   behaviour: unchanged, Apollo's assertions are kept
 it("runs nested merge functions as well as ancestors (descriptors)", function () {
 ```

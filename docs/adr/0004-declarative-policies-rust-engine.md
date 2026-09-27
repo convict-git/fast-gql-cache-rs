@@ -128,9 +128,87 @@ twins of the Apollo tests that exercise that idiom: the same scenario and assert
 Apollo's own helper on the `InMemoryCache` side and the descriptor on ours, never one
 implementation on both sides. The originals stay as they are. The twins' cases are derived
 branch by branch from the helper's source (for `offsetLimitPagination`: no `args`, a
-default offset, the `keyArgs` parameter). The spelling is
-settled in step 2 ([open question 1](#open-questions-for-the-maintainer)). The semantics
-are what this record fixes.
+default offset, the `keyArgs` parameter).
+
+**Spelling** (decided by the maintainer, 2026-09-28, which settles the former open question
+1). A descriptor is a plain object. Every name in it that selects a behaviour is a member of
+an exported enum, the way Apollo Client exports `NetworkStatus`
+(`core/networkStatus.ts`, re-exported from `@apollo/client`): a TypeScript `enum` with a
+PascalCase name, lowerCamelCase members and a doc comment on each. What belongs to the
+application stays a plain value: argument names (`offsetArg`, `limitArg`), field names
+(`path`, `equal`), key specifiers (`by`), type names and default values.
+
+```ts
+/** `merge: { list }`: where an incoming page goes. */
+export enum ListMerge {
+  /** After the stored items: `concatPagination()`. */
+  append = "append",
+  /** Before the stored items, newest first. */
+  prepend = "prepend",
+  /** At `args[offsetArg]`: `offsetLimitPagination()`. */
+  offset = "offset",
+}
+
+/** `read: { list }`: what a read returns from a stored list. */
+export enum ListRead {
+  /** One page, from `args[offsetArg]`, `args[limitArg]` items long. */
+  slice = "slice",
+  /** Every item, ordered by the key `by`. */
+  sort = "sort",
+}
+
+/** `read` and `merge: { connection }`: a paired connection model. */
+export enum Connection {
+  /** `relayStylePagination()`. */
+  relay = "relay",
+}
+
+/** `merge: { dedupe }`, the form without a key: which incoming items to skip. */
+export enum Dedupe {
+  /** References already in the stored list. */
+  ref = "ref",
+}
+
+/** `merge: { keep }`: which value survives a write. */
+export enum Keep {
+  /** The stored one, when there is one: `existing ?? incoming`. */
+  existing = "existing",
+}
+
+/** `read: { redirect, when }`: when a cache redirect applies. */
+export enum RedirectWhen {
+  /** On every read. */
+  always = "always",
+  /** Only when the field holds nothing: `existing ?? toReference(…)`. */
+  missing = "missing",
+}
+
+/** `read: { list: ListRead.sort, order }`. */
+export enum SortOrder {
+  asc = "asc",
+  desc = "desc",
+}
+```
+
+An application imports them next to the cache
+(`import { InMemoryCacheRs, ListMerge } from "fast-gql-cache-rs"`) and writes
+`merge: { list: ListMerge.offset, offsetArg: "start" }`.
+
+- **One enum per key**, named after it, with `list` split in two so TypeScript rejects a
+  read mode in a merge.
+- **String values equal to the member names**, where `NetworkStatus` uses numbers. Numbers
+  would overlap across enums, so a member under the wrong key would silently select another
+  behaviour; a string fails validation with an error that names it, and configuration
+  dumps stay readable. JavaScript users may write the string; TypeScript users need the
+  member.
+- **Members are never renamed or given new values** once released. The catalogue grows by
+  adding members or enums.
+- **The enums are the only exports** beyond `InMemoryCacheRs` and `InMemoryCacheRsConfig`
+  (AGENTS.md, package boundaries). The alternative, helper-style constructors named after
+  Apollo's (`offsetLimitPagination()`), would need an export each as well, and they look
+  like the functions the profile rejects.
+
+The semantics are what the tables below fix.
 
 **Merge descriptors** (`merge:` on a field policy, or on a type policy where Apollo allows
 it):
@@ -139,14 +217,14 @@ it):
 | --- | --- | --- |
 | `true` | `merge: true` (`mergeObjects`) | `mergeTrueFn`, `makeMergeObjectsFunction` (`cache/inmemory/policies.ts`) |
 | `false` | `merge: false`: replace, and no data-loss warning | `mergeFalseFn` (the same file) |
-| `{ list: "append" }` | `concatPagination()`, and `[...existing, ...incoming]` | `utilities/policies/pagination.ts`; `policies.ts` tests (756, 2094, 4483, 5772) |
-| `{ list: "prepend" }` | `[...incoming, ...existing]` (newest first) | caching guide, `notifications` |
-| `{ list: "append" \| "prepend", dedupe: "ref" }` | appending only references not already present | `policies.ts` tests (2870, 4930) |
-| `{ list: "append" \| "prepend", dedupe: { by: KeySpecifier } }` | appending only items whose key is new | `policies.ts` test (2615, deduplication by `isbn`) |
-| `{ list: "offset", offsetArg?: "offset" }` | `offsetLimitPagination()`: splice `incoming` at `args[offsetArg]`, leaving holes before it; with no `args`, append | `utilities/policies/pagination.ts`; the helper's comment invites renaming the argument, hence `offsetArg` |
+| `{ list: ListMerge.append }` | `concatPagination()`, and `[...existing, ...incoming]` | `utilities/policies/pagination.ts`; `policies.ts` tests (756, 2094, 4483, 5772) |
+| `{ list: ListMerge.prepend }` | `[...incoming, ...existing]` (newest first) | caching guide, `notifications` |
+| `{ list: ListMerge.append \| ListMerge.prepend, dedupe: Dedupe.ref }` | appending only references not already present | `policies.ts` tests (2870, 4930) |
+| `{ list: ListMerge.append \| ListMerge.prepend, dedupe: { by: KeySpecifier } }` | appending only items whose key is new | `policies.ts` test (2615, deduplication by `isbn`) |
+| `{ list: ListMerge.offset, offsetArg?: "offset" }` | `offsetLimitPagination()`: splice `incoming` at `args[offsetArg]`, leaving holes before it; with no `args`, append | `utilities/policies/pagination.ts`; the helper's comment invites renaming the argument, hence `offsetArg` |
 | `{ ...a list descriptor, path: "items" }` | a list inside a wrapper object: `{ ...incoming, items: [...existing.items, ...incoming.items] }` | caching guide, `posts` |
-| `{ connection: "relay" }` | `relayStylePagination()`, a paired read and merge | `utilities/policies/pagination.ts`, `utilities/policies/__tests__/relayStylePagination.test.ts` |
-| `{ keep: "existing" }` | first write wins: `existing ?? incoming` | `policies.ts` test (6157) |
+| `{ connection: Connection.relay }` | `relayStylePagination()`, a paired read and merge | `utilities/policies/pagination.ts`, `utilities/policies/__tests__/relayStylePagination.test.ts` |
+| `{ keep: Keep.existing }` | first write wins: `existing ?? incoming` | `policies.ts` test (6157) |
 | `{ keepExistingWhen: { equal: [fieldNames] } }` | the version guard: keep the stored value when the named fields are unchanged | [Apollo performance §7.4](../research/performance/07-structural-stress.md#74-the-untyped-blob-pathology); the only descriptor with no Apollo helper |
 
 **Read descriptors** (`read:`):
@@ -154,10 +232,10 @@ it):
 | Descriptor | Replaces | Semantics source |
 | --- | --- | --- |
 | `{ default: <JSON value> }` | `read(existing = value)`: a value when the field is missing | caching guide, `role` |
-| `{ redirect: { typename, keyArgs: { keyField: argName } }, when?: "always" \| "missing" }` | the cache redirect, `toReference({ __typename, id: args.id })`; `"missing"` is the `existing \|\| toReference(...)` form | [Apollo architecture §3.4](../research/architecture/03-policies.md#34-readfield--the-field-read-entry-point); `policies.ts` test (4648); probe section 11 |
-| `{ list: "slice", offsetArg?: "offset", limitArg?: "limit" }` | reading one page out of an offset-merged list | caching guide, custom pagination; `policies.ts` test (3385) |
-| `{ list: "sort", by: KeySpecifier, order?: "asc" \| "desc" }` | sorting a list by a field of its items on read | `policies.ts` test (2634) |
-| `{ connection: "relay" }` | the read half of `relayStylePagination()`: drop unreadable edges, derive `pageInfo` | `utilities/policies/pagination.ts` |
+| `{ redirect: { typename, keyArgs: { keyField: argName } }, when?: RedirectWhen.always \| RedirectWhen.missing }` | the cache redirect, `toReference({ __typename, id: args.id })`; `RedirectWhen.missing` is the `existing \|\| toReference(...)` form | [Apollo architecture §3.4](../research/architecture/03-policies.md#34-readfield--the-field-read-entry-point); `policies.ts` test (4648); probe section 11 |
+| `{ list: ListRead.slice, offsetArg?: "offset", limitArg?: "limit" }` | reading one page out of an offset-merged list | caching guide, custom pagination; `policies.ts` test (3385) |
+| `{ list: ListRead.sort, by: KeySpecifier, order?: SortOrder.asc \| SortOrder.desc }` | sorting a list by a field of its items on read | `policies.ts` test (2634) |
+| `{ connection: Connection.relay }` | the read half of `relayStylePagination()`: drop unreadable edges, derive `pageInfo` | `utilities/policies/pagination.ts` |
 
 Lists always drop references to missing entities on read, as Apollo's reader does (R4), so
 that needs no descriptor.
@@ -167,8 +245,9 @@ that needs no descriptor.
 - A field with both a read and a merge descriptor counts as defining both, so the implicit
   `keyArgs: false` of
   [Apollo architecture §3.3](../research/architecture/03-policies.md#keyargs-specifiers) applies.
-- A read and a merge descriptor on one field must agree on their list mode (`offset` with
-  `slice`, `relay` with `relay`); validation rejects other pairs.
+- A read and a merge descriptor on one field must agree on their list mode
+  (`ListMerge.offset` with `ListRead.slice`, `Connection.relay` with `Connection.relay`);
+  validation rejects other pairs.
 - A list keeps holes distinct from `null` and `undefined`. `offsetLimitPagination` at
   offset 2 stores two holes, which a read skips; after a JSON `extract()`/`restore()` the
   holes are `null`s and read as `null` (review, #16). `extract()` emits the holes as holes.
@@ -328,7 +407,7 @@ These replace ADR 0001's contracts 2, 4, 5 and 6 and restate the rest.
    a `WeakMap`. When the encoder meets a result object the reader handed out and that node
    is still current for (plan, entity) in the store being written, it marks the entity
    fresh, and Rust skips staging that entity's own fields, as Apollo does. Without this,
-   writing back a read result through a `concat` descriptor would append the page twice
+   writing back a read result through a `ListMerge.append` descriptor would append the page twice
    (E1). "Current" is exact because an entity entry that recomputes gets a new node
    (contract 7).
 
@@ -768,11 +847,11 @@ for production use before v2.
    [the oracle](#compatibility-amends-adr-0002). Performance does not change; adopters can
    check their configuration.
 3. **The vertical slice.** Root store, write engine, reader, watch registry and the
-   `concat` descriptor, behind the full JS shell, with no layers, driven by a real
+   `ListMerge.append` descriptor, behind the full JS shell, with no layers, driven by a real
    `ApolloClient` polling a query with watches and batches. The constructor initializes
    the WASM as [ADR 0003](0003-wasm-initialization.md) decides, which is not implemented
    today (review, #1). **Correctness is hard:** every ported test the slice's features
-   reach, and ADR 0001's oracle cases that still apply (F3 with `concat`, F10, W1 and
+   reach, and ADR 0001's oracle cases that still apply (F3 with `ListMerge.append`, F10, W1 and
    W2), pass. **Performance guideposts**, at `N = 5 000`, end to end:
    - at least 2× faster than Apollo on write cold, write identical and one field changed
      (probe section 1);
@@ -908,6 +987,9 @@ need their own evidence.
   applied to the whole argument before any of it takes effect.
 - **Rust-WASM is a product constraint.** No pure-JS engine is built or measured as an
   alternative.
+- **Descriptors are spelled with exported enums** (2026-09-28): plain objects whose
+  behaviour names are enum members, as Apollo exports `NetworkStatus`
+  ([section 2](#2-the-descriptor-vocabulary)).
 - **E10 and E11 run before the profile ships** (step 2), and no ported test is converted
   or deleted.
 - **Write-back semantics stay Apollo's** (contract 7, section 5 cases 4 and 5). Writing
@@ -978,11 +1060,12 @@ Resolved on 2026-09-26:
 - after the review, the decisions in
   [its section](#review-of-2026-09-26).
 
-1. **Descriptor spelling.** The catalogue fixes the semantics. The spelling is either
-   plain objects (`merge: { list: "append" }`), or helper-style constructors named after
-   Apollo's (`offsetLimitPagination()`), which make migration an import change. Helpers
-   need either an export beyond the two AGENTS.md allows, or static methods on
-   `InMemoryCacheRs`. Settled at step 2.
+Resolved on 2026-09-28:
+- descriptor spelling (formerly question 1): plain objects whose behaviour names are
+  exported enums, as Apollo exports `NetworkStatus`
+  ([section 2](#2-the-descriptor-vocabulary)).
+
+None is open.
 
 ## Provenance
 
@@ -995,3 +1078,5 @@ probes. It was revised again after the adversarial review of 2026-09-26
 accepted by the maintainer on 2026-09-27 after Codex's acknowledgement (#43). No experiment
 has been run for this design itself. The test counts come from a pattern
 count over `src/__tests__` and should be confirmed case by case at step 2.
+Amended on 2026-09-28 with the maintainer's descriptor spelling
+([section 2](#2-the-descriptor-vocabulary)).

@@ -37,5 +37,5 @@ body:
     id: descriptor
     attributes:
       label: A descriptor you'd imagine (optional)
-      description: 'For example `merge: { list: "append", dedupeBy: ["id"] }`. Spelling is not final anywhere yet.'
+      description: 'For example `merge: { list: ListMerge.append, dedupe: { by: ["id"] } }`. Behaviour names are members of enums the package exports; a new one can be a new member or a new enum.'
       render: ts

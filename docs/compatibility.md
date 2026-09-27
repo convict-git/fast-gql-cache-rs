@@ -71,16 +71,17 @@ descriptor fits it, [request a descriptor](https://github.com/convict-git/fast-g
 throw, and the error names every offending path (`typePolicies.Query.fields.feed.read`).
 TypeScript reports it at compile time.
 
-**Instead:** use a read descriptor for the common patterns:
+**Instead:** use a read descriptor for the common patterns. Behaviour names are enums the
+package exports (`import { Connection, ListRead, RedirectWhen, SortOrder } from "fast-gql-cache-rs"`):
 
 | Your `read` function | Read descriptor |
 | --- | --- |
 | `read(existing = value)` | `{ default: value }` |
 | `toReference({ __typename, id: args.id })`, a cache redirect | `{ redirect: { typename, keyArgs: { id: "id" } } }` |
-| `existing ?? toReference(…)` | the same, with `when: "missing"` |
-| one page out of an offset-merged list | `{ list: "slice", offsetArg?, limitArg? }` |
-| a list sorted by a field of its items | `{ list: "sort", by, order? }` |
-| the read half of `relayStylePagination()` | `{ connection: "relay" }` |
+| `existing ?? toReference(…)` | the same, with `when: RedirectWhen.missing` |
+| one page out of an offset-merged list | `{ list: ListRead.slice, offsetArg?, limitArg? }` |
+| a list sorted by a field of its items | `{ list: ListRead.sort, by, order?: SortOrder }` |
+| the read half of `relayStylePagination()` | `{ connection: Connection.relay }` |
 
 For anything else:
 
@@ -92,8 +93,6 @@ For anything else:
 
 If yours is a read pattern other applications share and no descriptor covers it yet,
 [request a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml).
-
-The descriptor spelling is not final.
 
 <details>
 <summary>Why</summary>
@@ -130,26 +129,25 @@ tests for that idiom, so the descriptors lose no semantics.
 **You will notice:** construction and `addTypePolicies()` throw, naming each path
 (`typePolicies.Query.fields.feed.merge`).
 
-**Instead:** use a merge descriptor:
+**Instead:** use a merge descriptor. Behaviour names are enums the package exports
+(`import { Connection, Dedupe, Keep, ListMerge } from "fast-gql-cache-rs"`):
 
 | Your `merge` function | Merge descriptor |
 | --- | --- |
-| `concatPagination()`, `[...existing, ...incoming]` | `{ list: "append" }` |
-| `[...incoming, ...existing]` (newest first) | `{ list: "prepend" }` |
-| append only references not already present | `{ list: "append", dedupe: "ref" }` |
-| append only items whose key is new | `{ list: "append", dedupe: { by: keySpecifier } }` |
-| `offsetLimitPagination()` | `{ list: "offset", offsetArg? }` |
+| `concatPagination()`, `[...existing, ...incoming]` | `{ list: ListMerge.append }` |
+| `[...incoming, ...existing]` (newest first) | `{ list: ListMerge.prepend }` |
+| append only references not already present | `{ list: ListMerge.append, dedupe: Dedupe.ref }` |
+| append only items whose key is new | `{ list: ListMerge.append, dedupe: { by: keySpecifier } }` |
+| `offsetLimitPagination()` | `{ list: ListMerge.offset, offsetArg? }` |
 | a list inside a wrapper object (`{ ...incoming, items: [...] }`) | any list descriptor, plus `path: "items"` |
-| `relayStylePagination()` | `{ connection: "relay" }` on both `read` and `merge` |
-| first write wins, `existing ?? incoming` | `{ keep: "existing" }` |
+| `relayStylePagination()` | `{ connection: Connection.relay }` on both `read` and `merge` |
+| first write wins, `existing ?? incoming` | `{ keep: Keep.existing }` |
 | keep the stored value while a version field is unchanged | `{ keepExistingWhen: { equal: [fieldNames] } }` |
 
 For anything else, such as unit conversion, case normalization or summing numbers,
 normalize the data in a link or on the server, or keep that state outside the cache. If
 yours is a merge pattern other applications share and no descriptor covers it yet,
 [request a descriptor](https://github.com/convict-git/fast-gql-cache-rs/issues/new?template=descriptor-request.yml).
-
-The descriptor spelling is not final.
 
 <details>
 <summary>Why</summary>

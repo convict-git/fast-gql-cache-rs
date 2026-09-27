@@ -263,33 +263,100 @@ Three rules carry the whole design:
 | runtimes without WebAssembly | `evict` and `gc()` that actually give memory back, and `cache[Symbol.dispose]()` for caches built per request |
 
 For a configuration that only uses keys and common policies, migrating means changing the
-import and how the policies are written:
+import and how the policies are written. A policy becomes a descriptor: a plain object
+whose behaviour names are enums the package exports, the way Apollo exports
+`NetworkStatus`.
 
-```ts
-// Before
-import { InMemoryCache } from "@apollo/client";
-import { offsetLimitPagination } from "@apollo/client/utilities";
+```diff
+  import { ApolloClient } from "@apollo/client";
+- import { InMemoryCache } from "@apollo/client";
+- import { offsetLimitPagination } from "@apollo/client/utilities";
++ import { InMemoryCacheRs, ListMerge } from "fast-gql-cache-rs";
 
-const cache = new InMemoryCache({
-  typePolicies: {
-    Query: { fields: { activity: offsetLimitPagination(["ticketId"]) } },
-  },
-});
+- const cache = new InMemoryCache({
++ const cache = new InMemoryCacheRs({
+    typePolicies: {
+      Query: {
+        fields: {
+-         activity: offsetLimitPagination(["ticketId"]),
++         activity: { keyArgs: ["ticketId"], merge: { list: ListMerge.offset } },
+        },
+      },
+    },
+  });
+
+  const client = new ApolloClient({ link, cache }); // unchanged
 ```
 
-```ts
-// After (descriptor spelling not final yet)
-import { ApolloClient } from "@apollo/client";
-import { InMemoryCacheRs } from "fast-gql-cache-rs";
+The other common policies, field by field:
 
-const cache = new InMemoryCacheRs({
-  typePolicies: {
-    Query: { fields: { activity: { keyArgs: ["ticketId"], merge: { list: "offset" } } } },
-  },
-});
+**Infinite scroll**, `concatPagination()`:
 
-const client = new ApolloClient({ link, cache }); // unchanged
+```diff
+- feed: concatPagination(),
++ feed: { merge: { list: ListMerge.append } },
 ```
+
+**Newest first**, a notification list that grows at the top:
+
+```diff
+  notifications: {
+-   merge(existing = [], incoming) {
+-     return [...incoming, ...existing];
+-   },
++   merge: { list: ListMerge.prepend },
+  },
+```
+
+**Relay connections**, `relayStylePagination()`:
+
+```diff
+- tickets: relayStylePagination(["status"]),
++ tickets: {
++   keyArgs: ["status"],
++   read: { connection: Connection.relay },
++   merge: { connection: Connection.relay },
++ },
+```
+
+**A cache redirect**, so `ticket(id: "T1")` finds a ticket another query already loaded:
+
+```diff
+  ticket: {
+-   read(existing, { args, toReference }) {
+-     return existing ?? toReference({ __typename: "Ticket", id: args?.id });
+-   },
++   read: {
++     redirect: { typename: "Ticket", keyArgs: { id: "id" } },
++     when: RedirectWhen.missing,
++   },
+  },
+```
+
+**A default** for a field the server may leave out:
+
+```diff
+  role: {
+-   read(existing = "viewer") {
+-     return existing;
+-   },
++   read: { default: "viewer" },
+  },
+```
+
+**First write wins**, a value that must not change once stored:
+
+```diff
+  createdAt: {
+-   merge(existing, incoming) {
+-     return existing ?? incoming;
+-   },
++   merge: { keep: Keep.existing },
+  },
+```
+
+[Unsupported features](docs/compatibility.md#unsupported-features) has the whole catalogue,
+with the replacement for each kind of function.
 
 A configuration that still contains a function fails loudly: TypeScript rejects it, and the
 constructor throws an error that names every offending path. Nothing half-works.

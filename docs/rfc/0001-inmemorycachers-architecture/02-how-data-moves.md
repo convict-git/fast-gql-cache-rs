@@ -35,7 +35,7 @@ query Activity($ticketId: ID!, $offset: Int!, $limit: Int!) {
 
 The configuration is the "after" of [§3.3](README.md#33-what-an-application-changes): `tickets` has
 no policy, so every argument is part of its store key; `activity` is keyed by `ticketId`
-alone and merged with `{ list: "offset" }`; and a `ticket(id)` field is redirected to the
+alone and merged with `{ list: ListMerge.offset }`; and a `ticket(id)` field is redirected to the
 `Ticket` entity when `ROOT_QUERY` does not hold it.
 
 ### 4.2 Its traffic through the cache
@@ -716,7 +716,7 @@ sequenceDiagram
     SH->>COD: bind(plan, variables)
     Note over COD: store key activity:{'ticketId':'T1'}<br/>offset and limit are not key arguments.<br/>The descriptor still gets offset = 20
     COD->>RS: write(op buffer)
-    Note over RS: merge descriptor list offset:<br/>existing 20 references, incoming spliced at 20,<br/>a new list of 40, dirty (ROOT_QUERY, activity)
+    Note over RS: merge descriptor ListMerge.offset:<br/>existing 20 references, incoming spliced at 20,<br/>a new list of 40, dirty (ROOT_QUERY, activity)
     SH->>RS: takeDirtiedWatches()
     RS-->>SH: [Activity watch]
     SH->>RS: read(Activity watch)
@@ -726,7 +726,7 @@ sequenceDiagram
 
 **What differs**
 
-- **The merge rule is a descriptor that Rust runs**, `{ list: "offset" }`, with the exact
+- **The merge rule is a descriptor that Rust runs**, `{ list: ListMerge.offset }`, with the exact
   semantics of `offsetLimitPagination`, including the holes it leaves when a page arrives
   out of order ([§7.2](03-design-in-depth.md#72-descriptors)).
 - **Descriptors are tested against Apollo's helpers**, by twins of Apollo's tests that run
