@@ -1,6 +1,7 @@
 # Nightly: measures `main` (InMemoryCacheRs and Apollo's InMemoryCache, same
 # runner) when it has changed since the last recorded run, and appends the
-# result to the `dnd-data/benchmarks` branch (history.jsonl, README.md, index.html).
+# result to the `dnd-data/benchmarks` branch (history.jsonl, README.md, index.html,
+# and charts/, which the repository README embeds).
 name: Benchmark history
 
 on:

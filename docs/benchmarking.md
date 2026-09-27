@@ -69,10 +69,17 @@ artifacts.
 - `README.md`: the latest result and every run, readable on GitHub as is
 - `index.html`: a trend chart of `InMemoryCacheRs ÷ InMemoryCache`, overall and per
   measurement (enable GitHub Pages for the `dnd-data/benchmarks` branch to serve it)
+- `charts/`: the chart the [README](../README.md#measured-against-inmemorycache) embeds,
+  as a light and a dark SVG. It plots `InMemoryCache ÷ InMemoryCacheRs` on one axis, so
+  higher is better: speed overall and for writes, reads and broadcasts, and memory
+  overall and for retained and allocated bytes. The categories come from the
+  measurement labels ([`charts.mjs`](../scripts/bench/charts.mjs))
 - `runs/`: the raw samples of each run
 
 The trend plots the ratio because it is measured within one job: nights on different
-runner hardware stay comparable.
+runner hardware stay comparable. After changing how the branch is rendered,
+`node scripts/bench/history.mjs render DIR` regenerates it from `history.jsonl` in a
+checkout of the branch, with no new run.
 
 ## Locally
 
@@ -172,6 +179,6 @@ from [`probes/cache-memory-probe.json`](probes/cache-memory-probe.json)). The
 | [`scripts/bench/report.mjs`](../scripts/bench/report.mjs) | The PR comment and the history summary |
 | [`scripts/bench/comment.mjs`](../scripts/bench/comment.mjs) | Keeps the one PR comment up to date |
 | [`scripts/bench/gate.mjs`](../scripts/bench/gate.mjs) | The `Benchmark gate` merge check |
-| [`scripts/bench/history.mjs`](../scripts/bench/history.mjs), [`trend.html`](../scripts/bench/trend.html) | The `dnd-data/benchmarks` branch |
+| [`scripts/bench/history.mjs`](../scripts/bench/history.mjs), [`trend.html`](../scripts/bench/trend.html), [`charts.mjs`](../scripts/bench/charts.mjs) | The `dnd-data/benchmarks` branch and the README charts |
 
 `npm run test:tooling` tests them.
