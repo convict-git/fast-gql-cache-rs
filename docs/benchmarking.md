@@ -69,11 +69,11 @@ artifacts.
 - `README.md`: the latest result and every run, readable on GitHub as is
 - `index.html`: a trend chart of `InMemoryCacheRs ÷ InMemoryCache`, overall and per
   measurement (enable GitHub Pages for the `dnd-data/benchmarks` branch to serve it)
-- `charts/`: the speed and memory charts the [README](../README.md#measured-against-inmemorycache)
-  embeds, a light and a dark SVG each. They plot `InMemoryCache ÷ InMemoryCacheRs`, so
-  higher is better: overall, and for writes, reads and broadcasts (speed) or retained
-  and allocated bytes (memory). The categories come from the measurement labels
-  ([`charts.mjs`](../scripts/bench/charts.mjs))
+- `charts/`: the chart the [README](../README.md#measured-against-inmemorycache) embeds,
+  as a light and a dark SVG. It plots `InMemoryCache ÷ InMemoryCacheRs` on one axis, so
+  higher is better: speed overall and for writes, reads and broadcasts, and memory
+  overall and for retained and allocated bytes. The categories come from the
+  measurement labels ([`charts.mjs`](../scripts/bench/charts.mjs))
 - `runs/`: the raw samples of each run
 
 The trend plots the ratio because it is measured within one job: nights on different

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  CHARTS,
   memoryKind,
   renderChart,
   seriesPoints,
@@ -64,37 +63,44 @@ test("plots InMemoryCache ÷ InMemoryCacheRs, so higher is better", () => {
       "write cold N=5000": { apollo: 0, rs: 10, unit: "B" },
     }),
   ];
-  const values = (s) => s.points.map((p) => Number(p.value.toFixed(9)));
-  const [all, writes, reads, broadcasts] = seriesPoints(runs, CHARTS.speed);
-  assert.deepEqual(values(all), [1, 2]);
-  assert.deepEqual(values(writes), [2, 4]);
-  assert.deepEqual(values(reads), [0.5, 1]);
-  assert.deepEqual(broadcasts.points, []);
+  const values = (name) =>
+    seriesPoints(runs)
+      .find((s) => s.name === name)
+      .points.map((p) => Number(p.value.toFixed(9)));
+  assert.deepEqual(values("All timings"), [1, 2]);
+  assert.deepEqual(values("Writes"), [2, 4]);
+  assert.deepEqual(values("Reads"), [0.5, 1]);
+  assert.deepEqual(values("Broadcasts"), []);
 
   // Memory appears from the run that first recorded it; a zero is skipped.
-  const [memory] = seriesPoints(runs, CHARTS.memory);
+  const memory = seriesPoints(runs).find((s) => s.name === "All memory");
   assert.deepEqual(
     memory.points.map((p) => p.i),
     [1]
   );
-  assert.deepEqual(values(memory), [3]);
+  assert.deepEqual(values("All memory"), [3]);
+  assert.deepEqual(values("Retained"), [3]);
+  assert.deepEqual(values("Allocated"), []);
 
-  const svg = renderChart(runs, CHARTS.speed, "dark");
+  const svg = renderChart(runs, "dark");
   assert.match(svg, /^<svg [^>]*role="img"/);
   assert.match(svg, /All timings <tspan[^>]*>2\.00×<\/tspan>/);
+  assert.match(svg, /All memory <tspan[^>]*>3\.00×<\/tspan>/);
   assert.match(svg, /Broadcasts <tspan[^>]*>—<\/tspan>/);
+  assert.match(svg, />Speed<\/text>/);
+  assert.match(svg, />Memory<\/text>/);
+  // Memory is dashed with square markers, speed solid with round ones.
+  assert.match(svg, /<line [^>]*stroke-dasharray/);
+  assert.match(svg, /<rect [^>]*><title>Memory, All memory/);
+  assert.match(svg, /<circle [^>]*><title>Speed, All timings/);
   assert.match(svg, /InMemoryCache<\/text>/);
   assert.match(svg, /bbbbbbb/);
   assert.match(svg, /<\/svg>\n$/);
 });
 
 test("renders a chart with no data yet", () => {
-  const runs = [
-    run("a".repeat(40), "2026-09-26T03:00:00.000Z", {
-      "write cold N=100": { apollo: 200, rs: 100 },
-    }),
-  ];
-  const svg = renderChart(runs, CHARTS.memory, "light");
+  const runs = [run("a".repeat(40), "2026-09-26T03:00:00.000Z", {})];
+  const svg = renderChart(runs, "light");
   assert.match(svg, /No runs recorded yet\./);
   assert.doesNotMatch(svg, /<path/);
 });
