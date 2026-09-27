@@ -147,6 +147,20 @@ callbacks) and two bulk codecs; Rust never calls JavaScript.
   step is done. Performance per PR and over time: `docs/benchmarking.md` (the `benchmark`
   PR label, the nightly history, `npm run bench:pr -- --base main` locally).
 
+## Branches and pull requests
+
+**One working branch per session.** Once a session is on a branch other than `main`, that
+branch and its open PR take every later change of the session, related to the first one or
+not, and the PR description grows to cover each. A new branch or PR needs the user's
+request or a reason stated to the user before it is created. Two cases leave the working
+branch:
+
+- **A data branch** (`dnd-data/*`, [below](#data-branches)): commit to it from a separate
+  worktree, as its rules allow, then carry on on the working branch.
+- **The PR is no longer open.** Before each push, `gh pr view <n> --json state` must say
+  `OPEN`; the user merges quickly. If it has merged or closed, the next change goes on a new
+  branch from `origin/main`, and the session says so; that branch becomes the working branch.
+
 ## Data branches
 
 A **data branch** holds data or assets that are not code, kept off `main`, and its name
