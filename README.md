@@ -131,13 +131,30 @@ From the [Apollo performance guide](docs/research/performance/README.md), for a 
 | --- | --- |
 | read the list, nothing changed | **3.8 µs** |
 | write the list again with **one** entity changed | **72.18 ms** |
+| write the list again with **nothing** changed | 75.95 ms |
 | re-read it after that one field changed | 19.53 ms |
 | notify 200 watchers after a relevant write (2 000 entities) | 95.99 ms |
 | memory kept for a query that is read and watched | **14.8×** the size of the store itself |
 
-At 60 fps, a frame lasts 16.7 ms. A poll that changes one ticket out of 5 000 spends about
-four frames just writing it. A write-heavy application pays on exactly the side Apollo
-cannot memoize.
+**Why milliseconds matter here.** The cache runs on the main thread, the thread that also
+scrolls, animates and handles input. To draw 60 frames a second, the browser has
+**16.7 ms per frame** for all of it, your JavaScript included (8.3 ms on a 120 Hz
+display). While a cache call runs, no frame is drawn and no click is handled. Browsers
+flag any task over 50 ms as a [long task](https://w3c.github.io/longtasks/).
+
+Now take one poll of that list, with one of the 5 000 tickets changed:
+
+1. **The write: 72.18 ms.** One changed field costs about as much as rewriting the whole
+   list unchanged (75.95 ms), because the writer only finds out what changed by comparing
+   every field.
+2. **The re-read by the query that shows the list: 19.53 ms**, against 3.8 µs when
+   nothing changed, because one dirty field invalidates the memoized list.
+
+That is about **92 ms in a single task**, more than five frames at 60 fps, to show one
+changed field, and every poll that brings a change pays it again, however small the
+change. More watchers cost more: a write that 200 watchers see takes 95.99 ms, on a list
+less than half the size. Reads are the side Apollo memoizes, and a write-heavy
+application spends its time on the other side.
 
 *These numbers were measured under Node. Browser measurements come with the vertical
 slice ([§19](docs/rfc/0001-inmemorycachers-architecture/04-getting-there.md#19-performance-and-memory-targets)).*
