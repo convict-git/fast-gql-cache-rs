@@ -32,7 +32,7 @@ owning consistent writes and JS eventually consistent. Two agents, a Claude Code
 and GPT-6 Astra (Codex), discussed it turn by turn under
 [the brainstorm protocol](../agents/brainstorm-protocol.md), with the maintainer
 moderating. Every fact below was verified against `apollo-client-sm/src/` (Apollo Client
-4.2.11 at `ba511be`), against the performance guide, or by an experiment whose script is
+4.2.11 at `ba511be`), against the Apollo performance guide, or by an experiment whose script is
 reproduced in this record. The messages are cited as `#n`.
 
 **Eventual consistency is ruled out** by F1: reads and writes are synchronous, and Apollo
@@ -153,7 +153,7 @@ amendment, and AGENTS.md carries it.
 | development console output, byte for byte except [registered drifts](../compatibility.md#behaviour-drift) | `npm run probe:parity`, ADR 0002 |
 
 **Measurements**, from the performance probe (`docs/probes/cache-performance-probe.mjs`) at
-N = 5 000, against Apollo's baselines [performance §1.3]: write cold 83.41 ms, write of an
+N = 5 000, against Apollo's baselines [Apollo performance §1.3]: write cold 83.41 ms, write of an
 identical payload 75.95 ms, read cold 155.23 ms, read warm 3.8 µs, read after one dirty
 field 19.53 ms.
 
@@ -234,13 +234,13 @@ Paths under `cache/`, `core/`, `link/` and `utilities/` are in `apollo-client-sm
 
 | Id | Fact | Evidence |
 | --- | --- | --- |
-| F1 | Reads and writes are synchronous (`reset` alone returns `Promise<void>`), and Apollo reads its own writes in the same call stack: `markQueryResult` writes then `diff`s inside one `batch`; `updateQuery` reads then writes; `writeQuery({ broadcast: false })` is visible to the next `readQuery`. | architecture §8.4; `cache/inmemory/inMemoryCache.ts` (`write`, `batch`); `cache/core/cache.ts:197` |
+| F1 | Reads and writes are synchronous (`reset` alone returns `Promise<void>`), and Apollo reads its own writes in the same call stack: `markQueryResult` writes then `diff`s inside one `batch`; `updateQuery` reads then writes; `writeQuery({ broadcast: false })` is visible to the next `readQuery`. | Apollo architecture §8.4; `cache/inmemory/inMemoryCache.ts` (`write`, `batch`); `cache/core/cache.ts:197` |
 | F2 | Notification is mostly deferred: `ObservableQuery`'s watch callback compares synchronously, then `scheduleNotify()` runs `notify` in a `setTimeout`. `QueryManager.broadcastQueries` calls `notify()` synchronously. React hooks read through `useSyncExternalStore`. | `core/ObservableQuery.ts:715`, `:1760`; `core/QueryManager.ts:866-869`; `react/hooks/useQuery.ts:859` |
 | F3 | The writer skips staging an object the reader handed out unchanged (`isFresh`), so its merge functions do not run. Losing JS identity on the way in is observable. | `cache/inmemory/writeToStore.ts:480`; `readFromStore.ts:251`; experiment E1 |
 | F4 | `Policies.identify` reads through `policies.cache["data"]`, so while Apollo's `Policies` is used, `cache.data` stays `NormalizedCache`-shaped. | `cache/inmemory/policies.ts:454` |
 | F5 | `cloneDeep` copies arrays and every `[object Object]` value, class instances included; `Date` and `Map` leaves keep their identity. | `utilities/internal/cloneDeep.ts`; `cache/inmemory/__tests__/readFromStore.ts:2183` |
 | F6 | Phase 2 of a write is not atomic (W1): a throwing merge function leaves earlier entities merged. | `cache/inmemory/writeToStore.ts:197-255` |
-| F7 | Removing a lower optimistic layer replays the JS `update` functions of the layers above it. | `cache/inmemory/entityStore.ts` (`Layer.removeLayer`); architecture §2.10 |
+| F7 | Removing a lower optimistic layer replays the JS `update` functions of the layers above it. | `cache/inmemory/entityStore.ts` (`Layer.removeLayer`); Apollo architecture §2.10 |
 | F8 | `StoreReader` duck-types its store (`supportsResultCaching`, `makeCacheKey`), keys the list memo on the stored array object, and calls `store.group.depend` directly. | `cache/inmemory/readFromStore.ts:146`, `:163`, `:176`, `:187`, `:350-352`; `entityStore.ts:554-556`, `:603`, `:697` |
 | F9 | The state model of contract 3. | `cache/inmemory/entityStore.ts:72-99`, `:123`, `:140-184`, `:257-260`, `:323`; experiments E2, E3 |
 | F10 | Reconciliation by `@wry/equality`, dirtying by `!==`: a stored `-0` survives a write of `0`; a `NaN` rewrite always dirties. | `@wry/equality` 0.5.7 `lib/index.js:66-73`; `entityStore.ts:157`; experiment E4 |

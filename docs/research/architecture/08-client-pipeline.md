@@ -1,6 +1,10 @@
 # Part 8 — The cache in the Apollo Client pipeline
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 7](07-method-reference.md) · [Part 9 →](09-invariants-and-checklist.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 7](07-method-reference.md) · [Part 9 →](09-invariants-and-checklist.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 Parts 0–7 treated the cache as a closed system. This part opens the boundary: who calls
 which method, in what order, and — most importantly — **which client behaviours are actually
@@ -807,4 +811,4 @@ gets `optimism`'s default of `2^16`. `getMemoryInternals()` still reports the de
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 7 — Method-by-method reference](07-method-reference.md) | [Architecture guide](README.md) | [Part 9 — Invariants and a re-implementation checklist](09-invariants-and-checklist.md) |
+| [Part 7 — Method-by-method reference](07-method-reference.md) | [Apollo architecture guide](README.md) | [Part 9 — Invariants and a re-implementation checklist](09-invariants-and-checklist.md) |

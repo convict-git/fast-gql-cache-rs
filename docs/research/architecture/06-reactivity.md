@@ -1,6 +1,10 @@
 # Part 6 — Reactivity
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 5](05-store-reader.md) · [Part 7 →](07-method-reference.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 5](05-store-reader.md) · [Part 7 →](07-method-reference.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 Parts 2–5 covered storage, naming, writing, and reading. This part covers the machinery
 that turns a write into a notification: `watch`, `broadcastWatches`, `txCount`, `batch`,
@@ -682,4 +686,4 @@ yields `null` data.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 5 — `StoreReader`](05-store-reader.md) | [Architecture guide](README.md) | [Part 7 — Method-by-method reference](07-method-reference.md) |
+| [Part 5 — `StoreReader`](05-store-reader.md) | [Apollo architecture guide](README.md) | [Part 7 — Method-by-method reference](07-method-reference.md) |

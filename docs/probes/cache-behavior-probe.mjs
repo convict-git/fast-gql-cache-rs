@@ -1,8 +1,8 @@
 /**
  * Executable behaviour probe for Apollo Client's `InMemoryCache` (v4.2.11).
  *
- * Observable behaviour documented in the architecture guide
- * (`docs/architecture/`) is pinned here, so the documentation can be
+ * Observable behaviour documented in the Apollo architecture guide
+ * (`docs/research/architecture/`) is pinned here, so the documentation can be
  * re-validated against a new Apollo version by re-running this file:
  *
  *   node --conditions=development docs/probes/cache-behavior-probe.mjs

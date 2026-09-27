@@ -1,6 +1,10 @@
 # Part 4 — The dependency graph and broadcast
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 3](03-read-path.md) · [Part 5 →](05-layers-and-optimistic-updates.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 3](03-read-path.md) · [Part 5 →](05-layers-and-optimistic-updates.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 ## 4.1 `depend` and `dirty`
 
@@ -319,4 +323,4 @@ and compares the result with the previous one (`O(N)`, [§4.4](#44-broadcast-fan
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 3 — The read path](03-read-path.md) | [Performance guide](README.md) | [Part 5 — Layers and optimistic updates](05-layers-and-optimistic-updates.md) |
+| [Part 3 — The read path](03-read-path.md) | [Apollo performance guide](README.md) | [Part 5 — Layers and optimistic updates](05-layers-and-optimistic-updates.md) |

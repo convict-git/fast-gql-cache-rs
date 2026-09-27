@@ -1,7 +1,7 @@
 /**
  * Executable performance probe for Apollo Client's `InMemoryCache` (v4.2.11).
  *
- * Companion to the performance guide (`docs/performance/`): every measured cost
+ * Companion to the Apollo performance guide (`docs/research/performance/`): every measured cost
  * claim in that guide is produced by this file. Re-run it to re-derive the
  * numbers on a new machine or a new Apollo version.
  *
@@ -204,7 +204,7 @@ function note(text) {
 /**
  * Prints a scaling table. `rows` is [[sizeLabel, size, {col: ns}], ...], and
  * `sizeName` names the variable in the first column (the symbol the
- * performance guide uses for it, e.g. "N" for list length).
+ * Apollo performance guide uses for it, e.g. "N" for list length).
  * Adds a "scale" column per measurement: the growth against the previous row
  * divided by the size ratio (1.00 = linear; a constant cost reads as
  * 1/ratio; a quadratic step reads as the size ratio itself, e.g. 4.00 for a

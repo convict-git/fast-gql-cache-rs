@@ -3,8 +3,10 @@
 Rust-WASM `InMemoryCache` implementation for Apollo Client, published as the npm package
 `fast-gql-cache-rs`. The public surface is `InMemoryCacheRs` / `InMemoryCacheRsConfig`
 (`src/index.ts`); the WASM core lives in `wasm/` and the TypeScript shell delegates to
-Apollo collaborators. Research on the cache being replaced (architecture, costs, the
-build order for a re-implementation) is in `docs/README.md`.
+Apollo collaborators. Research on the cache being replaced, Apollo's `InMemoryCache`
+(architecture, costs, the build order for a re-implementation), is in `docs/research/`; our
+own design is RFC 0001 (`docs/rfc/`) and the ADRs. Keep the two apart: cite the research as
+"Apollo architecture §N.M" or "Apollo performance §N.M", never as plain "architecture".
 
 These conventions bind every change. Breaking one requires explicit user approval and the
 reasoning recorded in the commit/PR message.
@@ -57,7 +59,7 @@ The target is close to `InMemoryCache`, not byte-identical
 ([ADR 0002](docs/adr/0002-compatibility-target.md)):
 
 - **Always holds**: the `ApolloCache` contract Apollo Client relies on
-  ([architecture §9.3](docs/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements),
+  ([Apollo architecture §9.3](docs/research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements),
   synchronous read-your-writes), and, for the declarative profile of
   [ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md), the user-authored surface:
   config shapes, identity, descriptor and modifier semantics including how often they

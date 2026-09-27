@@ -1,6 +1,10 @@
 # Part 4 — `StoreWriter`
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 3](03-policies.md) · [Part 5 →](05-store-reader.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 3](03-policies.md) · [Part 5 →](05-store-reader.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 `writeToStore.ts` (967 lines) turns a response-shaped tree into a set of `StoreObject`
 patches. Its defining structural choice is that it is **two-phase**: the entire result is
@@ -802,4 +806,4 @@ stateDiagram-v2
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 3 — `Policies`](03-policies.md) | [Architecture guide](README.md) | [Part 5 — `StoreReader`](05-store-reader.md) |
+| [Part 3 — `Policies`](03-policies.md) | [Apollo architecture guide](README.md) | [Part 5 — `StoreReader`](05-store-reader.md) |

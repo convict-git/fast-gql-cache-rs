@@ -1,6 +1,10 @@
 # Part 9 — Invariants and a re-implementation checklist
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 8](08-client-pipeline.md) · [Performance guide →](../performance/README.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 8](08-client-pipeline.md) · [Performance guide →](../performance/README.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 This part is the specification distilled. If a re-implementation satisfies every invariant
 here and passes `docs/probes/cache-behavior-probe.mjs`, it is behaviourally compatible with
@@ -79,7 +83,7 @@ Each invariant names the part that derives it and the failure mode of violating 
 
 The dependency graph is strict: each stage builds only on the stages above it. Most stages
 can be checked in isolation against the
-[behaviour probe](../probes/cache-behavior-probe.mjs) sections listed in their box (the
+[behaviour probe](../../probes/cache-behavior-probe.mjs) sections listed in their box (the
 section numbers the probe prints).
 
 ```mermaid
@@ -201,4 +205,4 @@ unbounded leak for any application that evicts.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 8 — The cache in the Apollo Client pipeline](08-client-pipeline.md) | [Architecture guide](README.md) | [Performance guide](../performance/README.md) |
+| [Part 8 — The cache in the Apollo Client pipeline](08-client-pipeline.md) | [Apollo architecture guide](README.md) | [Performance guide](../performance/README.md) |

@@ -1,6 +1,10 @@
 # Part 5 — `StoreReader`
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 4](04-store-writer.md) · [Part 6 →](06-reactivity.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 4](04-store-writer.md) · [Part 6 →](06-reactivity.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 `readFromStore.ts` is only 507 lines, but it is where the cache earns its performance. It
 walks a selection set over the flat store and re-assembles a response tree, memoizing every
@@ -612,4 +616,4 @@ flowchart LR
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 4 — `StoreWriter`](04-store-writer.md) | [Architecture guide](README.md) | [Part 6 — Reactivity](06-reactivity.md) |
+| [Part 4 — `StoreWriter`](04-store-writer.md) | [Apollo architecture guide](README.md) | [Part 6 — Reactivity](06-reactivity.md) |

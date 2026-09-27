@@ -1,6 +1,10 @@
 # Part 2 — The write path
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 1](01-cost-model.md) · [Part 3 →](03-read-path.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 1](01-cost-model.md) · [Part 3 →](03-read-path.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 ## 2.1 Where the time goes
 
@@ -374,4 +378,4 @@ in the scaling table above, where the cold column also pays the per-cache setup)
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 1 — The cost model in one page](01-cost-model.md) | [Performance guide](README.md) | [Part 3 — The read path](03-read-path.md) |
+| [Part 1 — The cost model in one page](01-cost-model.md) | [Apollo performance guide](README.md) | [Part 3 — The read path](03-read-path.md) |

@@ -124,7 +124,7 @@ the memo is almost free. A write has no incremental path: it normalizes and comp
 *whole* payload before it knows what changed. Then every watcher of the changed data pays
 for a re-read and a comparison.
 
-From the [performance guide](docs/performance/README.md), for a list of 5 000 entities
+From the [Apollo performance guide](docs/research/performance/README.md), for a list of 5 000 entities
 (production build, median of five fresh runs):
 
 | What happens | `InMemoryCache` |
@@ -485,47 +485,50 @@ WebAssembly logo and Ferris the crab, both dedicated to the public domain under
   engine and prove it against Apollo's own tests.
 - **Help shape it.** See [How can I help?](#faq) in the FAQ.
 
-## Go deeper: the research
+## Go deeper: the research on Apollo's `InMemoryCache`
 
-Before writing any Rust, we took `InMemoryCache` (`@apollo/client@4.2.11`) apart: how every
-path works, what each one costs, and what a replacement has to preserve. These documents
-record what we've found so far and will change as the work goes on. The
-[documentation home](docs/README.md) has reading paths and a section-level table of
-contents.
+Before writing any Rust, we took Apollo's `InMemoryCache` (`@apollo/client@4.2.11`) apart:
+how every path works, what each one costs, and what a replacement has to preserve. **These
+guides describe Apollo's cache, not `InMemoryCacheRs`**; the design of `InMemoryCacheRs` is
+[RFC 0001](docs/rfc/0001-inmemorycachers-architecture/README.md). They record what we've
+found so far and will change as the work goes on. The [research](docs/research/README.md)
+lists every chapter, and the [documentation home](docs/README.md) has reading paths and a
+section-level table of contents.
 
 <!-- toc:start -->
 
-### [Architecture guide](docs/architecture/README.md): what every path does
+### [Apollo architecture guide](docs/research/architecture/README.md): what every path does
 
-- [Part 0 — Orientation](docs/architecture/00-orientation.md)
-- [Part 1 — Foundations](docs/architecture/01-foundations.md)
-- [Part 2 — The normalized store](docs/architecture/02-normalized-store.md)
-- [Part 3 — `Policies`](docs/architecture/03-policies.md)
-- [Part 4 — `StoreWriter`](docs/architecture/04-store-writer.md)
-- [Part 5 — `StoreReader`](docs/architecture/05-store-reader.md)
-- [Part 6 — Reactivity](docs/architecture/06-reactivity.md)
-- [Part 7 — Method-by-method reference](docs/architecture/07-method-reference.md)
-- [Part 8 — The cache in the Apollo Client pipeline](docs/architecture/08-client-pipeline.md)
-- [Part 9 — Invariants and a re-implementation checklist](docs/architecture/09-invariants-and-checklist.md)
+- [Part 0 — Orientation](docs/research/architecture/00-orientation.md)
+- [Part 1 — Foundations](docs/research/architecture/01-foundations.md)
+- [Part 2 — The normalized store](docs/research/architecture/02-normalized-store.md)
+- [Part 3 — `Policies`](docs/research/architecture/03-policies.md)
+- [Part 4 — `StoreWriter`](docs/research/architecture/04-store-writer.md)
+- [Part 5 — `StoreReader`](docs/research/architecture/05-store-reader.md)
+- [Part 6 — Reactivity](docs/research/architecture/06-reactivity.md)
+- [Part 7 — Method-by-method reference](docs/research/architecture/07-method-reference.md)
+- [Part 8 — The cache in the Apollo Client pipeline](docs/research/architecture/08-client-pipeline.md)
+- [Part 9 — Invariants and a re-implementation checklist](docs/research/architecture/09-invariants-and-checklist.md)
 
-### [Performance guide](docs/performance/README.md): what every path costs
+### [Apollo performance guide](docs/research/performance/README.md): what every path costs
 
-- [Part 1 — The cost model in one page](docs/performance/01-cost-model.md)
-- [Part 2 — The write path](docs/performance/02-write-path.md)
-- [Part 3 — The read path](docs/performance/03-read-path.md)
-- [Part 4 — The dependency graph and broadcast](docs/performance/04-dependency-graph-and-broadcast.md)
-- [Part 5 — Layers and optimistic updates](docs/performance/05-layers-and-optimistic-updates.md)
-- [Part 6 — Lifecycle operations](docs/performance/06-lifecycle-operations.md)
-- [Part 7 — Structural properties that stress the hot paths](docs/performance/07-structural-stress.md)
-- [Part 8 — Worst-case shapes and a stress corpus](docs/performance/08-worst-case-shapes.md)
-- [Part 9 — Optimization playbook](docs/performance/09-optimization-playbook.md)
+- [Part 1 — The cost model in one page](docs/research/performance/01-cost-model.md)
+- [Part 2 — The write path](docs/research/performance/02-write-path.md)
+- [Part 3 — The read path](docs/research/performance/03-read-path.md)
+- [Part 4 — The dependency graph and broadcast](docs/research/performance/04-dependency-graph-and-broadcast.md)
+- [Part 5 — Layers and optimistic updates](docs/research/performance/05-layers-and-optimistic-updates.md)
+- [Part 6 — Lifecycle operations](docs/research/performance/06-lifecycle-operations.md)
+- [Part 7 — Structural properties that stress the hot paths](docs/research/performance/07-structural-stress.md)
+- [Part 8 — Worst-case shapes and a stress corpus](docs/research/performance/08-worst-case-shapes.md)
+- [Part 9 — Optimization playbook](docs/research/performance/09-optimization-playbook.md)
+- [Part 10 — Memory](docs/research/performance/10-memory.md)
 
 ### [Probes](docs/README.md#probes): executable checks
 
 - [Behaviour probe](docs/probes/cache-behavior-probe.mjs): 78 assertions that pin the
-  behaviour described in the architecture guide
+  behaviour described in the Apollo architecture guide
 - [Performance probe](docs/probes/cache-performance-probe.mjs): produces every table in the
-  performance guide; its output is committed as
+  Apollo performance guide; its output is committed as
   [`cache-performance-probe.log`](docs/probes/cache-performance-probe.log)
 - [Benchmarking](docs/benchmarking.md): how each PR's performance effect is measured
   (the `benchmark` label) and tracked nightly on the `dnd-data/benchmarks` branch

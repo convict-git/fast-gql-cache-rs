@@ -1,6 +1,10 @@
 # Part 6 — Lifecycle operations
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 5](05-layers-and-optimistic-updates.md) · [Part 7 →](07-structural-stress.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 5](05-layers-and-optimistic-updates.md) · [Part 7 →](07-structural-stress.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 Over a list of `N` entities, so a store of `S = N + 1` entries (the probe's section 12):
 
@@ -113,4 +117,4 @@ queries.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 5 — Layers and optimistic updates](05-layers-and-optimistic-updates.md) | [Performance guide](README.md) | [Part 7 — Structural properties that stress the hot paths](07-structural-stress.md) |
+| [Part 5 — Layers and optimistic updates](05-layers-and-optimistic-updates.md) | [Apollo performance guide](README.md) | [Part 7 — Structural properties that stress the hot paths](07-structural-stress.md) |

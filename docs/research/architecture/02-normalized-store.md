@@ -1,6 +1,10 @@
 # Part 2 — The normalized store
 
-[Documentation](../README.md) › [Architecture guide](README.md) · [← Part 1](01-foundations.md) · [Part 3 →](03-policies.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo architecture guide](README.md) · [← Part 1](01-foundations.md) · [Part 3 →](03-policies.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 `entityStore.ts` contains the four store classes (`EntityStore`, `Root`, `Layer`, `Stump`)
 and the `CacheGroup` dependency tracker. This is where all state lives; `InMemoryCache`
@@ -905,4 +909,4 @@ yields `"server+B"`, not `"optimistic-A"` or `"server"`.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 1 — Foundations](01-foundations.md) | [Architecture guide](README.md) | [Part 3 — `Policies`](03-policies.md) |
+| [Part 1 — Foundations](01-foundations.md) | [Apollo architecture guide](README.md) | [Part 3 — `Policies`](03-policies.md) |

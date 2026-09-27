@@ -1,6 +1,10 @@
 # Part 7 — Structural properties that stress the hot paths
 
-[Documentation](../README.md) › [Performance guide](README.md) · [← Part 6](06-lifecycle-operations.md) · [Part 8 →](08-worst-case-shapes.md)
+[Documentation](../../README.md) › [Research](../README.md) › [Apollo performance guide](README.md) · [← Part 6](06-lifecycle-operations.md) · [Part 8 →](08-worst-case-shapes.md)
+
+> **This is research on Apollo Client's `InMemoryCache`, the cache this project replaces.**
+> It does not describe `InMemoryCacheRs`; for that design, see
+> [RFC 0001: The architecture of `InMemoryCacheRs`](../../rfc/0001-inmemorycachers-architecture/README.md).
 
 This is the core of the question: **given deeply nested typed and untyped objects and
 arrays, what shapes hurt, and which hot path do they hurt?**
@@ -413,4 +417,4 @@ reached it.
 
 | ← Previous | Up | Next → |
 | :-- | :-: | --: |
-| [Part 6 — Lifecycle operations](06-lifecycle-operations.md) | [Performance guide](README.md) | [Part 8 — Worst-case shapes and a stress corpus](08-worst-case-shapes.md) |
+| [Part 6 — Lifecycle operations](06-lifecycle-operations.md) | [Apollo performance guide](README.md) | [Part 8 — Worst-case shapes and a stress corpus](08-worst-case-shapes.md) |

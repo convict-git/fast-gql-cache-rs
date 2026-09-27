@@ -27,7 +27,7 @@ the `ApolloCache` interface. That is `fragmentMatches`, `lookupFragment`, and th
 or reads `cache.policies` [verified: `git grep` over `apollo-client-sm/src` outside
 `cache/inmemory/` and tests]. On top of the interface, the client relies on a handful of
 behaviours, listed in
-[architecture §9.3](../architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements),
+[Apollo architecture §9.3](../research/architecture/09-invariants-and-checklist.md#93-cross-boundary-requirements),
 and on synchronous read-your-writes (ADR 0001, F1). One example: `QueryInfo` monkey-patches
 `evict`, `modify` and `reset` on the cache instance [verified:
 `core/QueryInfo.ts:68-80`, `:136-138`]. Breaking any of these breaks applications, so they
@@ -62,7 +62,7 @@ fields. Nothing in Apollo Client's API or production code depends on it. That is
 
 | Tier | Holds | Examples |
 | --- | --- | --- |
-| **1. Client contract** (hard) | always | synchronous read-your-writes (F1); architecture §9.3's cross-boundary requirements; §9.1's invariants that the client observes: D4–D7, L2, L3, L5, R4–R6, S4 |
+| **1. Client contract** (hard) | always | synchronous read-your-writes (F1); Apollo architecture §9.3's cross-boundary requirements; §9.1's invariants that the client observes: D4–D7, L2, L3, L5, R4–R6, S4 |
 | **2. User-authored surface** (hard) | always | `InMemoryCacheConfig` option shapes; identity (P1–P3, S2, S3); `read`/`merge`/modifier semantics and options (`readField`, `toReference`, `canRead`, `storage`, `DELETE`, `INVALIDATE`), including how often merge functions run (W2–W5, F3); `possibleTypes` (P5); reactive variables (P4); `evict`/`gc`/`retain` semantics; `extract()`/`restore()` contents (S5); `cache.policies`' public methods; mid-write visibility for callbacks that read (F12) |
 | **3. Incidental** (may drift) | until a register entry says otherwise | the entity-snapshot capture of optimistic layers (F9); `NaN` rewrites always dirtying (F10); the Root keeping `undefined` when `resultCaching` is off (F9); non-atomic phase 2 (W1, F6); development warning text and its interleaving with user output; `getMemoryInternals` shape; key order inside `extract()`; private fields (`cache["data"]`, `storeReader`, `watches`); `===` result stability (R2) |
 
