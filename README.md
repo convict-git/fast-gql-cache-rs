@@ -1,6 +1,6 @@
 # fast-gql-cache-rs
 
-[![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
+[![Waitlist](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fconvict-git%2Ffast-gql-cache-rs%2Fdnd-data%2Fbadges%2Fwaitlist.json)](https://github.com/convict-git/fast-gql-cache-rs/issues/18)
 [![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/convict-git)
 [![CI](https://img.shields.io/github/actions/workflow/status/convict-git/fast-gql-cache-rs/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/convict-git/fast-gql-cache-rs/actions/workflows/ci.yml)
 
@@ -485,7 +485,7 @@ contents.
   performance guide; its output is committed as
   [`cache-performance-probe.log`](docs/probes/cache-performance-probe.log)
 - [Benchmarking](docs/benchmarking.md): how each PR's performance effect is measured
-  (the `benchmark` label) and tracked nightly on the `benchmarks` branch
+  (the `benchmark` label) and tracked nightly on the `dnd-data/benchmarks` branch
 
 <!-- toc:end -->
 

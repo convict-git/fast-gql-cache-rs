@@ -63,12 +63,12 @@ artifacts.
 [`benchmark-history.yml`](../.github/workflows/benchmark-history.yml) runs nightly. When
 `main` has changed since the last recorded run, it measures `InMemoryCacheRs` and
 `InMemoryCache` on one runner (3 runs, full precision) and appends the result to the
-**`benchmarks`** branch:
+**`dnd-data/benchmarks`** branch:
 
 - `history.jsonl`: one line per measured commit
 - `README.md`: the latest result and every run, readable on GitHub as is
 - `index.html`: a trend chart of `InMemoryCacheRs ÷ InMemoryCache`, overall and per
-  measurement (enable GitHub Pages for the `benchmarks` branch to serve it)
+  measurement (enable GitHub Pages for the `dnd-data/benchmarks` branch to serve it)
 - `runs/`: the raw samples of each run
 
 The trend plots the ratio because it is measured within one job: nights on different
@@ -172,6 +172,6 @@ from [`probes/cache-memory-probe.json`](probes/cache-memory-probe.json)). The
 | [`scripts/bench/report.mjs`](../scripts/bench/report.mjs) | The PR comment and the history summary |
 | [`scripts/bench/comment.mjs`](../scripts/bench/comment.mjs) | Keeps the one PR comment up to date |
 | [`scripts/bench/gate.mjs`](../scripts/bench/gate.mjs) | The `Benchmark gate` merge check |
-| [`scripts/bench/history.mjs`](../scripts/bench/history.mjs), [`trend.html`](../scripts/bench/trend.html) | The `benchmarks` branch |
+| [`scripts/bench/history.mjs`](../scripts/bench/history.mjs), [`trend.html`](../scripts/bench/trend.html) | The `dnd-data/benchmarks` branch |
 
 `npm run test:tooling` tests them.
