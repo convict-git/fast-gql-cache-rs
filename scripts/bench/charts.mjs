@@ -39,7 +39,6 @@ export const memoryKind = (label) =>
 const SPEED = {
   file: "speed",
   title: "Speed: InMemoryCacheRs vs InMemoryCache",
-  noun: "timings",
   unit: (m) => m.unit !== "B",
   series: [
     { name: "All timings", test: () => true },
@@ -53,7 +52,6 @@ const SPEED = {
 const MEMORY = {
   file: "memory",
   title: "Memory: InMemoryCacheRs vs InMemoryCache",
-  noun: "memory measurements",
   unit: (m) => m.unit === "B",
   series: [
     { name: "All memory", test: () => true },
@@ -171,7 +169,7 @@ export function renderChart(runs, chart, themeName) {
   out.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-labelledby="${titleId} ${descId}" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">`,
     `<title id="${titleId}">${esc(chart.title)}</title>`,
-    `<desc id="${descId}">InMemoryCache ÷ InMemoryCacheRs, nightly on main; higher is ${chart.above}. ${esc(desc)}</desc>`,
+    `<desc id="${descId}">InMemoryCache ÷ InMemoryCacheRs, both measured on one runner, per measured commit of main; higher is ${chart.above}. ${esc(desc)}</desc>`,
     `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="6" fill="${theme.surface}" stroke="${theme.border}"/>`,
     text(
       24,
@@ -182,7 +180,7 @@ export function renderChart(runs, chart, themeName) {
     text(
       24,
       56,
-      `How many times ${chart.above} than InMemoryCache: geometric mean of the probe's ${chart.noun}, nightly on main.`,
+      `How many times ${chart.above} than InMemoryCache (geometric mean), one point per measured commit of main.`,
       `font-size="12" fill="${theme.muted}"`
     )
   );

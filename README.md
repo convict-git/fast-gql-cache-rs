@@ -330,12 +330,13 @@ underneath, it still delegates to Apollo's internals, and the Rust engine is a s
 The gates for each step are in
 [RFC §20](docs/rfc/0001-inmemorycachers-architecture/04-getting-there.md#20-where-we-are-and-the-plan).
 
-### Measured every night
+### Measured against `InMemoryCache`
 
-Every night `main` runs the [performance](docs/probes/cache-performance-probe.mjs) and
-[memory](docs/probes/cache-memory-probe.mjs) probes against Apollo's `InMemoryCache` on
-the same machine. Each point shows how many times faster, or smaller, `InMemoryCacheRs`
-is. 1× is `InMemoryCache`, higher is better, and the 2× line is the target for writes,
+Each night that `main` has changed, a job runs the
+[performance](docs/probes/cache-performance-probe.mjs) and
+[memory](docs/probes/cache-memory-probe.mjs) probes on both caches, `InMemoryCacheRs`
+and Apollo's `InMemoryCache`, on the same machine. Each point shows how many times
+faster, or smaller, `InMemoryCacheRs` is than `InMemoryCache` at that commit. 1× is `InMemoryCache`, higher is better, and the 2× line is the target for writes,
 broadcasts and memory from [the trade](#the-trade). Both charts sit at about 1× for now:
 underneath, the engine is still Apollo's.
 

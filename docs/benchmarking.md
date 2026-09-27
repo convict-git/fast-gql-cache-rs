@@ -69,7 +69,7 @@ artifacts.
 - `README.md`: the latest result and every run, readable on GitHub as is
 - `index.html`: a trend chart of `InMemoryCacheRs ÷ InMemoryCache`, overall and per
   measurement (enable GitHub Pages for the `dnd-data/benchmarks` branch to serve it)
-- `charts/`: the speed and memory charts the [README](../README.md#measured-every-night)
+- `charts/`: the speed and memory charts the [README](../README.md#measured-against-inmemorycache)
   embeds, a light and a dark SVG each. They plot `InMemoryCache ÷ InMemoryCacheRs`, so
   higher is better: overall, and for writes, reads and broadcasts (speed) or retained
   and allocated bytes (memory). The categories come from the measurement labels
