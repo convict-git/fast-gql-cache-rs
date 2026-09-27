@@ -330,6 +330,24 @@ underneath, it still delegates to Apollo's internals, and the Rust engine is a s
 The gates for each step are in
 [RFC §20](docs/rfc/0001-inmemorycachers-architecture/04-getting-there.md#20-where-we-are-and-the-plan).
 
+### Measured every night
+
+Every night `main` runs the [performance](docs/probes/cache-performance-probe.mjs) and
+[memory](docs/probes/cache-memory-probe.mjs) probes against Apollo's `InMemoryCache` on
+the same machine. Each point shows how many times faster, or smaller, `InMemoryCacheRs`
+is. 1× is `InMemoryCache`, higher is better, and the 2× line is the target for writes,
+broadcasts and memory from [the trade](#the-trade). Both charts sit at about 1× for now:
+underneath, the engine is still Apollo's.
+
+<a href="https://github.com/convict-git/fast-gql-cache-rs/tree/dnd-data/benchmarks"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/benchmarks/charts/speed-dark.svg"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/benchmarks/charts/speed.svg" alt="Speed of InMemoryCacheRs relative to InMemoryCache per nightly run: all timings, writes, reads and broadcasts, with InMemoryCache at 1× and the goal at 2×" width="100%"></picture></a>
+
+<a href="https://github.com/convict-git/fast-gql-cache-rs/tree/dnd-data/benchmarks"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/benchmarks/charts/memory-dark.svg"><img src="https://raw.githubusercontent.com/convict-git/fast-gql-cache-rs/dnd-data/benchmarks/charts/memory.svg" alt="Memory of InMemoryCacheRs relative to InMemoryCache per nightly run: all memory measurements, retained and allocated, with InMemoryCache at 1× and the goal at 2× smaller" width="100%"></picture></a>
+
+Every run and every measurement is on the
+[`dnd-data/benchmarks`](https://github.com/convict-git/fast-gql-cache-rs/tree/dnd-data/benchmarks)
+branch. [Benchmarking](docs/benchmarking.md) explains how the numbers are produced and
+why you can trust them.
+
 ## FAQ
 
 <details>

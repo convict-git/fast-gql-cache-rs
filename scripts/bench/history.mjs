@@ -1,11 +1,12 @@
 /**
  * Maintains the benchmark history on the `dnd-data/benchmarks` branch: one
  * line per measured `main` commit in `history.jsonl`, plus a generated
- * `README.md` (readable on GitHub as is) and `index.html` (the trend page for
- * GitHub Pages).
+ * `README.md` (readable on GitHub as is), `index.html` (the trend page for
+ * GitHub Pages) and `charts/` (the SVGs the repository README embeds).
  *
  *   node scripts/bench/history.mjs last-sha DIR
  *   node scripts/bench/history.mjs append DIR summary.json
+ *   node scripts/bench/history.mjs render DIR   (regenerate, no new run)
  *
  * The headline metric is InMemoryCacheRs ÷ InMemoryCache, measured in the same
  * job: it does not depend on which runner machine a night's job landed on.
@@ -13,6 +14,8 @@
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { writeCharts } from "./charts.mjs";
 
 const read = (dir) => {
   const file = join(dir, "history.jsonl");
@@ -83,17 +86,23 @@ function readme(runs) {
   ].join("\n");
 }
 
+/** Regenerates everything derived from `history.jsonl`. */
+export function render(dir, runs = read(dir)) {
+  writeFileSync(join(dir, "README.md"), readme(runs));
+  copyFileSync(
+    fileURLToPath(new URL("trend.html", import.meta.url)),
+    join(dir, "index.html")
+  );
+  writeCharts(dir, runs);
+}
+
 export function append(dir, summary) {
   const runs = [...read(dir), summary];
   writeFileSync(
     join(dir, "history.jsonl"),
     `${runs.map((r) => JSON.stringify(r)).join("\n")}\n`
   );
-  writeFileSync(join(dir, "README.md"), readme(runs));
-  copyFileSync(
-    fileURLToPath(new URL("trend.html", import.meta.url)),
-    join(dir, "index.html")
-  );
+  render(dir, runs);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -102,8 +111,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(lastSha(dir) ?? "");
   } else if (command === "append") {
     append(dir, JSON.parse(readFileSync(file, "utf8")));
+  } else if (command === "render") {
+    render(dir);
   } else {
-    console.error("Usage: history.mjs last-sha DIR | append DIR summary.json");
+    console.error(
+      "Usage: history.mjs last-sha DIR | append DIR summary.json | render DIR"
+    );
     process.exit(2);
   }
 }
