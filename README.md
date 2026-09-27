@@ -266,6 +266,9 @@ For a configuration that only uses keys and common policies, migrating means cha
 import and how the policies are written. A policy becomes a descriptor: a plain object
 whose behaviour names are enums the package exports.
 
+<details>
+<summary><b>Before and after: seven common policies in one configuration</b></summary>
+
 ```diff
   import { ApolloClient } from "@apollo/client";
 - import { InMemoryCache } from "@apollo/client";
@@ -350,6 +353,8 @@ whose behaviour names are enums the package exports.
 
   const client = new ApolloClient({ link, cache }); // unchanged
 ```
+
+</details>
 
 [Unsupported features](docs/compatibility.md#unsupported-features) has the whole catalogue,
 with the replacement for each kind of function.
