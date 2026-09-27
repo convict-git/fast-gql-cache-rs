@@ -141,6 +141,16 @@ callbacks) and two bulk codecs; Rust never calls JavaScript.
   step is done. Performance per PR and over time: `docs/benchmarking.md` (the `benchmark`
   PR label, the nightly history, `npm run bench:pr -- --base main` locally).
 
+## Data branches
+
+A **data branch** holds data a workflow writes, not code, and its name starts with
+`dnd-data/` ("do not delete"): `dnd-data/benchmarks` is the nightly history
+(`benchmark-history.yml`), and `dnd-data/badges` backs the README's waitlist badge
+(`waitlist.yml`). Only its workflow changes a data branch, by appending commits. Leave data
+branches out of branch clean-ups, rebases, force-pushes, renames and PRs: deleting one
+breaks the README badge or loses the benchmark history. A new branch of this kind goes
+under `dnd-data/`.
+
 ## Skills
 
 - **Rust/WASM work**: the `rust-skills` skill (`.claude/skills/rust-skills` submodule;

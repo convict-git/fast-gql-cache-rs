@@ -1,7 +1,8 @@
 /**
- * Maintains the benchmark history on the `benchmarks` branch: one line per
- * measured `main` commit in `history.jsonl`, plus a generated `README.md`
- * (readable on GitHub as is) and `index.html` (the trend page for GitHub Pages).
+ * Maintains the benchmark history on the `dnd-data/benchmarks` branch: one
+ * line per measured `main` commit in `history.jsonl`, plus a generated
+ * `README.md` (readable on GitHub as is) and `index.html` (the trend page for
+ * GitHub Pages).
  *
  *   node scripts/bench/history.mjs last-sha DIR
  *   node scripts/bench/history.mjs append DIR summary.json

@@ -1,5 +1,5 @@
 # Every six hours: counts the thumbs-up reactions on the pinned waitlist issue
-# and publishes the count to the `badges` branch as waitlist.json, a shields.io
+# and publishes the count to the `dnd-data/badges` branch as waitlist.json, a shields.io
 # endpoint badge that the README's waitlist badge reads. Commits only when the
 # count changes. It reads a public count and stores nothing about who reacted.
 name: Waitlist count
@@ -28,12 +28,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Check out the badges branch
+      - name: Check out the dnd-data/badges branch
         run: |
-          if git fetch --depth 1 origin badges:refs/remotes/origin/badges; then
-            git worktree add -B badges badges origin/badges
+          if git fetch --depth 1 origin dnd-data/badges:refs/remotes/origin/dnd-data/badges; then
+            git worktree add -B dnd-data/badges badges origin/dnd-data/badges
           else
-            git worktree add --orphan -b badges badges
+            git worktree add --orphan -b dnd-data/badges badges
           fi
 
       - name: Count the waitlist
@@ -59,4 +59,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Waitlist: $(jq -r .message waitlist.json)"
-          git push origin HEAD:badges
+          git push origin HEAD:dnd-data/badges
