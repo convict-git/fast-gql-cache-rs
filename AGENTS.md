@@ -43,6 +43,9 @@ stating it.
   deterministically; the finalizer is only a fallback. The method and a memory check that
   disposal returns the WASM heap to its baseline are required before any release (v2,
   [ADR 0004](docs/adr/0004-declarative-policies-rust-engine.md) contract 14).
+- **Licensing**: code is `MIT OR Apache-2.0`, documentation is CC-BY 4.0 (README
+  "License"). Anything adapted from Apollo keeps Apollo's MIT notice: a new copy goes into
+  `THIRD_PARTY_NOTICES.md` in the same PR.
 - **Release**: nothing ships for production use while production code imports a symbol
   that only `patches/@apollo+client+4.2.11.patch` exports; `patch-package` never reaches
   an installed package. The patch is for development until v1 (correctness) and goes in

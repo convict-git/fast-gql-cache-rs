@@ -2,7 +2,7 @@
   "name": "fast-gql-cache-rs",
   "version": "0.1.0",
   "description": "Rust-WASM InMemoryCache implementation for Apollo Client",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -20,7 +20,10 @@
     "pkg/fast_gql_cache_rs.js",
     "pkg/fast_gql_cache_rs.d.ts",
     "pkg/fast_gql_cache_rs_bg.wasm",
-    "pkg/fast_gql_cache_rs_bg.wasm.d.ts"
+    "pkg/fast_gql_cache_rs_bg.wasm.d.ts",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "engines": {
     "node": ">=22.21.0 <23 || >=24.7.0"

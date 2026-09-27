@@ -508,3 +508,20 @@ npm test
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same steps.
+
+## License
+
+- **Code** (everything that is not documentation, including the npm package and the Rust
+  crate): dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your
+  option. This is the convention across the Rust ecosystem.
+- **Documentation** (this README's prose, `docs/` and its diagrams):
+  [CC-BY 4.0](LICENSE-CC-BY). Reuse it anywhere, with credit to fast-gql-cache-rs and a
+  link back. Code samples in the documentation are also available under the code licenses,
+  so you can paste them without attribution overhead.
+- **Third-party material**: code adapted from Apollo Client stays under Apollo's MIT
+  license, and the logos belong to their owners. See
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Unless you say otherwise, any contribution you submit is licensed the same way as the file
+it changes: code under MIT OR Apache-2.0, documentation under CC-BY 4.0, with no
+additional terms.
