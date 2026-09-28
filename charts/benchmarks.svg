@@ -1,22 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="800" height="400" role="img" aria-labelledby="chart-title chart-desc" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
 <title id="chart-title">InMemoryCacheRs vs InMemoryCache: speed and memory</title>
-<desc id="chart-desc">InMemoryCache ÷ InMemoryCacheRs, both measured on one runner, per measured commit of main; higher is faster or smaller. Speed, All timings: 0.97× (193 measurements); Speed, Writes: 0.95× (72 measurements); Speed, Reads: 0.99× (71 measurements); Speed, Broadcasts: 0.97× (13 measurements); Memory, All memory: 1.00× (44 measurements); Memory, Retained: 1.00× (35 measurements); Memory, Allocated: 1.00× (9 measurements), as of 2026-09-27.</desc>
+<desc id="chart-desc">InMemoryCache ÷ InMemoryCacheRs, both measured on one runner, per measured commit of main; higher is faster or smaller. Speed, All timings: 1.00× (193 measurements); Speed, Writes: 0.98× (72 measurements); Speed, Reads: 0.99× (71 measurements); Speed, Broadcasts: 1.01× (13 measurements); Memory, All memory: 1.00× (44 measurements); Memory, Retained: 1.00× (35 measurements); Memory, Allocated: 1.00× (9 measurements), as of 2026-09-28.</desc>
 <rect x="0.5" y="0.5" width="799" height="399" rx="6" fill="#ffffff" stroke="#d1d9e0"/>
 <text x="24" y="34" font-size="16" font-weight="600" fill="#1f2328">InMemoryCacheRs vs InMemoryCache: speed and memory</text>
 <text x="24" y="56" font-size="12" fill="#59636e">How many times faster or smaller than InMemoryCache, per measured commit of main. Higher is better.</text>
 <text x="24" y="88" font-size="12" font-weight="600" fill="#1f2328">Speed</text>
 <line x1="96" y1="84" x2="120" y2="84" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
 <circle cx="108" cy="84" r="3.5" fill="#2a78d6" stroke="#ffffff" stroke-width="2"></circle>
-<text x="128" y="88" font-size="12" fill="#59636e">All timings <tspan font-weight="600" fill="#1f2328">0.97×</tspan></text>
+<text x="128" y="88" font-size="12" fill="#59636e">All timings <tspan font-weight="600" fill="#1f2328">1.00×</tspan></text>
 <line x1="266" y1="84" x2="290" y2="84" stroke="#eb6834" stroke-width="2" stroke-linecap="round"/>
 <circle cx="278" cy="84" r="3.5" fill="#eb6834" stroke="#ffffff" stroke-width="2"></circle>
-<text x="298" y="88" font-size="12" fill="#59636e">Writes <tspan font-weight="600" fill="#1f2328">0.95×</tspan></text>
+<text x="298" y="88" font-size="12" fill="#59636e">Writes <tspan font-weight="600" fill="#1f2328">0.98×</tspan></text>
 <line x1="436" y1="84" x2="460" y2="84" stroke="#1baf7a" stroke-width="2" stroke-linecap="round"/>
 <circle cx="448" cy="84" r="3.5" fill="#1baf7a" stroke="#ffffff" stroke-width="2"></circle>
 <text x="468" y="88" font-size="12" fill="#59636e">Reads <tspan font-weight="600" fill="#1f2328">0.99×</tspan></text>
 <line x1="606" y1="84" x2="630" y2="84" stroke="#eda100" stroke-width="2" stroke-linecap="round"/>
 <circle cx="618" cy="84" r="3.5" fill="#eda100" stroke="#ffffff" stroke-width="2"></circle>
-<text x="638" y="88" font-size="12" fill="#59636e">Broadcasts <tspan font-weight="600" fill="#1f2328">0.97×</tspan></text>
+<text x="638" y="88" font-size="12" fill="#59636e">Broadcasts <tspan font-weight="600" fill="#1f2328">1.01×</tspan></text>
 <text x="24" y="112" font-size="12" font-weight="600" fill="#1f2328">Memory</text>
 <line x1="96" y1="108" x2="120" y2="108" stroke="#e87ba4" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 4"/>
 <rect x="104.5" y="104.5" width="7" height="7" rx="1.5" fill="#e87ba4" stroke="#ffffff" stroke-width="2"></rect>
@@ -39,13 +39,29 @@
 <text x="660" y="147.6" font-size="11" fill="#59636e">goal: 2×</text>
 <line x1="56" y1="239" x2="650" y2="239" stroke="#818b98" stroke-width="1.5"/>
 <text x="660" y="243" font-size="11" fill="#59636e">InMemoryCache</text>
-<text x="353" y="372" font-size="11" text-anchor="middle" fill="#59636e">2026-09-27</text>
-<text x="353" y="388" font-size="11" text-anchor="middle" fill="#59636e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">e4d30a4</text>
-<rect x="349" y="235.1" width="8" height="8" rx="1.5" fill="#4a3aa7" stroke="#ffffff" stroke-width="2"><title>Memory, Allocated, 2026-09-27 e4d30a4: 1.00× (9 measurements)</title></rect>
-<rect x="349" y="235.3" width="8" height="8" rx="1.5" fill="#008300" stroke="#ffffff" stroke-width="2"><title>Memory, Retained, 2026-09-27 e4d30a4: 1.00× (35 measurements)</title></rect>
-<circle cx="353" cy="242.7" r="4" fill="#eda100" stroke="#ffffff" stroke-width="2"><title>Speed, Broadcasts, 2026-09-27 e4d30a4: 0.97× (13 measurements)</title></circle>
-<circle cx="353" cy="240.5" r="4" fill="#1baf7a" stroke="#ffffff" stroke-width="2"><title>Speed, Reads, 2026-09-27 e4d30a4: 0.99× (71 measurements)</title></circle>
-<circle cx="353" cy="246.2" r="4" fill="#eb6834" stroke="#ffffff" stroke-width="2"><title>Speed, Writes, 2026-09-27 e4d30a4: 0.95× (72 measurements)</title></circle>
-<rect x="349" y="235.2" width="8" height="8" rx="1.5" fill="#e87ba4" stroke="#ffffff" stroke-width="2"><title>Memory, All memory, 2026-09-27 e4d30a4: 1.00× (44 measurements)</title></rect>
-<circle cx="353" cy="243.3" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"><title>Speed, All timings, 2026-09-27 e4d30a4: 0.97× (193 measurements)</title></circle>
+<text x="56" y="372" font-size="11" text-anchor="start" fill="#59636e">2026-09-27</text>
+<text x="56" y="388" font-size="11" text-anchor="start" fill="#59636e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">e4d30a4</text>
+<text x="650" y="372" font-size="11" text-anchor="end" fill="#59636e">2026-09-28</text>
+<text x="650" y="388" font-size="11" text-anchor="end" fill="#59636e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0e5a254</text>
+<path d="M56,239.1L650,239" fill="none" stroke="#4a3aa7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>
+<rect x="52" y="235.1" width="8" height="8" rx="1.5" fill="#4a3aa7" stroke="#ffffff" stroke-width="2"><title>Memory, Allocated, 2026-09-27 e4d30a4: 1.00× (9 measurements)</title></rect>
+<rect x="646" y="235" width="8" height="8" rx="1.5" fill="#4a3aa7" stroke="#ffffff" stroke-width="2"><title>Memory, Allocated, 2026-09-28 0e5a254: 1.00× (9 measurements)</title></rect>
+<path d="M56,239.3L650,238.8" fill="none" stroke="#008300" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>
+<rect x="52" y="235.3" width="8" height="8" rx="1.5" fill="#008300" stroke="#ffffff" stroke-width="2"><title>Memory, Retained, 2026-09-27 e4d30a4: 1.00× (35 measurements)</title></rect>
+<rect x="646" y="234.8" width="8" height="8" rx="1.5" fill="#008300" stroke="#ffffff" stroke-width="2"><title>Memory, Retained, 2026-09-28 0e5a254: 1.00× (35 measurements)</title></rect>
+<path d="M56,242.7L650,238.1" fill="none" stroke="#eda100" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="56" cy="242.7" r="4" fill="#eda100" stroke="#ffffff" stroke-width="2"><title>Speed, Broadcasts, 2026-09-27 e4d30a4: 0.97× (13 measurements)</title></circle>
+<circle cx="650" cy="238.1" r="4" fill="#eda100" stroke="#ffffff" stroke-width="2"><title>Speed, Broadcasts, 2026-09-28 0e5a254: 1.01× (13 measurements)</title></circle>
+<path d="M56,240.5L650,240.5" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="56" cy="240.5" r="4" fill="#1baf7a" stroke="#ffffff" stroke-width="2"><title>Speed, Reads, 2026-09-27 e4d30a4: 0.99× (71 measurements)</title></circle>
+<circle cx="650" cy="240.5" r="4" fill="#1baf7a" stroke="#ffffff" stroke-width="2"><title>Speed, Reads, 2026-09-28 0e5a254: 0.99× (71 measurements)</title></circle>
+<path d="M56,246.2L650,241.7" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="56" cy="246.2" r="4" fill="#eb6834" stroke="#ffffff" stroke-width="2"><title>Speed, Writes, 2026-09-27 e4d30a4: 0.95× (72 measurements)</title></circle>
+<circle cx="650" cy="241.7" r="4" fill="#eb6834" stroke="#ffffff" stroke-width="2"><title>Speed, Writes, 2026-09-28 0e5a254: 0.98× (72 measurements)</title></circle>
+<path d="M56,239.2L650,238.8" fill="none" stroke="#e87ba4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>
+<rect x="52" y="235.2" width="8" height="8" rx="1.5" fill="#e87ba4" stroke="#ffffff" stroke-width="2"><title>Memory, All memory, 2026-09-27 e4d30a4: 1.00× (44 measurements)</title></rect>
+<rect x="646" y="234.8" width="8" height="8" rx="1.5" fill="#e87ba4" stroke="#ffffff" stroke-width="2"><title>Memory, All memory, 2026-09-28 0e5a254: 1.00× (44 measurements)</title></rect>
+<path d="M56,243.3L650,239.6" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="56" cy="243.3" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"><title>Speed, All timings, 2026-09-27 e4d30a4: 0.97× (193 measurements)</title></circle>
+<circle cx="650" cy="239.6" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"><title>Speed, All timings, 2026-09-28 0e5a254: 1.00× (193 measurements)</title></circle>
 </svg>

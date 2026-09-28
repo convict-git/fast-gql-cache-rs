@@ -1,0 +1,712 @@
+{
+  "meta": {
+    "schema": 2,
+    "probe": "memory",
+    "units": {
+      "breadth N=1000: store after write": "B",
+      "breadth N=1000: + read (optimistic: false)": "B",
+      "breadth N=1000: + watch (optimistic: true)": "B",
+      "breadth N=5000: store after write": "B",
+      "breadth N=5000: + read (optimistic: false)": "B",
+      "breadth N=5000: + watch (optimistic: true)": "B",
+      "breadth N=20000: store after write": "B",
+      "breadth N=20000: + read (optimistic: false)": "B",
+      "breadth N=20000: + watch (optimistic: true)": "B",
+      "shape normalized list (2 000 entities): store after write": "B",
+      "shape normalized list (2 000 entities): + read": "B",
+      "shape embedded list (2 000 objects): store after write": "B",
+      "shape embedded list (2 000 objects): + read": "B",
+      "shape deep chain (D = 256): store after write": "B",
+      "shape deep chain (D = 256): + read": "B",
+      "shape nested lists (50 groups x 40 rows): store after write": "B",
+      "shape nested lists (50 groups x 40 rows): + read": "B",
+      "shape scalar matrix (100 x 1 000 strings): store after write": "B",
+      "shape scalar matrix (100 x 1 000 strings): + read": "B",
+      "shape JSON blob field (5 000 objects): store after write": "B",
+      "shape JSON blob field (5 000 objects): + read": "B",
+      "shape argument-heavy field (2 000 items): store after write": "B",
+      "shape argument-heavy field (2 000 items): + read": "B",
+      "write cold N=5000": "B",
+      "write cold N=20000": "B",
+      "write identical N=5000": "B",
+      "write 1-changed N=5000": "B",
+      "read cold N=5000": "B",
+      "read warm N=5000": "B",
+      "read after 1 dirty N=5000": "B",
+      "broadcast to 50 watches after a 1-changed write N=5000": "B",
+      "100 single-field writes in one batch, 1 watch, N=5000": "B",
+      "watches N=2000: store + read": "B",
+      "watches N=2000: + 200 watches of one document": "B",
+      "watches N=2000: + 50 watches of distinct documents": "B",
+      "layers N=2000: store + read + 1 watch": "B",
+      "layers N=2000: + 16 optimistic layers": "B",
+      "layers N=2000: after removing the 16 layers": "B",
+      "rolling window: 5 live pages of 100, write + read + evict + gc per page": "B",
+      "watch churn: subscribe + unsubscribe over 1 000 entities": "B",
+      "optimistic churn: add + remove a layer over 1 000 entities": "B",
+      "document churn: a freshly parsed document per read over 1 000 entities": "B",
+      "reclaim N=5000: store + read + watch": "B",
+      "reclaim N=5000: after unwatch + evict + gc": "B"
+    },
+    "date": "2026-09-28T10:52:31.399Z",
+    "node": "v24.21.0",
+    "platform": "linux/x64",
+    "runs": 3,
+    "quick": false,
+    "sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "head": {
+      "root": "/home/runner/work/fast-gql-cache-rs/fast-gql-cache-rs",
+      "sha": "0e5a2541a4456c27045749ad42d27eaed5df46cd",
+      "wasmBytes": 12724
+    },
+    "base": null,
+    "baseNote": null
+  },
+  "samples": {
+    "breadth N=1000: store after write": {
+      "rs@head": [
+        541680,
+        535432,
+        541640
+      ],
+      "apollo@head": [
+        538768,
+        539728,
+        539648
+      ]
+    },
+    "breadth N=1000: + read (optimistic: false)": {
+      "rs@head": [
+        4898264,
+        4891568,
+        4896664
+      ],
+      "apollo@head": [
+        4896216,
+        4895952,
+        4895840
+      ]
+    },
+    "breadth N=1000: + watch (optimistic: true)": {
+      "rs@head": [
+        9481272,
+        9479928,
+        9499824
+      ],
+      "apollo@head": [
+        9514208,
+        9483968,
+        9483856
+      ]
+    },
+    "breadth N=5000: store after write": {
+      "rs@head": [
+        3161848,
+        3157928,
+        3157928
+      ],
+      "apollo@head": [
+        3157448,
+        3157488,
+        3157488
+      ]
+    },
+    "breadth N=5000: + read (optimistic: false)": {
+      "rs@head": [
+        24858896,
+        24861968,
+        24862200
+      ],
+      "apollo@head": [
+        24861944,
+        24861208,
+        24861752
+      ]
+    },
+    "breadth N=5000: + watch (optimistic: true)": {
+      "rs@head": [
+        48483440,
+        48480912,
+        48479080
+      ],
+      "apollo@head": [
+        48480248,
+        48479352,
+        48479832
+      ]
+    },
+    "breadth N=20000: store after write": {
+      "rs@head": [
+        13122880,
+        13120656,
+        13122264
+      ],
+      "apollo@head": [
+        13122160,
+        13120064,
+        13120064
+      ]
+    },
+    "breadth N=20000: + read (optimistic: false)": {
+      "rs@head": [
+        100433144,
+        100430136,
+        100436016
+      ],
+      "apollo@head": [
+        100419968,
+        100429624,
+        100429024
+      ]
+    },
+    "breadth N=20000: + watch (optimistic: true)": {
+      "rs@head": [
+        195722280,
+        195718488,
+        195719928
+      ],
+      "apollo@head": [
+        195699048,
+        195719136,
+        195718312
+      ]
+    },
+    "shape normalized list (2 000 entities): store after write": {
+      "apollo@head": [
+        1253144,
+        1226168,
+        1244056
+      ],
+      "rs@head": [
+        1246976,
+        1248504,
+        1267312
+      ]
+    },
+    "shape normalized list (2 000 entities): + read": {
+      "apollo@head": [
+        9996112,
+        10035952,
+        10023096
+      ],
+      "rs@head": [
+        10050904,
+        10050648,
+        10043192
+      ]
+    },
+    "shape embedded list (2 000 objects): store after write": {
+      "apollo@head": [
+        851464,
+        858624,
+        858480
+      ],
+      "rs@head": [
+        858504,
+        865856,
+        852392
+      ]
+    },
+    "shape embedded list (2 000 objects): + read": {
+      "apollo@head": [
+        4564464,
+        4561184,
+        4563408
+      ],
+      "rs@head": [
+        4563288,
+        4570640,
+        4565416
+      ]
+    },
+    "shape deep chain (D = 256): store after write": {
+      "apollo@head": [
+        112000,
+        112360,
+        117520
+      ],
+      "rs@head": [
+        112264,
+        112264,
+        112464
+      ]
+    },
+    "shape deep chain (D = 256): + read": {
+      "apollo@head": [
+        1089504,
+        1082984,
+        1095040
+      ],
+      "rs@head": [
+        1083280,
+        1090008,
+        1083184
+      ]
+    },
+    "shape nested lists (50 groups x 40 rows): store after write": {
+      "apollo@head": [
+        534952,
+        534560,
+        512568
+      ],
+      "rs@head": [
+        501928,
+        541904,
+        495248
+      ]
+    },
+    "shape nested lists (50 groups x 40 rows): + read": {
+      "apollo@head": [
+        6569080,
+        6565048,
+        6546704
+      ],
+      "rs@head": [
+        6536912,
+        6576136,
+        6548824
+      ]
+    },
+    "shape scalar matrix (100 x 1 000 strings): store after write": {
+      "apollo@head": [
+        3233608,
+        3233624,
+        3233608
+      ],
+      "rs@head": [
+        3234120,
+        3234136,
+        3234136
+      ]
+    },
+    "shape scalar matrix (100 x 1 000 strings): + read": {
+      "apollo@head": [
+        4226304,
+        4226232,
+        4226216
+      ],
+      "rs@head": [
+        4226424,
+        4226440,
+        4225744
+      ]
+    },
+    "shape JSON blob field (5 000 objects): store after write": {
+      "apollo@head": [
+        987240,
+        987240,
+        987240
+      ],
+      "rs@head": [
+        987296,
+        987296,
+        987248
+      ]
+    },
+    "shape JSON blob field (5 000 objects): + read": {
+      "apollo@head": [
+        1037224,
+        1036976,
+        1036976
+      ],
+      "rs@head": [
+        1042728,
+        1037032,
+        1036984
+      ]
+    },
+    "shape argument-heavy field (2 000 items): store after write": {
+      "apollo@head": [
+        409864,
+        513720,
+        507024
+      ],
+      "rs@head": [
+        506616,
+        506840,
+        507152
+      ]
+    },
+    "shape argument-heavy field (2 000 items): + read": {
+      "apollo@head": [
+        6835552,
+        6932504,
+        6921720
+      ],
+      "rs@head": [
+        6921312,
+        6922152,
+        6928200
+      ]
+    },
+    "write cold N=5000": {
+      "rs@head": [
+        96545568,
+        96571000,
+        96495704
+      ],
+      "apollo@head": [
+        96673376,
+        96590008,
+        96505304
+      ]
+    },
+    "write cold N=20000": {
+      "rs@head": [
+        384898160,
+        384996680,
+        382805144
+      ],
+      "apollo@head": [
+        385059384,
+        385066440,
+        385032744
+      ]
+    },
+    "write identical N=5000": {
+      "rs@head": [
+        92697328,
+        92670864,
+        92657864
+      ],
+      "apollo@head": [
+        92684864,
+        92688296,
+        92652520
+      ]
+    },
+    "write 1-changed N=5000": {
+      "rs@head": [
+        92635176,
+        92653752,
+        92674096
+      ],
+      "apollo@head": [
+        92662368,
+        92647344,
+        92643056
+      ]
+    },
+    "read cold N=5000": {
+      "rs@head": [
+        99858184,
+        99859632,
+        99835424
+      ],
+      "apollo@head": [
+        99858736,
+        99861424,
+        99858224
+      ]
+    },
+    "read warm N=5000": {
+      "rs@head": [
+        7136,
+        7136,
+        7136
+      ],
+      "apollo@head": [
+        7104,
+        7104,
+        7104
+      ]
+    },
+    "read after 1 dirty N=5000": {
+      "rs@head": [
+        7571760,
+        7571584,
+        7573072
+      ],
+      "apollo@head": [
+        7571664,
+        7573512,
+        7573912
+      ]
+    },
+    "broadcast to 50 watches after a 1-changed write N=5000": {
+      "rs@head": [
+        140350032,
+        140388496,
+        140331816
+      ],
+      "apollo@head": [
+        140391088,
+        140462560,
+        140371288
+      ]
+    },
+    "100 single-field writes in one batch, 1 watch, N=5000": {
+      "rs@head": [
+        16425920,
+        16423240,
+        16437144
+      ],
+      "apollo@head": [
+        16442584,
+        16428816,
+        16426048
+      ]
+    },
+    "watches N=2000: store + read": {
+      "apollo@head": [
+        10002536,
+        9998584,
+        10068200
+      ],
+      "rs@head": [
+        10081440,
+        10014992,
+        10080992
+      ]
+    },
+    "watches N=2000: + 200 watches of one document": {
+      "apollo@head": [
+        19792976,
+        19788008,
+        19790048
+      ],
+      "rs@head": [
+        19802456,
+        19805824,
+        19801800
+      ]
+    },
+    "watches N=2000: + 50 watches of distinct documents": {
+      "apollo@head": [
+        224718248,
+        224714104,
+        224716000
+      ],
+      "rs@head": [
+        224728040,
+        224727920,
+        224731520
+      ]
+    },
+    "layers N=2000: store + read + 1 watch": {
+      "apollo@head": [
+        19040008,
+        19037128,
+        19038008
+      ],
+      "rs@head": [
+        18672072,
+        19043152,
+        19038120
+      ]
+    },
+    "layers N=2000: + 16 optimistic layers": {
+      "apollo@head": [
+        19286728,
+        19284392,
+        19282696
+      ],
+      "rs@head": [
+        18962408,
+        19289200,
+        19284192
+      ]
+    },
+    "layers N=2000: after removing the 16 layers": {
+      "apollo@head": [
+        19258984,
+        19253840,
+        19253168
+      ],
+      "rs@head": [
+        18916232,
+        19259408,
+        19254496
+      ]
+    },
+    "rolling window: 5 live pages of 100, write + read + evict + gc per page": {
+      "rs@head": [
+        32405776,
+        32409536,
+        27858376
+      ],
+      "apollo@head": [
+        32404080,
+        32413984,
+        32404352
+      ]
+    },
+    "watch churn: subscribe + unsubscribe over 1 000 entities": {
+      "rs@head": [
+        7459848,
+        7461600,
+        7491216
+      ],
+      "apollo@head": [
+        7465488,
+        7461664,
+        7463016
+      ]
+    },
+    "optimistic churn: add + remove a layer over 1 000 entities": {
+      "rs@head": [
+        7367176,
+        7356544,
+        7393496
+      ],
+      "apollo@head": [
+        7360064,
+        7360416,
+        7361600
+      ]
+    },
+    "document churn: a freshly parsed document per read over 1 000 entities": {
+      "rs@head": [
+        556166968,
+        556164352,
+        556157384
+      ],
+      "apollo@head": [
+        556165416,
+        556151888,
+        556155232
+      ]
+    },
+    "reclaim N=5000: store + read + watch": {
+      "apollo@head": [
+        48728112,
+        48727672,
+        48726704
+      ],
+      "rs@head": [
+        48732928,
+        48732720,
+        48726544
+      ]
+    },
+    "reclaim N=5000: after unwatch + evict + gc": {
+      "apollo@head": [
+        22344024,
+        22344064,
+        22342584
+      ],
+      "rs@head": [
+        22348784,
+        22343840,
+        22343624
+      ]
+    }
+  },
+  "checks": {
+    "removing every optimistic layer returns the memory the layers took": {
+      "apollo@head": [
+        true,
+        true,
+        true
+      ],
+      "rs@head": [
+        true,
+        true,
+        true
+      ]
+    },
+    "rolling window: retained memory plateaus": {
+      "rs@head": [
+        false,
+        false,
+        false
+      ],
+      "apollo@head": [
+        false,
+        false,
+        false
+      ]
+    },
+    "watch churn: retained memory plateaus": {
+      "rs@head": [
+        true,
+        true,
+        true
+      ],
+      "apollo@head": [
+        true,
+        true,
+        true
+      ]
+    },
+    "optimistic churn: retained memory plateaus": {
+      "rs@head": [
+        true,
+        true,
+        true
+      ],
+      "apollo@head": [
+        true,
+        true,
+        true
+      ]
+    },
+    "document churn: retained memory plateaus": {
+      "rs@head": [
+        false,
+        false,
+        false
+      ],
+      "apollo@head": [
+        false,
+        false,
+        false
+      ]
+    },
+    "evict + gc returns the memory of an evicted list": {
+      "apollo@head": [
+        false,
+        false,
+        false
+      ],
+      "rs@head": [
+        false,
+        false,
+        false
+      ]
+    },
+    "dropping a cache returns its JS heap": {
+      "apollo@head": [
+        true,
+        true,
+        true
+      ],
+      "rs@head": [
+        true,
+        true,
+        true
+      ]
+    },
+    "dropping a cache returns its WASM heap": {
+      "apollo@head": [
+        true,
+        true,
+        true
+      ],
+      "rs@head": [
+        true,
+        true,
+        true
+      ]
+    },
+    "a second cache reuses WASM linear memory instead of growing it": {
+      "apollo@head": [
+        true,
+        true,
+        true
+      ],
+      "rs@head": [
+        true,
+        true,
+        true
+      ]
+    }
+  }
+}
